@@ -13,6 +13,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "DB (Supabase: kepco_capa + bjd_master)",
+  cache: "no-store",
+  auth: "user",
+  inputs: [
+    {
+      name: "bjd_code",
+      type: "string",
+      required: true,
+      sample: "4673025025",
+      description: "법정동 코드 10자리",
+    },
+    {
+      name: "jibun",
+      type: "string",
+      required: true,
+      sample: "20-1",
+      description: "지번 (예: 20, 20-1, 산5-3)",
+    },
+  ],
+  outputSchema:
+    "{ ok, bjd_code, jibun, rows: KepcoDataRow[], total, meta: AddrMeta | null }",
+  externalDeps: [],
+  notes:
+    "exact match 만 — fallback 없음. KEPCO 미수집 지번은 빈 rows 반환. meta 는 bjd_master 의 sep_1~5 (헤더 주소 표시용 보조 데이터).",
+};
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();

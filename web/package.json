@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/build-api-manifest.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/build-api-manifest.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "manifest": "node scripts/build-api-manifest.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",

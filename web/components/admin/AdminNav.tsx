@@ -12,18 +12,25 @@ interface NavItem {
   icon: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   // 엑셀 업로드는 현재 사용하지 않으므로 숨김 (페이지는 유지, /admin/upload 직접 접근 가능)
   // { href: "/admin/upload", label: "엑셀 업로드", icon: "📤" },
   { href: "/admin/crawl", label: "데이터 수집", icon: "🔄" },
   { href: "/admin/users", label: "계정 관리", icon: "👥" },
 ];
 
+const LOCAL_ONLY_NAV_ITEMS: NavItem[] = [
+  { href: "/admin/api-manager", label: "API 관리", icon: "🔧" },
+];
+
 interface Props {
   email: string;
+  /** 로컬 환경 한정 메뉴 노출 여부 (layout 이 NODE_ENV + VERCEL 체크해 전달) */
+  isLocal: boolean;
 }
 
-export default function AdminNav({ email }: Props) {
+export default function AdminNav({ email, isLocal }: Props) {
+  const NAV_ITEMS = isLocal ? [...BASE_NAV_ITEMS, ...LOCAL_ONLY_NAV_ITEMS] : BASE_NAV_ITEMS;
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
