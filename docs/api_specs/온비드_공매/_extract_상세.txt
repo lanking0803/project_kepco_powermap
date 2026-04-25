@@ -1,0 +1,280 @@
+차세대 국가자산처분시스템(온비드) 구축 사업
+Open API 활용가이드
+목   차
+1. 온비드 부동산 물건상세 조회서비스	1
+1.1 서비스 개요	1
+1.2 오퍼레이션 명세	2
+1.2.1 오퍼레이션 목록	2
+1.2.2 오퍼레이션 명세	2
+1.2.3 요청 메시지 명세	2
+1.2.4 응답 메시지 명세	3
+2. 코드표	15
+3. 응답 메시지 결과코드	17
+4. API 응답 구조 참고자료 (XML, JSON 차이)	18
+온비드 부동산 물건상세 조회서비스
+서비스 개요
+오퍼레이션 명세
+오퍼레이션 목록
+오퍼레이션 명세
+요청 메시지 명세
+※ 항목구분 : 필수(1), 옵션(0), 1건 이상 복수건(1..n), 0건 또는 복수건(0..n)
+응답 메시지 명세
+※ 항목구분 : 필수(1), 옵션(0), 1건 이상 복수건(1..n), 0건 또는 복수건(0..n)
+코드표
+API 서비스 스펙의 요청 메시지 명세와 응답 메시지 명세에서 사용되는 코드표
+응답 메시지 결과코드
+API 서비스 호출 시 응답 파라미터의 resultCode(결과코드)와 resultMsg(결과메시지) 설명
+API 응답 구조 참고자료 (XML, JSON 차이)
+응답 메시지에 배열구조가 포함될 경우, XML과 JSON의 일부 구조가 다르므로 아래 호출 예시를 참고 바랍니다.
+.
+--- TABLE 0 ---
+ | 
+ | 
+--- TABLE 1 ---
+서비스 정보 | 서비스ID | SVC-API-004 | SVC-API-004 | SVC-API-004 | SVC-API-004
+서비스 정보 | 서비스명(국문) | 온비드 부동산 물건상세 조회서비스 | 온비드 부동산 물건상세 조회서비스 | 온비드 부동산 물건상세 조회서비스 | 온비드 부동산 물건상세 조회서비스
+서비스 정보 | 서비스명(영문) | OnbidRlstDtlSrvc | OnbidRlstDtlSrvc | OnbidRlstDtlSrvc | OnbidRlstDtlSrvc
+서비스 정보 | 서비스설명 | 한국자산관리공사에서 운영하는 온비드(Onbid)에 등록된 부동산 공매 물건을 물건관리번호(필수), 공매조건번호(옵션)로 조회하여 소재지, 면적상세, 최저입찰금액, 감정평가정보목록, 사진목록 등 상세 정보를 확인할 수 있는 서비스입니다. 현재 입찰 중이거나 입찰예정인 부동산만 조회할 수 있습니다. | 한국자산관리공사에서 운영하는 온비드(Onbid)에 등록된 부동산 공매 물건을 물건관리번호(필수), 공매조건번호(옵션)로 조회하여 소재지, 면적상세, 최저입찰금액, 감정평가정보목록, 사진목록 등 상세 정보를 확인할 수 있는 서비스입니다. 현재 입찰 중이거나 입찰예정인 부동산만 조회할 수 있습니다. | 한국자산관리공사에서 운영하는 온비드(Onbid)에 등록된 부동산 공매 물건을 물건관리번호(필수), 공매조건번호(옵션)로 조회하여 소재지, 면적상세, 최저입찰금액, 감정평가정보목록, 사진목록 등 상세 정보를 확인할 수 있는 서비스입니다. 현재 입찰 중이거나 입찰예정인 부동산만 조회할 수 있습니다. | 한국자산관리공사에서 운영하는 온비드(Onbid)에 등록된 부동산 공매 물건을 물건관리번호(필수), 공매조건번호(옵션)로 조회하여 소재지, 면적상세, 최저입찰금액, 감정평가정보목록, 사진목록 등 상세 정보를 확인할 수 있는 서비스입니다. 현재 입찰 중이거나 입찰예정인 부동산만 조회할 수 있습니다.
+서비스 보안 | 서비스인증/권한 | [ O ] 서비스 Key [ ] 인증서 (GPKI) / [   ] Basic (ID/PW)  [ ] 없음 | [ O ] 서비스 Key [ ] 인증서 (GPKI) / [   ] Basic (ID/PW)  [ ] 없음 | [  ] WS-Security | [  ] WS-Security
+서비스 보안 | 메시지레벨암호화 | [  ] 전자서명 [  ] 암호화 [O] 없음 | [  ] 전자서명 [  ] 암호화 [O] 없음 | [  ] WS-Security | [  ] WS-Security
+서비스 보안 | 전송레벨암호화 | [  ] SSL   [ O ] 없음 | [  ] SSL   [ O ] 없음 | [  ] SSL   [ O ] 없음 | [  ] SSL   [ O ] 없음
+적용기술 / 수준 | 인터페이스표준 | [  ] SOAP 1.2 / (RPC-Encoded, Document Literal, Document Literal Wrapped) / [ O ] REST (GET, POST, PUT, DELETE) / [ ] RSS 1.0 [ ] RSS 2.0 [ ] Atom 1.0 [ ] 기타 | [  ] SOAP 1.2 / (RPC-Encoded, Document Literal, Document Literal Wrapped) / [ O ] REST (GET, POST, PUT, DELETE) / [ ] RSS 1.0 [ ] RSS 2.0 [ ] Atom 1.0 [ ] 기타 | [  ] SOAP 1.2 / (RPC-Encoded, Document Literal, Document Literal Wrapped) / [ O ] REST (GET, POST, PUT, DELETE) / [ ] RSS 1.0 [ ] RSS 2.0 [ ] Atom 1.0 [ ] 기타 | [  ] SOAP 1.2 / (RPC-Encoded, Document Literal, Document Literal Wrapped) / [ O ] REST (GET, POST, PUT, DELETE) / [ ] RSS 1.0 [ ] RSS 2.0 [ ] Atom 1.0 [ ] 기타
+적용기술 / 수준 | 교환데이터표준 | [ O ] XML [ O ] JSON [ ] MIME [ ] MTOM | [ O ] XML [ O ] JSON [ ] MIME [ ] MTOM | [ O ] XML [ O ] JSON [ ] MIME [ ] MTOM | [ O ] XML [ O ] JSON [ ] MIME [ ] MTOM
+서비스URL | 개발환경 | N/A | N/A | N/A | N/A
+서비스URL | 운영환경 | https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2 | https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2 | https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2 | https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2
+서비스WADL | 개발환경 | N/A | N/A | N/A | N/A
+서비스WADL | 운영환경 | N/A | N/A | N/A | N/A
+서비스 / 배포정보 | 서비스버전 | 2.0 | 2.0 | 2.0 | 2.0
+서비스 / 배포정보 | 유효일자 | N/A | N/A | 배포일자 | 2026/04/06
+서비스 / 배포정보 | 서비스이력 | V2.0: / 재산유형코드상 ‘파산재산’포함 / 최저입찰가격(lowstBidPrcIndctCont) 항목설명 추가 / 최초공고일자(frstPbancYmd) 출력값 포함 / 물건사진목록(potoUrlList) 중첩구조로 변경 / 온비드물건번호(onbidCltrno), 온비드공고번호(onbidPbancNo), / 공매번호(pbctNo) 출력값 추가 / 공매재산명세(papsInf) Object -> Array(0..1) 명세 변경 | V2.0: / 재산유형코드상 ‘파산재산’포함 / 최저입찰가격(lowstBidPrcIndctCont) 항목설명 추가 / 최초공고일자(frstPbancYmd) 출력값 포함 / 물건사진목록(potoUrlList) 중첩구조로 변경 / 온비드물건번호(onbidCltrno), 온비드공고번호(onbidPbancNo), / 공매번호(pbctNo) 출력값 추가 / 공매재산명세(papsInf) Object -> Array(0..1) 명세 변경 | V2.0: / 재산유형코드상 ‘파산재산’포함 / 최저입찰가격(lowstBidPrcIndctCont) 항목설명 추가 / 최초공고일자(frstPbancYmd) 출력값 포함 / 물건사진목록(potoUrlList) 중첩구조로 변경 / 온비드물건번호(onbidCltrno), 온비드공고번호(onbidPbancNo), / 공매번호(pbctNo) 출력값 추가 / 공매재산명세(papsInf) Object -> Array(0..1) 명세 변경 | V2.0: / 재산유형코드상 ‘파산재산’포함 / 최저입찰가격(lowstBidPrcIndctCont) 항목설명 추가 / 최초공고일자(frstPbancYmd) 출력값 포함 / 물건사진목록(potoUrlList) 중첩구조로 변경 / 온비드물건번호(onbidCltrno), 온비드공고번호(onbidPbancNo), / 공매번호(pbctNo) 출력값 추가 / 공매재산명세(papsInf) Object -> Array(0..1) 명세 변경
+메시지교환유형 | 메시지교환유형 | [ O ] Request-Response [   ] Publish-Subscribe / [   ] Fire-and-Forgot  [   ] Notification | [ O ] Request-Response [   ] Publish-Subscribe / [   ] Fire-and-Forgot  [   ] Notification | [ O ] Request-Response [   ] Publish-Subscribe / [   ] Fire-and-Forgot  [   ] Notification | [ O ] Request-Response [   ] Publish-Subscribe / [   ] Fire-and-Forgot  [   ] Notification
+메시지로깅수준 | 메시지로깅수준 | 성공 | [O] Header [ ] Body | 실패 | [O] Header [O] Body
+사용제약사항(비고) | 사용제약사항(비고) |  |  |  | 
+--- TABLE 2 ---
+일련번호 | 오퍼레이션명(국문) | 오퍼레이션명(영문)
+1 | 부동산 물건상세정보 조회 | getRlstDtlInf
+--- TABLE 3 ---
+오퍼레이션번호 | 1 | 오퍼레이션명(국문) | 부동산 물건상세정보 조회
+오퍼레이션유형 | 조회(목록) | 오퍼레이션명(영문) | getRlstDtlInf
+오퍼레이션설명 | 부동산 물건목록에서 제공되는 물건관리번호와 공매조건번호로 조회하면 물건관리번호, 물건명, 지목, 면적, 공고공지사항, 일괄입찰물건, 감정평가정보, 임대차정보, 등기사항증명서주요정보목록, 사진URL, 동영상URL, 위치도URL, 지번PNU코드, 도로명PNU코드 등의 정보를 제공합니다. | 부동산 물건목록에서 제공되는 물건관리번호와 공매조건번호로 조회하면 물건관리번호, 물건명, 지목, 면적, 공고공지사항, 일괄입찰물건, 감정평가정보, 임대차정보, 등기사항증명서주요정보목록, 사진URL, 동영상URL, 위치도URL, 지번PNU코드, 도로명PNU코드 등의 정보를 제공합니다. | 부동산 물건목록에서 제공되는 물건관리번호와 공매조건번호로 조회하면 물건관리번호, 물건명, 지목, 면적, 공고공지사항, 일괄입찰물건, 감정평가정보, 임대차정보, 등기사항증명서주요정보목록, 사진URL, 동영상URL, 위치도URL, 지번PNU코드, 도로명PNU코드 등의 정보를 제공합니다.
+Call Back URL | [서비스URL]/getRlstDtlInf2 | [서비스URL]/getRlstDtlInf2 | [서비스URL]/getRlstDtlInf2
+최대메시지사이즈 | 100 bytes | 100 bytes | 100 bytes
+평균응답시간 | 500 ms | 초당최대트랜잭션 | 10 tps
+--- TABLE 4 ---
+항목명(영문) | 항목명(국문) | 항목크기 | 항목구분 | 샘플데이터 | 항목설명
+serviceKey | 서비스키 | 100 | 1 | 인증키 (URL- Encode) | 공공데이터포털에서 발급받은 인증키
+pageNo | 페이지번호 | 2 | 1 | 10 | 페이지 번호
+numOfRows | 한 페이지 결과 수 | 5 | 1 | 1 | 한 페이지 / 결과 수
+resultType | 응답유형 | - | 1 | json | 응답유형
+cltrMngNo | 물건관리번호 | VARCHAR(100) | 1 | 2024-1100-084555 | 물건관리번호(물건목록에서 제공)
+pbctCdtnNo | 공매조건번호 | NUMBER(22) | 0 | 3621804 | 공매조건번호(물건목록에서 제공)
+ |  |  |  |  | 
+--- TABLE 5 ---
+항목명(영문) | 항목명(영문) | 항목명(영문) | 항목명(국문) | 항목크기 | 항목 / 구분 | 샘플데이터 | 항목설명
+resultCode | resultCode | resultCode | 응답코드 | 10 | 1 | 00 | 검색결과 코드
+resultMsg | resultMsg | resultMsg | 응답메세지 | 20 | 1 | NORMAL / SERVICE | 검색결과 메세지
+pageNo | pageNo | pageNo | 페이지수 | 4 | 1 | 1 | 출력될 페이지 번호
+totalCount | totalCount | totalCount | 데이터 총 개수 | 5 | 1 | 1 | 데이터 총개수
+numOfRows | numOfRows | numOfRows | 한 페이지 결과 수 | 4 | 1 | 10 | 한페이지당 표출 데이터 수
+ | cltrMngNo | cltrMngNo | 물건관리번호 | VARCHAR(100) | 1 | 2024-1100-084555 | 물건관리번호
+ | pbctCdtnNo | pbctCdtnNo | 공매조건번호 | NUMBER(22) | 1 | 3621804 | 공매조건번호(물건 상세정보나 입찰정보 조회시 물건관리번호와 함께 입력 필요)
+ | onbidCltrno | onbidCltrno | 온비드물건번호 | NUMBER(22) | 1 | 1676101 | 온비드물건번호
+ | onbidPbancNo | onbidPbancNo | 온비드공고번호 | NUMBER(22) | 1 | 857406 | 온비드공고번호
+ | pbctNo | pbctNo | 공매번호 | NUMBER(22) | 1 | 9992357 | 공매번호
+ | pbctNsq | pbctNsq | 회차 | VARCHAR(3) | 1 | 1 | 회차
+ | pbctsn | pbctsn | 차수 | VARCHAR(5) | 1 | 1 | 차수(2026.1.1 이후 확정된 공고는 차수 표시되지 않음)
+ | prptDivCd | prptDivCd | 재산유형코드 | VARCHAR(4) | 0 | 0007 | 재산유형코드 (0007 : 압류재산, 0010 : 국유재산, 0005 : 기타일반재산, 0004 : 불용품, 0002 : 공유재산, 0003 : 금융권담보재산, 0006 : 유입재산, 0008 : 수탁재산, 0011 : 공공개발재산, 0013: 파산자산)
+ | prptDivNm | prptDivNm | 재산유형코드명 | VARCHAR(100) | 0 | 압류재산 | 재산유형코드명 (0007 : 압류재산, 0010 : 국유재산, 0005 : 기타일반재산, 0004 : 불용품, 0002 : 공유재산, 0003 : 금융권담보재산, 0006 : 유입재산, 0008 : 수탁재산, 0011 : 공공개발재산, 0013: 파산자산)
+ | dspsMthodCd | dspsMthodCd | 처분방식코드 | VARCHAR(4) | 0 | 0001 | 처분방식코드 (0001 : 매각 / 0002 : 임대)
+ | dspsMthodNm | dspsMthodNm | 처분방식코드명 | VARCHAR(100) | 0 | 매각 | 처분방식명 (0001 : 매각 / 0002 : 임대)
+ | bidMthodCd | bidMthodCd | 세부입찰방식코드 | VARCHAR(4) | 0 | 0001 | 세부입찰방식코드 (0001 : 최고가방식 / 0002 : 호가방식 / 0003 : 평가방식 / 0004 : 추첨방식 / 0005 : 시담방식 / 0006:적정최고가방식 / 0007:제한적최고가방식)
+ | bidMthodNm | bidMthodNm | 세부입찰방식코드명 | VARCHAR(100) | 0 | 최고가방식 | 세부입찰방식코드명(0001 : 최고가방식 / 0002 : 호가방식 / 0003 : 평가방식 / 0004 : 추첨방식 / 0005 : 시담방식 / 0006:적정최고가방식 / 0007:제한적최고가방식)
+ | cptnMthodCd | cptnMthodCd | 입찰방식코드 | VARCHAR(4) | 0 | 0001 | 입찰방식코드(0001 : 일반경쟁 / 0002 : 제한경쟁 / 0003 : 지명경쟁 / 0004 : 수의계약)
+ | cptnMthodNm | cptnMthodNm | 입찰방식코드명 | VARCHAR(100) | 0 | 일반경쟁 | 입찰방식코드명(0001 : 일반경쟁 / 0002 : 제한경쟁 / 0003 : 지명경쟁 / 0004 : 수의계약)
+ | totalamtUnpcDivCd | totalamtUnpcDivCd | 총액단가구분코드 | VARCHAR(4) | 0 | 0001 | 총액/단가구분코드(0001 : 총액 / 0002 : 단가)
+ | totalamtUnpcDivNm | totalamtUnpcDivNm | 총액단가구분코드명 | VARCHAR(100) | 0 | 총액 | 총액/단가구분명(0001 : 총액 / 0002 : 단가)
+ | bidDivCd | bidDivCd | 입찰구분코드 | VARCHAR(4) | 0 | 0001 | 입찰구분코드 (0001:인터넷 / 0002:현장)
+ | bidDivNm | bidDivNm | 입찰구분코드명 | VARCHAR(100) | 0 | 인터넷 | 입찰구분코드명 (0001:인터넷 / 0002:현장 / )
+ | cltrUsgLclsCtgrId | cltrUsgLclsCtgrId | 용도대분류코드 | VARCHAR(20) | 0 | 10000 | 용도대분류코드
+ | cltrUsgMclsCtgrId | cltrUsgMclsCtgrId | 용도중분류코드 | VARCHAR(20) | 0 | 10400 | 용도중분류코드
+ | cltrUsgSclsCtgrId | cltrUsgSclsCtgrId | 용도소분류코드 | VARCHAR(20) | 0 | 10402 | 용도소분류코드
+ | cltrUsgLclsCtgrNm | cltrUsgLclsCtgrNm | 용도대분류코드명 | VARCHAR(100) | 0 | 부동산 | 용도대분류코드명
+ | cltrUsgMclsCtgrNm | cltrUsgMclsCtgrNm | 용도중분류코드명 | VARCHAR(100) | 0 | 산업용및기타특수용건물 | 용도중분류코드명
+ | cltrUsgSclsCtgrNm | cltrUsgSclsCtgrNm | 용도소분류코드명 | VARCHAR(100) | 0 | 창고시설 | 용도소분류코드명
+ | onbidCltrNm | onbidCltrNm | 물건명 | VARCHAR(1000) | 0 | 서울특별시 송파구 석촌동 242-15 짜투리 대지 | 물건명
+ | usbdNft | usbdNft | 유찰횟수 | NUMBER(15) | 0 | 0 | 유찰횟수(회)
+ | bidPrgnNft | bidPrgnNft | 입찰진행횟수 | NUMBER(22) | 0 | 9 | 입찰진행횟수(회)
+ | pvctTrgtYn | pvctTrgtYn | 수의계약가능여부 | CHAR(1) | 0 | N | 수의계약가능여부(수의계약 가능 : Y, 수의계약 불가능 : N)
+ | batcBidYn | batcBidYn | 일괄입찰여부 | CHAR(1) | 0 | Y | 일괄입찰여부(일괄입찰 : Y, 일괄입찰아님 : N) Y인 경우 일괄입찰물건목록 참고
+ | cltrBidBgngDt | cltrBidBgngDt | 입찰시작일시 | CHAR(12) | 0 | 201605181120 | 입찰시작일시(yyyyMMddHHmm)
+ | cltrBidEndDt | cltrBidEndDt | 입찰종료일시 | CHAR(12) | 0 | 201605181120 | 입찰종료일시(yyyyMMddHHmm)
+ | apslEvlAmt | apslEvlAmt | 감정평가금액 | NUMBER(22) | 0 | 700000000000 | 감정평가금액(원)
+ | lowstBidPrcIndctCont | lowstBidPrcIndctCont | 최저입찰가격 | VARCHAR(100) | 0 | 700000000000 | 최저입찰가격표시내용(원) (최저입찰가격이 표시되거나 비공개로 표시, 재산유형코드가 압류재산(0007)인 경우 온비드 화면상에 공매예정가격으로 표시)
+ | frstBidPrc | frstBidPrc | 최초예정가액 | NUMBER(22) | 0 | 700000000000 | [재산유형 : 캠코국유] 최초예정가액
+ | apslPrcCtrsLowstBidRto | apslPrcCtrsLowstBidRto | 감정평가금액 대비 현재 최저입찰가격 | NUMBER(12,6) | 0 | 50 | 감정평가금액 대비 현재 최저입찰가격
+ | frstCtrsLowstBidPrcRto | frstCtrsLowstBidPrcRto | 최초최저입찰가격 대비 현재 최저입찰가격 | NUMBER(12,6) | 0 | 50 | 최초최저입찰가격 대비 현재 최저입찰가격
+ | ltnoPnu | ltnoPnu | 지번PNU코드 | VARCHAR(19) | 0 | 4683025023000750000 | 지번PNU코드
+ | rdnmPnu | rdnmPnu | 도로명PNU코드 | VARCHAR(25) | 0 | 4683032950650100003100000 | 도로명PNU코드
+ | lctnSdnm | lctnSdnm | 소재지지번주소(시도) | VARCHAR(100) | 0 | 경기도 | 소재지지번주소(시도)
+ | lctnSggnm | lctnSggnm | 소재지지번주소(시군구) | VARCHAR(100) | 0 | 고양시 일산동구 | 소재지지번주소(시군구)
+ | lctnEmdNm | lctnEmdNm | 소재지지번주소(읍면동) | VARCHAR(100) | 0 | 마두동 | 소재지지번주소(읍면동)
+ | rqstOrgNm | rqstOrgNm | 의뢰기관 | VARCHAR(40) | 0 | 통영세무서 | [압류재산] 의뢰기관명
+ | orgNm | orgNm | 공고기관 | VARCHAR(200) | 0 | 한국자산관리공사 | 공고기관명
+ | eltrGrprUseYn | eltrGrprUseYn | 전자보증서가능여부 | CHAR(1) | 0 | N | 전자보증서 가능 : Y, 불가능 : N
+ | collbBidPsblYn | collbBidPsblYn | 공동입찰가능여부 | CHAR(1) | 0 | Y | 공동입찰 가능 : Y, 불가능 : N
+ | twtmGthrBidPsblYn | twtmGthrBidPsblYn | 2회이상입찰가능여부 | CHAR(1) | 0 | Y | 2회이상 입찰가능 : Y, 불가능 : N
+ | subtBidPsblYn | subtBidPsblYn | 대리입찰가능여부 | CHAR(1) | 0 | Y | 대리입찰가능 : Y, 불가능 : N
+ | evcRsbyTrgtCont | evcRsbyTrgtCont | 인도인수책임 | VARCHAR(400) | 0 | 매수자 | 낙찰 후 인도/인수 책임
+ | landSqms | landSqms | 토지면적 | NUMBER(18,4) | 0 | 84.46 | 토지면적(m2)
+ | bldSqms | bldSqms | 건물면적 | NUMBER(18,4) | 0 | 28.38 | 건물면적(m2)
+ | alcYn | alcYn | 지분물건여부 | CHAR(1) | 0 | N | 지분물건여부
+ | dtbtRqrEdtmCont | dtbtRqrEdtmCont | 배분요구종기 | VARCHAR(4000) | 0 | 20160518 | 배분요구종기
+ | rentMthodNm | rentMthodNm | 임대방식명 | VARCHAR(100) | 0 | 고정형 임대 | [처분방식 : 임대] 임대방식(1년미만(임대) / ,고정형 임대,변동형 임대,매출연동 임대)
+ | rentPerdCont | rentPerdCont | 임대기간내용 | VARCHAR(100) | 0 | 3년 | [처분방식 : 임대] 임대기간내용
+ | zadrNm | zadrNm | 소재지지번주소(전체) | VARCHAR(2000) | 0 | 경상남도 진주시 충무공동 227-2 버스 주차장 | 소재지지번주소(전체)
+ | cltrRadr | cltrRadr | 소재지도로명주소(전체) | VARCHAR(1000) | 0 | 광주광역시 북구 비엔날레로 72(용봉동, 용봉동 한천아파트) | 소재지도로명주소(전체)
+ | locVntyPscdCont | locVntyPscdCont | 위치 및 부근현황 | VARCHAR(2000) | 0 | 본건은 경기도 김포시 마산동 소재 '온여울초등학교 | 위치 및 부근현황
+ | icdlCdtnCont | icdlCdtnCont | 부대조건 | CLOB | 0 | 본 매각재산의 지적은 각종 공부 및 지적도상에 표시된 면적으로 하여, 재산은 현상태로 매각하는 | 부대조건
+ | utlzPscdCont | utlzPscdCont | 이용현황 | VARCHAR(1000) | 0 | 일련번호(1~19)는 근린생활시설 등으로 이용중임(후점건물이용상황 참조) | 이용현황
+ | cltrEtcCont | cltrEtcCont | 기타사항 | VARCHAR(4000) | 0 | 일련번호(4,8), (14,7)은 벽체 구분없이 일괄로 이용중임 | 기타정보
+ | dsplVldCont | dsplVldCont | 매각유효내용 | VARCHAR(4000) | 0 | 건설공제조합 출자증권의 명의개서는 건설산업기본법에 의거 종합건설업에 등록 | 매각유효내용(공매재산에 대해 등기된 권리 또는 가처분으로서 매각으로 효력을 잃지 아니하는 것) (※재산유형코드가 압류재산(0007)인 경우만 표시)
+ | purrQlfcCont | purrQlfcCont | 매수인자격내용 | VARCHAR(4000) | 0 | 배분요구의 종기까지 배분요구를 하지 않은 최선순위 전세권은 매각으로 소멸되지 않고 | 매수인자격내용(공매재산의 매수인으로서 일정한 자격을 필요로 하는 경우 그 사실) (※재산유형코드가 압류재산(0007)인 경우만 표시)
+ | pytnMtrsCont | pytnMtrsCont | 유의사항내용 | VARCHAR(4000) | 0 | 1.본건 공유지분 매각으로 해당 지분위치는 특정되지 않았으며 | 유의사항 / (※재산유형코드가 압류재산(0007)인 경우만 표시)
+ | frstPbancYmd | frstPbancYmd | 최초공고일자 | CHAR(8) | 0 | 20241014 | 최초공고일자(yyyyMMdd) / (※재산유형코드가 압류재산(0007)인 경우만 표시)
+ | potoUrlList | potoUrlList | 물건사진URL 목록 | Array | 0..n | - | 물건사진URL 목록
+ |  | urlAdr | URL주소 | VARCHAR(500) | 0 | https://www.onbid.co.kr/cmm/cmmn/commonImageView.do?kind=LST_FILE_NM | 사진 URL주소
+ | poto360DgrUrlList | poto360DgrUrlList | 360도사진URL 목록 | VARCHAR(4000) | 0 | https://www.onbid.co.kr/cmm/cmmn/commonImageView.do?kind=LST_FILE_NM | 360도사진URL 목록 (복수일 경우 구분자 : |)
+ | vdoUrlAdrList | vdoUrlAdrList | 동영상URL 목록 | VARCHAR(4000) | 0 | https://www.onbid.co.kr/cmm/cmmn/commonImageView.do?kind=LST_FILE_NM | 동영상URL
+ | lrmUrlAdrList | lrmUrlAdrList | 지적도URL 목록 | VARCHAR(4000) | 0 | https://www.onbid.co.kr/cmm/cmmn/commonImageView.do?kind=LST_FILE_NM | 지적도URL 목록 (복수일 경우 구분자 : |)
+ | lmapUrlAdrList | lmapUrlAdrList | 위치도URL 목록 | VARCHAR(4000) | 0 | https://www.onbid.co.kr/cmm/cmmn/commonImageView.do?kind=LST_FILE_NM | 위치도URL 목록 (복수일 경우 구분자 : |)
+ | batcBidCltrClgList | batcBidCltrClgList | 일괄입찰물건목록 | Array | 0..n | - | 일괄입찰물건목록
+ |  | cltrMngNo | 물건관리번호 | VARCHAR(100) | 0 | 2024-1100-084555 | 물건관리번호
+ |  | prptDivCd | 재산유형코드 | VARCHAR(4) | 0 | 0007 | 재산유형코드 (0007 : 압류재산, 0010 : 국유재산, 0005 : 기타일반재산, 0004 : 불용품, 0002 : 공유재산, 0003 : 금융권담보재산, 0006 : 유입재산, 0008 : 수탁재산, 0011 : 공공개발재산)
+ |  | prptDivNm | 재산유형코드명 | VARCHAR(100) | 0 | 압류재산 | 재산유형코드명 (0007 : 압류재산, 0010 : 국유재산, 0005 : 기타일반재산, 0004 : 불용품, 0002 : 공유재산, 0003 : 금융권담보재산, 0006 : 유입재산, 0008 : 수탁재산, 0011 : 공공개발재산)
+ |  | dspsMthodCd | 처분방식코드 | VARCHAR(4) | 0 | 0001 | 처분방식코드 (0001 : 매각 / 0002 : 임대)
+ |  | dspsMthodNm | 처분방식코드명 | VARCHAR(100) | 0 | 매각 | 처분방식명 (0001 : 매각 / 0002 : 임대)
+ |  | cltrUsgLclsCtgrId | 용도대분류코드 | VARCHAR(20) | 0 | 10000 | 용도대분류코드
+ |  | cltrUsgMclsCtgrId | 용도중분류코드 | VARCHAR(20) | 0 | 14000 | 용도중분류코드
+ |  | cltrUsgSclsCtgrId | 용도소분류코드 | VARCHAR(20) | 0 | 14400 | 용도소분류코드
+ |  | cltrUsgLclsCtgrNm | 용도대분류코드명 | VARCHAR(100) | 0 | 부동산 | 용도대분류코드명
+ |  | cltrUsgMclsCtgrNm | 용도중분류코드명 | VARCHAR(100) | 0 | 산업용및기타특수용건물 | 용도중분류코드명
+ |  | cltrUsgSclsCtgrNm | 용도소분류코드명 | VARCHAR(100) | 0 | 창고시설 | 용도소분류코드명
+ |  | onbidCltrNm | 물건명 | VARCHAR(1000) | 0 | 서울특별시 송파구 석촌동 242-15 짜투리 대지 | 물건명
+ |  | usbdNft | 유찰횟수 | NUMBER(15) | 0 | 0 | 유찰횟수(회)
+ |  | landSqms | 토지면적 | NUMBER(18,4) | 0 | 84.46 | 토지면적(m2)
+ |  | bldSqms | 건물면적 | NUMBER(18,4) | 0 | 28.38 | 건물면적(m2)
+ |  | apslEvlAmt | 감정평가금액 | NUMBER(22) | 0 | 700000000000 | 감정평가금액(원)
+ | crtnLstClgList | crtnLstClgList | 정정내역 | Array | 0..n | - | 정정내역
+ |  | crtnYmd | 정정일자 | CHAR(8) | 0 | 20260129 | 정정일자(yyyyMMdd)
+ |  | crtnItemCont | 변경항목 | VARCHAR(1000) | 0 | 압류재산 소재지 | 변경항목
+ |  | bfmdfLstCont | 변경전 | VARCHAR(4000) | 0 | [압류재산 소재지] 대전광역시 서구 월평동 243-1  스타게이트씨네몰 제5층 제87호 | 변경전 내용
+ |  | afmdfLstCont | 변경후 | VARCHAR(4000) | 0 | [압류재산 소재지] 대전광역시 서구 월평동 243 , 스타게이트씨네몰 제5층 제87호 | 변경후 내용
+ | sqmsList | sqmsList | 면적정보목록 | Array | 0..n | - | 면적정보목록
+ |  | clandCont | 종별(지목) | VARCHAR(1000) | 0 | 건물>건물 | 종별(지목)
+ |  | sqmsCont | 면적 | VARCHAR(1000) | 0 | 59.76 | 면적(m2)
+ |  | pursAlcCont | 지분 | VARCHAR(1000) | 0 | - | 지분
+ |  | dtlCltrNm | 비고 | VARCHAR(1000) | 0 | 경기도 부천시 원미구 중동로 301 은하마을주공아파트 528동 303호 | 비고
+ | apslEvlClgList | apslEvlClgList | 감정평가정보 | Array | 0..n | - | 감정평가정보목록
+ |  | apslEvlOrgNm | 감정평가기관 | VARCHAR(300) | 0 | ㈜건일감정평가법인 | 감정평가기관
+ |  | apslApprNm | 감정평가사 | VARCHAR(300) | 0 | 홍길동 | 감정평가사명
+ |  | apslEvlYmd | 평가일자 | CHAR(8) | 0 | 20241014 | 평가일(yyyyMMdd)
+ |  | apslEvlAmt | 감정평가금액 | NUMBER(22) | 0 | 321000000 | 감정평가금액(원)
+ |  | urlAdr | 감정평가서URL | VARCHAR(500) | 0 | http://ddd~ | 감정평가서첨부파일 URL
+ | leasInfList | leasInfList | 임대차정보목록 | Array | 0..n | 0 | 임대차정보목록(감정평가서 및 배분요구서 기준)(재산유형코드가 압류재산(0007)인 경우만 표시)
+ |  | irstDivNm | 임대차내용 | VARCHAR(200) | 0 | 전세권 | 임대차내용
+ |  | cltrInprNm | 성명 | VARCHAR(200) | 0 | 황** | 성명
+ |  | bidGrteeAmt | 보증금액 | NUMBER(22) | 0 | 850000 | 보증금액(원)
+ |  | mthrAmt | 차임(월세금액) | NUMBER(23,3) | 0 | - | 차임(월세금액)(원)
+ |  | convGrteeAmt | 환산보증금액 | NUMBER(23,3) | 0 | - | 환산보증금액(원)
+ |  | cfmtnYmd | 확정(설정)일자 | VARCHAR(8) | 0 | 19721006 | 확정일자(yyyyMMdd)
+ |  | mvinYmd | 전입일자 | VARCHAR(8) | 0 | - | 전입일자(yyyyMMdd)
+ | rgstPrmrInfList | rgstPrmrInfList | 등기사항증명서주요정보목록 | Array | 0..n | 0 | 등기사항증명서 주요정보 목록(재산유형코드가 압류재산(0007)인 경우만 표시)
+ |  | irstDivNm | 권리종류명 | VARCHAR(200) | 0 | 위임기관 | 권리종류명
+ |  | cltrInprNm | 권리자명 | VARCHAR(200) | 0 | - | 권리자명
+ |  | rgstYmd | 설정일자 | VARCHAR(8) | 0 | 231107 | 등기 설정일자(yyyyMMdd)
+ |  | inprStngAmt | 설정금액 | NUMBER(22) | 0 | 1000000 | 설정금액(원)
+ | dtbtRqrMtrsList | dtbtRqrMtrsList | 배분요구사항목록 | Array | 0..n | - | [권리분석 기초정보] 배분요구사항목록(재산유형코드가 압류재산(0007)인 경우만 표시)
+ |  | rgtRelCdNm | 권리종류 | VARCHAR(300) | 0 | 근저당권 | 권리종류
+ |  | acpmPrptBondDclFlnm | 권리자명 | VARCHAR(200) | 0 | 주***** | 권리자명
+ |  | stngYmd | 설정일자 | VARCHAR(8) | 0 | 20060220 | 설정일자(yyyyMMdd)
+ |  | bondDclrStngAmt | 설정금액 | NUMBER(22) | 0 | 10000000 | 설정금액(원)
+ |  | dtbtRqrYn | 배분요구여부 | CHAR(1) | 0 | Y | 배분요구여부(Y/N)
+ |  | dtbtRqrYmd | 배분요구일자 | VARCHAR(8) | 0 | 20060220 | 배분요구일자(yyyyMMdd)
+ |  | dtbtRqrAmt | 배분요구채권금액 | NUMBER(22) | 0 | 10000000 | 배분요구채권금액(원)
+ |  | ersrPsblYn | 말소가능여부 | CHAR(1) | 0 | N | 말소가능여부
+ |  | etcCont | 기타내용 | VARCHAR(1000) | 0 | 현황 도로이나 정확한 경계 등은 별도 확인이 필요한것으로 보임 | 기타내용
+ | ocpyRelList | ocpyRelList | 점유관계목록 | Array | 0..n | - | [권리분석 기초정보] 점유관계목록(재산유형코드가 압류재산(0007)인 경우만 표시)
+ |  | ocpyRelCdNm | 점유관계명 | VARCHAR(200) | 0 | 소유자 | 점유관계코드명
+ |  | acpmPrptOcpyIrpsFlnm | 성명 | VARCHAR(200) | 0 | 홍길동 | 점유관계인성명
+ |  | ctrtYmd | 계약일자 | VARCHAR(8) | 0 | 20240101 | 계약일자(yyyyMMdd)
+ |  | mvinYmd | 전입일자 | VARCHAR(8) | 0 | 20240101 | 전입일자(yyyyMMdd)(사업자등록신청일)
+ |  | cfmtnYmd | 확정일자 | VARCHAR(8) | 0 | 20240101 | 확정일자(yyyyMMdd)
+ |  | acpmGrteeAmt | 보증금액 | NUMBER(22) | 0 | 200000000 | 보증금액(원)
+ |  | rntAmt | 차임금액 | NUMBER(22,3) | 0 | 1000000 | 차임금액(원)
+ |  | lsdPartCont | 임차부분내용 | VARCHAR(1000) | 0 | - | 임차부분내용
+ | papsInf | papsInf | 공매재산명세서정보 | Object | 0 | - | 공매재산명세서정보
+ |  | dlgtOrgNm | 처분청 | VARCHAR(200) | 0 | 서울특별시 | 처분청
+ |  | mngNo | 관리번호 | VARCHAR(40) | 0 | 2024-11111 | 관리번호
+ |  | pbancYmd | 공매공고일자 | VARCHAR(8) | 0 | 20240101 | 공매공고일자(yyyyMMdd)
+ |  | dtbtRqrEdtmYmd | 배분요구의종기일자 | VARCHAR(8) | 0 | 20240101 | 배분요구의종기일자(yyyyMMdd)
+ |  | pbctTdps | 공매보증금 | VARCHAR( | 0 | 20000000 | 공매보증금
+ |  | zadr | 지번주소 | VARCHAR | 0 | 서울특별시 중구 1 | [공매재산의 표시] 지번주소
+ |  | alcCont | 지분내용 | VARCHAR | 0 | 온비드 입찰정보 참조 | [공매재산의 표시] 지분내용
+ |  | pbctEspc | 공매(매각)예정가격 | VARCHAR | 0 | 온비드 입찰정보 참조 | 공매(매각)예정가격
+ |  | bidPerd | 입찰서제출(입찰기간) | VARCHAR | 0 | 온비드 입찰정보 참조 | 입찰서제출(입찰기간)
+ |  | opbdYmd | 개찰일자 | VARCHAR | 0 | 온비드 입찰정보 참조 | 개찰일자
+ |  | dodispDudt | 매각결정기일 | VARCHAR | 0 | 온비드 입찰정보 참조 | 매각결정기일
+ |  | ersrExclRgtCont | 말소제외권리내용 | VARCHAR | 0 | - | 말소제외권리내용
+ |  | sttyEbrVldCont | 법정지상권유효내용 | VARCHAR | 0 | - | 법정지상권유효내용
+ |  | pytnMtrsCont | 유의사항내용 | VARCHAR | 0 | - | 유의사항내용
+ |  | prcvYmd | 현황조사일자 | VARCHAR | 0 | - | [공매재산 이용 및 점유현황] 조사일자(yyyyMMdd)
+ |  | etcSmryCont | 기타요약내용 | VARCHAR | 0 | - | 기타요약내용
+ |  | szrPrptIndctCont | 압류재산표시내용 | VARCHAR | 0 | 온비드 입찰정보 참조 | 압류재산표시내용
+ | mdfcnDt | mdfcnDt | 최종수정일시 | VARCHAR(14) | 0 | 20160518112000 | 최종수정일시(yyyyMMddHHmmss)
+ | crtnYn | crtnYn | 정정여부 | CHAR(1) | 0 | 0 | 정정여부(정정내역있음 : Y, 정정내역없음 : N) 물건 항목에 대한 정정이 있었는지 여부를 나타냄. Y인 경우 물건 상세의 정정내역 항목 참고
+ | feeRate | feeRate | 할인율 | NUMBER | 0 | 80 | 할인율(%)
+ | pbctStatCd | pbctStatCd | 입찰결과구분코드 | VARCHAR(4) | 0 | 0011 | 입찰결과코드 (0001 : 입찰준비중 / 0002 : 입찰진행중 / 0003 : 입찰마감 / 0006 : 개찰중 / 0009 : 수의계약가능 / 0010 : 낙찰 / 0011 : 유찰 / 0012 : 취소)
+ | pbctStatNm | pbctStatNm | 입찰결과구분코드명 | VARCHAR(100) | 0 | 유찰 | 입찰결과코드명 (0001 : 입찰준비중 / 0002 : 입찰진행중 / 0003 : 입찰마감 / 0006 : 개찰중 / 0009 : 수의계약가능 / 0010 : 낙찰 / 0011 : 유찰 / 0012 : 취소)
+--- TABLE 6 ---
+항목명(영문) | 항목명(국문) | 코드값 : 코드값설명 | 비고
+prptDivCd | 재산유형코드 | 0007 : 압류재산 / 0010 : 국유재산 / 0005 : 기타일반재산 / 0004 : 불용품 / 0002 : 공유재산 / 0003 : 금융권담보재산 / 0006 : 유입재산 / 0008 : 수탁재산 / 0011 : 공공개발재산 / 0013 : 파산재산 | 
+prptDivNm | 재산유형코드명 | 0007 : 압류재산 / 0010 : 국유재산 / 0005 : 기타일반재산 / 0004 : 불용품 / 0002 : 공유재산 / 0003 : 금융권담보재산 / 0006 : 유입재산 / 0008 : 수탁재산 / 0011 : 공공개발재산 / 0013 : 파산재산 | 
+dspsMthodCd | 처분방식코드 | 0001 : 매각 / 0002 : 임대 | 
+dspsMthodNm | 처분방식코드명 | 0001 : 매각 / 0002 : 임대 | 
+bidMthodCd | 세부입찰방식코드 | 0001 : 최고가방식 / 0002 : 호가방식 / 0003 : 평가방식 / 0004 : 추첨방식 / 0005 : 시담방식 / 0006 : 적정최고가방식 / 0007 : 제한적최고가방식 | 
+bidMthodNm | 세부입찰방식코드명 | 0001 : 최고가방식 / 0002 : 호가방식 / 0003 : 평가방식 / 0004 : 추첨방식 / 0005 : 시담방식 / 0006 : 적정최고가방식 / 0007 : 제한적최고가방식 | 
+cptnMthodCd | 입찰방식코드 | 0001 : 일반경쟁 / 0002 : 제한경쟁 / 0003 : 지명경쟁 / 0004 : 수의계약 | 
+cptnMthodNm | 입찰방식코드명 | 0001 : 일반경쟁 / 0002 : 제한경쟁 / 0003 : 지명경쟁 / 0004 : 수의계약 | 
+totalamtUnpcDivCd | 총액단가구분코드 | 0001 : 총액 / 0002 : 단가 | 
+totalamtUnpcDivNm | 총액단가구분코드명 | 0001 : 총액 / 0002 : 단가 | 
+bidDivCd | 입찰구분코드 | 0001 : 인터넷 / 0002 : 현장 | 
+bidDivNm | 입찰구분코드명 | 0001 : 인터넷 / 0002 : 현장 | 
+cltrTypeCd | 물건유형코드 | 0001 : 부동산 / 0002 : 자동차 / 0003 : 동산 | 
+pbctStatCd | 입찰결과구분코드 | 0001 : 입찰준비중 / 0002 : 입찰진행중 / 0003 : 입찰마감 / 0006 : 개찰중 / 0009 : 수의계약가능 / 0010 : 낙찰 / 0011 : 유찰 / 0012 : 취소 | 
+pbctStatNm | 입찰결과구분코드명 | 0001 : 입찰준비중 / 0002 : 입찰진행중 / 0003 : 입찰마감 / 0006 : 개찰중 / 0009 : 수의계약가능 / 0010 : 낙찰 / 0011 : 유찰 / 0012 : 취소 | 
+pbancKindCd | 공고유형코드 | 0001 : 일반공고 / 0002 : 재공고 / 0003 : 정정공고 / 0004 : 연기공고 / 0005 : 취소공고 / 0006 : 긴급공고 | 
+pbancKindNm | 공고유형코드명 | 0001 : 일반공고 / 0002 : 재공고 / 0003 : 정정공고 / 0004 : 연기공고 / 0005 : 취소공고 / 0006 : 긴급공고 | 
+exctStatCd | 집행상태코드 | 0001 : 개찰준비중 / 0002 : 개찰중 / 0003 : 개찰완료 | 
+exctStatNm | 집행상태명 | 0001 : 개찰준비중 / 0002 : 개찰중 / 0003 : 개찰완료 | 
+--- TABLE 7 ---
+결과코드 | 결과메세지 | 설명
+00 | NORMAL_CODE | 정상
+01 | APPLICATION_ERROR | 어플리케이션 에러
+02 | DB_ERROR | 데이터베이스 에러
+03 | NODATA_ERROR | 데이터없음 에러
+04 | HTTP_ERROR | HTTP 에러
+05 | SERVICETIMEOUT_ERROR | 서비스 연결실패 에러
+10 | INVALID_REQUEST_PARAMETER_ERROR | 잘못된 요청 파라메터 에러
+11 | NO_MANDATORY_REQUEST_PARAMETERS_ERROR | 필수요청 파라메터가 없음
+12 | NO_OPENAPI_SERVICE_ERROR | 해당 오픈API서비스가 없거나 폐기됨
+20 | SERVICE_ACCESS_DENIED_ERROR | 서비스 접근거부
+21 | TEMPORARILY_DISABLE_THE_SERVICEKEY_ERROR | 일시적으로 사용할 수 없는 서비스 키
+22 | LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR | 서비스 요청제한횟수 초과에러
+30 | SERVICE_KEY_IS_NOT_REGISTERED_ERROR | 등록되지 않은 서비스키
+31 | DEADLINE_HAS_EXPIRED_ERROR | 기한만료된 서비스키
+32 | UNREGISTERED_IP_ERROR | 등록되지 않은 IP
+33 | UNSIGNED_CALL_ERROR | 서명되지 않은 호출
+99 | UNKNOWN_ERROR | 기타에러
+--- TABLE 8 ---
+XML | JSON
+<?xml version="1.0" encoding="UTF-8"?><response> /   <header> /     <resultCode>00</resultCode> /     <resultMsg>NORMAL_CODE</resultMsg> /   </header> /   <body> /     <items> /       <item> /         <cltrMngNo>2025-1200-015749</cltrMngNo> /         <onbidCltrNm>경기도 안양시 만안구 안양동  / 435-1 1401 주상복합 / </onbidCltrNm> /         <alcYn>N</alcYn> /         <cltrRadr>경기도 안양시 만안구 만안로 99, /  1401 (안양동, 프리빌오피스텔) / </cltrRadr> /         <cltrEtcCont>엘리베이터 : 있음 /  에스컬레이터 : 없음  / 주차장 : 없음 없음 / </cltrEtcCont> /         <apslEvlClgList> /           <listItem> /             <apslEvlYmd>20251203</apslEvlYmd> /             <apslEvlOrgNm>감정평가기관 / </apslEvlOrgNm> / <apslApprNm>홍길동</apslApprNm> /             <apslEvlAmt>10000000</apslEvlAmt> /            <urlAdr> / http://opdev.onbid.or.kr/op/cm/syc/filemng/ / </urlAdr> /           </listItem> /         </apslEvlClgList> /       </item> /     </items> /     <numOfRows>10</numOfRows> /     <pageNo>1</pageNo> /     <totalCount>1</totalCount> /   </body> / </response> | { /   "header": { /     "resultCode": "00", /     "resultMsg": "NORMAL_CODE" /   }, /   "body": { /     "items": { /       "item": [ /         { /           "cltrMngNo": "2025-1200-015749", /           "onbidCltrNm": "경기도 안양시 만안구  / 안양동 435-1 1401 주상복합", /           "alcYn": "N", /           "cltrRadr": "경기도 안양시 만안구 /                 만안로 99, 1401  / (안양동, 프리빌오피스텔)", /           "cltrEtcCont": "엘리베이터 : 있음  / 에스컬레이터 : 없음 / 주차장 : 없음 없음", /           "apslEvlClgList": [ /             { /               "apslEvlYmd": "20251203", /               "apslEvlOrgNm": "감정평가기관", / "apslApprNm": "홍길동", /               "apslEvlAmt": 10000000, /               "urlAdr": "http://opdev.onbid.or.kr/op/cm/syc/filemng/" /             } /           ] /         } /       ] /     }, /     "numOfRows": 10, /     "pageNo": 1, /     "totalCount": 1 /   } / }

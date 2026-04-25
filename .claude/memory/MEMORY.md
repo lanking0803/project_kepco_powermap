@@ -13,6 +13,7 @@
 - 좌표 저장 정책 (2026-04-22~): `kepco_addr.lat/lng` = 리 단위 단일 저장소. 지번 좌표는 VWorld on-demand + Vercel KV (TTL 3일). `geocode_cache` 폐기
 - [SUNLAP 결제 일정](project_payment_schedule.md) 💰 — 선금 200만 수령(2026-04-21). 잔금 1,210만은 완료 후. 서버비 월 5만 매월 21일
 - [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 로드뷰·수집기+2개 완료. 1차 1단계(지적편집도) 착수. 가격표 docs/견적_1차2차.md
+- 🏛 [공매+경매 통합 의도](project_auction_intent.md) ⭐ — 의뢰자 의도: "태양광 부지 저가 매입 기회 발굴". 경매 무상서비스 추가(2026-04-25). 출처 미정
 - [3차 개발 — 태양광설치여부+이격거리](project_phase3_proposal.md) ⭐ — 전국태양광허가 API + 법제처 조례 API + 도로현황 SHP 연계 가능 검증 완료. 400~550만/10~12주. 의뢰자 확답 대기 (2026-04-17)
 - [건축물대장 API 검증](reference_bldg_register_api.md) — endpoint/파라미터/응답필드 실측. 비닐하우스는 대부분 미등록 한계. 키는 SECRETS.local.md
 - [줌 레벨별 마커 최적화](project_zoom_level_optimization.md) — 130만 행 대비, 줌에 따라 시/군→읍/면→리 마커 전환 (미구현 숙제)
