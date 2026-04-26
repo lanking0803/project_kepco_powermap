@@ -6,12 +6,15 @@ export const meta: ExternalServiceMeta = {
   category: "data.go.kr",
   consoleUrl: "https://www.data.go.kr/data/15044713/openapi.do",
   envKeys: ["DATA_GO_KR_KEY"],
-  expiry: null,
-  dailyLimit: "10,000건/일 (개발계정, 운영계정 미전환)",
+  expiry: "2028-04-25",
+  dailyLimit: "운영계정 (2026-04-25 전환, 정확 한도는 마이페이지 확인)",
   issueGuide: `1. https://www.data.go.kr → "건축HUB 건축물대장 정보 서비스" 활용신청
-2. 자동승인 → 즉시 사용
-3. 운영계정 전환 가능 (필요 시) — 자동승인 + 한도 상향
-4. 인증키는 DATA_GO_KR_KEY 공유`,
+2. 자동승인 → 즉시 사용 (개발계정)
+3. 운영계정 전환 (2026-04-25 완료):
+   - 활용신청 상세 → "운영계정 활용신청"
+   - 활용사례 정보 입력 → 자동승인 → 한도 상향
+4. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)
+5. 만료 만료예정일 2028-04-25 — 만료 전 콘솔에서 연장`,
   usageExample: `# 표제부 (메인 건물)
 GET https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo
   ?serviceKey=\${DATA_GO_KR_KEY}

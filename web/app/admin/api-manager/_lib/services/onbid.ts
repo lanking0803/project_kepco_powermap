@@ -7,8 +7,8 @@ export const meta: ExternalServiceMeta = {
   consoleUrl:
     "https://www.data.go.kr/iim/api/selectAPIAcountView.do?publicDataDetailPk=uddi:35a76c3c-9712-4c9a-bf80-a78b25b9d3b8",
   envKeys: ["DATA_GO_KR_KEY"],
-  expiry: "2028-04-26",
-  dailyLimit: "100,000건/일 (운영계정, 2026-04-26 전환)",
+  expiry: "2028-04-25",
+  dailyLimit: "100,000건/일 (운영계정, 2026-04-25 전환)",
   issueGuide: `1. https://www.data.go.kr → "한국자산관리공사_차세대 온비드 부동산 물건상세 조회서비스" 활용신청
 2. 추가로 "OnbidRlstListSrvc2" (목록 조회) 도 함께 신청
 3. 자동승인 → 즉시 사용

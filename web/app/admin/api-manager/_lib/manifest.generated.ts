@@ -380,6 +380,37 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/buildings/polygons/by-pnu",
+      "id": "buildings-polygons-by-pnu",
+      "filePath": "app/api/buildings/polygons/by-pnu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "VWorld WFS lt_c_spbd (도로명주소건물, fes:Filter pnu 1:1 매칭)",
+            "cache": "private, s-maxage=86400, max-age=3600",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4783035035101790000",
+                "description": "PNU 19자리 — 필지 단위 1:1 매칭"
+              }
+            ],
+            "outputSchema": "{ ok, pnu, rows: BuildingPolygon[] }   // 0건도 정상 (비닐하우스/간이축사 가설건축물 미등록)",
+            "externalDeps": [
+              "vworld"
+            ],
+            "notes": "한 필지 여러 동 → rows 배열. 옥상 합산 면적 = sum(rows.area_m2). bd_mgt_sn 으로 건축물대장 표제부와 join 가능. 검증 (직리 179: 11동, 서울시청 BBOX: 33동)."
+          },
+          "metaLine": 22,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/capa/by-bjd",
       "id": "capa-by-bjd",
       "filePath": "app/api/capa/by-bjd/route.ts",
@@ -764,6 +795,44 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/solar-permits/by-page",
+      "id": "solar-permits-by-page",
+      "filePath": "app/api/solar-permits/by-page/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "data.go.kr tn_pubr_public_solar_gen_flct_api (NIA, 데이터ID 15107742)",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "page",
+                "type": "number",
+                "required": false,
+                "sample": "1",
+                "description": "1-base 페이지 번호 (기본 1, 최대 122)"
+              },
+              {
+                "name": "size",
+                "type": "number",
+                "required": false,
+                "sample": "10",
+                "description": "페이지당 행 수 (기본 100, 최대 1000)"
+              }
+            ],
+            "outputSchema": "{ ok, page, size, totalCount, rows: SolarPermit[] }   // SolarPermit = 17 필드 정규화 (facilityName, lotnoAddr, lat, lng, capacityKw, operatingStatus 등)",
+            "externalDeps": [
+              "solar-permit"
+            ],
+            "notes": "⚠️ 외부 API 가 검색 필터 미지원 → 페이지네이션만 가능. 사용자 영업 화면(이 PNU 근처 태양광)은 Phase 3 정식 작업에서 DB 적재 후 by-pnu/near-point 별도 신설 필요. 본 endpoint 는 (1) API 살아있는지 검증 (2) Phase 3 수집기 기반 코드 재활용 용도."
+          },
+          "metaLine": 22,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/transactions/by-bjd",
       "id": "transactions-by-bjd",
       "filePath": "app/api/transactions/by-bjd/route.ts",
@@ -819,9 +888,9 @@ export const MANIFEST: GeneratedManifest = {
       "envKeys": [
         "DATA_GO_KR_KEY"
       ],
-      "expiry": null,
-      "dailyLimit": "10,000건/일 (개발계정, 운영계정 미전환)",
-      "issueGuide": "1. https://www.data.go.kr → \"건축HUB 건축물대장 정보 서비스\" 활용신청\n2. 자동승인 → 즉시 사용\n3. 운영계정 전환 가능 (필요 시) — 자동승인 + 한도 상향\n4. 인증키는 DATA_GO_KR_KEY 공유",
+      "expiry": "2028-04-25",
+      "dailyLimit": "운영계정 (2026-04-25 전환, 정확 한도는 마이페이지 확인)",
+      "issueGuide": "1. https://www.data.go.kr → \"건축HUB 건축물대장 정보 서비스\" 활용신청\n2. 자동승인 → 즉시 사용 (개발계정)\n3. 운영계정 전환 (2026-04-25 완료):\n   - 활용신청 상세 → \"운영계정 활용신청\"\n   - 활용사례 정보 입력 → 자동승인 → 한도 상향\n4. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)\n5. 만료 만료예정일 2028-04-25 — 만료 전 콘솔에서 연장",
       "usageExample": "# 표제부 (메인 건물)\nGET https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &sigunguCd=11680    # 시군구 5자리\n  &bjdongCd=10300     # 법정동 5자리\n  &platGbCd=0         # 0=일반/1=산\n  &bun=0073&ji=0001   # 본번/부번 4자리",
       "notes": "- ⚠️ **트러블슈팅**: 401 Unauthorized 의 진짜 원인은 키 문제가 아니라 **존재하지 않는 시군구/법정동 조합**\n  → 의심되는 주소 시도 전 검증된 주소(서울 강남 삼성동 159)로 200 OK 먼저 확인\n- **결정적 한계**: 비닐하우스/간이 슬레이트 축사는 가설건축물 → 미등록 (대부분 안 잡힘)\n- 등록 잘 됨: 유리온실(100평↑), 콘크리트/철골 축사, 공장/창고/일반건물\n- 표제부(getBrTitleInfo) + 총괄표제부(getBrRecapTitleInfo) 가 메인 — 7개 오퍼레이션 중 표제부만 우선 도입\n- 응답 = 78 필드, 영업가치 22개만 발췌 정규화 (lib/building-hub/title.ts)\n- 한 지번에 여러 동(부속건축물 등) 가능 → rows 배열",
       "filePath": "app/admin/api-manager/_lib/services/bldg-register.ts",
@@ -895,8 +964,8 @@ export const MANIFEST: GeneratedManifest = {
       "envKeys": [
         "DATA_GO_KR_KEY"
       ],
-      "expiry": "2028-04-26",
-      "dailyLimit": "100,000건/일 (운영계정, 2026-04-26 전환)",
+      "expiry": "2028-04-25",
+      "dailyLimit": "100,000건/일 (운영계정, 2026-04-25 전환)",
       "issueGuide": "1. https://www.data.go.kr → \"한국자산관리공사_차세대 온비드 부동산 물건상세 조회서비스\" 활용신청\n2. 추가로 \"OnbidRlstListSrvc2\" (목록 조회) 도 함께 신청\n3. 자동승인 → 즉시 사용\n4. 운영계정 전환:\n   - 활용사례 입력 (활용사례명, 분류체계, 서비스URL, 서비스설명, 서비스 화면 캡처 1장)\n   - 자동승인 → 100,000건/일로 즉시 상향\n5. 인증키는 DATA_GO_KR_KEY 공유",
       "usageExample": "# 부동산 물건 목록\nGET https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &resultType=json\n  &prptDivCd=10           # 10=부동산\n  &pvctTrgtYn=N           # 공고일 기준 N=현재진행\n  &pageNo=1&numOfRows=100\n\n# 부동산 물건 상세\nGET https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2/getRlstDtlInf2\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &cltrNo=...             # 물건관리번호\n  &plnmNo=...             # 공고관리번호",
       "notes": "- 응답에 **지번PNU코드 (ltnoPnu) 19자리** 직접 제공 → VWorld 폴리곤 그대로 결합 가능 (★ 매우 유용)\n- 압류재산만 현재 30,178건 진행 중 (정기 공매 + 일별 갱신)\n- 명세 docx → 텍스트 보존: docs/api_specs/온비드_공매/_extract.txt / _extract_상세.txt\n- 호출 테스트 스크립트: crawler/test_onbid.py (gitignored, 키는 env 사용)\n- 영업 활용: 시세 대비 할인율 노출 (의뢰자 의도 — 토지 저가 매입 기회 발굴)",
@@ -940,6 +1009,25 @@ export const MANIFEST: GeneratedManifest = {
       "metaLine": 3,
       "consumedBy": [
         "transactions-by-bjd"
+      ]
+    },
+    {
+      "id": "solar-permit",
+      "name": "전국 태양광 발전소 전기사업 허가 정보 (NIA)",
+      "category": "data.go.kr",
+      "consoleUrl": "https://www.data.go.kr/data/15107742/standard.do",
+      "envKeys": [
+        "DATA_GO_KR_KEY"
+      ],
+      "expiry": "2028-04-25",
+      "dailyLimit": "운영계정 (2026-04-25 전환, 정확 한도는 마이페이지 확인)",
+      "issueGuide": "1. https://www.data.go.kr → \"전국태양광발전소전기사업허가정보표준데이터\" 활용신청\n2. 자동승인 → 즉시 사용 (개발계정 1,000건/일)\n3. 운영계정 전환 (2026-04-25 완료):\n   - 활용신청 상세 → \"운영계정 활용신청\" → 자동승인\n4. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)\n5. 만료예정일 2028-04-25 — 만료 전 콘솔 연장",
+      "usageExample": "# 페이지네이션만 작동 (검색 필터 미지원, 아래 ⚠ 참고)\nGET https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &type=json\n  &pageNo=1&numOfRows=100\nHeaders:\n  User-Agent: Mozilla/5.0\n  Accept: application/json\n\n# 응답 17 필드 (camelCase, 명세 PDF 의 대문자 표기와 다름) — 정규화: lib/solar-permit/by-page.ts\n# 주요: solarGenFcltNm / lctnLotnoAddr / latitude / longitude\n#       capa / oprtngSttsSeNm / instlDtlPstnSeNm / prmsnYmd / instlYr ...",
+      "notes": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ 검증 결과 (2026-04-26 직접 호출 검증)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1. 검색 필터 전부 미지원 (명세 PDF 표기와 다름)\n   - LCTN_LOTNO_ADDR / LCTN_ROAD_NM_ADDR / SOLAR_GEN_FCLT_NM\n     → 응답에 있는 정확한 값을 그대로 입력해도 NODATA\n   - LATITUDE / LONGITUDE → byte 단위 정확 일치 시에만 매칭 (실용성 0)\n   - 한글 파라미터명 → INVALID_REQUEST_PARAMETER_ERROR\n\n2. 작동하는 입력 = pageNo + numOfRows + type 만\n   - 전국 12만 행 (totalCount=121,015)\n   - 122 페이지 × 1000건 = 전수 다운로드 가능\n\n3. 응답 필드 = camelCase\n   - 명세 PDF: LCTN_LOTNO_ADDR (대문자)\n   - 실제 응답: lctnLotnoAddr (camelCase)\n   - 정규화는 wrapper (lib/solar-permit/by-page.ts) 가 처리\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🎯 영업 활용 패턴 (Phase 3 정식 작업)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n이 API 는 검색 미지원이라 사용자 클릭 시점 호출 불가.\n실제 영업 기능은 \"수집형 패턴\" 으로 구현해야 함:\n\n[수집] GitHub Actions 월 1회 cron\n   → 122 페이지 전수 다운로드 (~7분, 운영계정 100K/일 충분)\n   → Supabase solar_permits 테이블 적재\n   → PostGIS GIST 인덱스 (geom GEOGRAPHY)\n\n[검색] 사용자 PNU 클릭\n   → 우리 DB ST_DWithin(geom, point, 50m) 쿼리\n   → 결과: 50m 반경 시설 목록 (외부 API 호출 0, 1ms 이하)\n\n⚠ 견적: Phase 3 정식 작업 = ① 태양광 설치여부 표시 (150만 / 3~4주, 견적_3차_데이터연계.md)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📋 본 atomic endpoint (/api/solar-permits/by-page) 의 역할\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n페이지 1건씩 받아오는 최소 wrapper. 용도:\n  (1) API 살아있나 라이브 검증 (관리자 페이지)\n  (2) Phase 3 정식 시 수집기의 기반 코드 (그대로 재사용)\n\n⛔ 사용자 영업 화면용 X. 영업 endpoint 는 Phase 3 시점에 별도 신설:\n  - /api/solar-permits/by-pnu      (같은 PNU 매칭)\n  - /api/solar-permits/near-point  (좌표 50m 반경)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 데이터 한계\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n- 3 kW 이하 자가발전 누락 (허가 대상 아님 — 축사/온실은 30kW↑ 라 영향 적음)\n- 응답 = JSON (type=json) 또는 XML (기본). 우리는 type=json 명시\n- numOfRows 최대 1,000\n- 일부 필드 sentinel 값: instlYr=1900 (실제 미상), lctnRoadNmAddr=\"\" (도로명 없는 경우)\n- 데이터 갱신 주기: API 측에서 수시 — crtrYmd 필드로 데이터 기준일 확인 가능",
+      "filePath": "app/admin/api-manager/_lib/services/solar-permit.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "solar-permits-by-page"
       ]
     },
     {
@@ -1003,6 +1091,7 @@ export const MANIFEST: GeneratedManifest = {
       "filePath": "app/admin/api-manager/_lib/services/vworld.ts",
       "metaLine": 3,
       "consumedBy": [
+        "buildings-polygons-by-pnu",
         "parcel-by-latlng",
         "parcel-by-pnu",
         "polygon-by-bjd"
