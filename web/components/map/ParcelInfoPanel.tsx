@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 import { hasCapacity } from "@/lib/types";
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
@@ -290,8 +291,33 @@ function ParcelTab({
         )}
       </div>
 
+      <QuoteEntryButton pnu={jibun.pnu} />
+
       <ParcelFooter jibun={jibun} />
     </div>
+  );
+}
+
+/**
+ * 견적 모드 진입 버튼 — /quote/[pnu] 풀스크린으로 이동.
+ *
+ * 1차 2단계 진입점. 새 탭에서 열기 — 영업 시 메인 지도(여러 부지 비교) 와
+ * 견적 작업창을 동시에 띄워두는 흐름이 자연스러움.
+ * PNU 19자리 검증은 라우트 page.tsx 에서.
+ */
+function QuoteEntryButton({ pnu }: { pnu: string }) {
+  if (!/^\d{19}$/.test(pnu)) return null;
+  return (
+    <Link
+      href={`/quote/${pnu}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block w-full py-2.5 text-sm font-bold text-center
+                 bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+                 text-white rounded-lg shadow-sm transition-colors"
+    >
+      📐 면적 산출 / 견적 시작 ↗
+    </Link>
   );
 }
 
