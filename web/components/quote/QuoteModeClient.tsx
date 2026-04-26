@@ -25,10 +25,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { fetchVworldParcelByPnu } from "@/lib/api/vworld";
-import { fetchBuildingPolygonsByPnu } from "@/lib/api/buildings";
+import {
+  fetchBuildingPolygonsByPnu,
+  fetchBuildingsByPnu,
+  type BuildingTitleInfo,
+} from "@/lib/api/buildings";
+import { fetchKepcoCapaByJibun } from "@/lib/api/kepco";
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import type { BuildingPolygon } from "@/lib/vworld/buildings";
+import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 import type { Position } from "geojson";
+import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 
 const M2_TO_PYEONG = 0.3025;
@@ -65,11 +72,18 @@ export default function QuoteModeClient({ pnu }: Props) {
   const [jibun, setJibun] = useState<JibunInfo | null>(null);
   const [geometry, setGeometry] = useState<ParcelGeometry | null>(null);
   const [buildings, setBuildings] = useState<EditedBuilding[]>([]);
+  // 건축물대장 표제부 — 도로명주소건물(폴리곤) 과는 별개 데이터셋.
+  // 동·식물관련시설은 대장 등록은 되지만 도로명주소 미부여로 폴리곤 0건 케이스가 흔함.
+  const [bldgRegister, setBldgRegister] = useState<BuildingTitleInfo[]>([]);
+  // 부지 정보 floating overlay 용 — 메인 지도와 동일 ParcelInfoPanel
+  const [capa, setCapa] = useState<KepcoDataRow[]>([]);
+  const [meta, setMeta] = useState<AddrMeta | null>(null);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [loadingParcel, setLoadingParcel] = useState(true);
   const [loadingBuildings, setLoadingBuildings] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 데이터 fetch — 두 endpoint 병렬
+  // 데이터 fetch — 세 endpoint 병렬 (필지 + 건물 폴리곤 + 건축물대장)
   useEffect(() => {
     const ctl = new AbortController();
     setLoadingParcel(true);
@@ -100,8 +114,34 @@ export default function QuoteModeClient({ pnu }: Props) {
       })
       .finally(() => setLoadingBuildings(false));
 
+    fetchBuildingsByPnu(pnu, { signal: ctl.signal })
+      .then(setBldgRegister)
+      .catch((e) => {
+        if ((e as Error).name === "AbortError") return;
+        console.error("건축물대장 조회 실패:", e);
+      });
+
     return () => ctl.abort();
   }, [pnu]);
+
+  // jibun 받은 후 KEPCO 용량 + meta 별도 fetch (ParcelInfoPanel 의 전기 탭 + 헤더 주소용)
+  useEffect(() => {
+    if (!jibun) return;
+    const bjdCode = jibun.pnu.slice(0, 10);
+    const jibunStr = jibun.jibun;
+    if (!/^\d{10}$/.test(bjdCode) || !jibunStr) return;
+    const ctl = new AbortController();
+    fetchKepcoCapaByJibun(bjdCode, jibunStr, { signal: ctl.signal })
+      .then((res) => {
+        setCapa(res.rows);
+        setMeta(res.meta);
+      })
+      .catch((e) => {
+        if ((e as Error).name === "AbortError") return;
+        console.error("KEPCO 용량 조회 실패:", e);
+      });
+    return () => ctl.abort();
+  }, [jibun]);
 
   /** QuoteMap 의 dragend → 해당 동만 폴리곤/면적 갱신 */
   const handleBuildingChange = useCallback(
@@ -160,6 +200,17 @@ export default function QuoteModeClient({ pnu }: Props) {
           <span className="text-base">←</span>
           <span className="hidden md:inline">지도로</span>
         </Link>
+        <button
+          onClick={() => setIsInfoOpen((v) => !v)}
+          className={`px-2.5 py-1.5 text-sm rounded transition-colors ${
+            isInfoOpen
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+          title="이 부지의 필지/전기/가격/입지/규제 정보"
+        >
+          ⓘ <span className="hidden md:inline ml-0.5">부지 정보</span>
+        </button>
         <div className="flex-1 min-w-0 text-center">
           <div className="text-sm md:text-base font-bold text-gray-900 truncate">
             {headerAddr}
@@ -176,6 +227,25 @@ export default function QuoteModeClient({ pnu }: Props) {
           PDF 출력
         </button>
       </header>
+
+      {/* 부지 정보 floating overlay — 메인 지도 ParcelInfoPanel 그대로 재사용.
+          [ⓘ 부지 정보] 버튼으로 토글. 데이터는 위 useEffect 들이 atomic endpoint
+          호출 (HTTP 캐시 hit 으로 사실상 0 fetch) → props 로 전달. */}
+      {isInfoOpen && (
+        <ParcelInfoPanel
+          jibun={jibun}
+          geometry={geometry}
+          capa={capa}
+          meta={meta}
+          clickedJibun={jibun?.jibun ?? ""}
+          matchMode={jibun ? "exact" : null}
+          nearestJibun={null}
+          loading={loadingParcel}
+          onClose={() => setIsInfoOpen(false)}
+          polygonCount={loadingBuildings ? undefined : buildings.length}
+          inQuoteMode
+        />
+      )}
 
       {/* 폰 안내 — 태블릿 이상에선 숨김 */}
       <div className="md:hidden flex-1 flex items-center justify-center px-6 text-center bg-white">
@@ -194,7 +264,8 @@ export default function QuoteModeClient({ pnu }: Props) {
 
       {/* 본문 (태블릿+) */}
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
-        {/* 좌측 도구 패널 */}
+        {/* 좌측 도구 패널 — 영역 정의/시설/PDF/수지 (작업 도구 전용).
+            부지 정보(필지/전기/가격/입지/규제) 는 상단바 [ⓘ] 토글로 별도 표시. */}
         <aside className="w-72 lg:w-80 bg-white border-r border-gray-200 overflow-y-auto">
           <SectionHeader step={1} title="영역 정의" status="active" />
           <div className="px-4 py-3 space-y-2 text-sm">
@@ -211,11 +282,20 @@ export default function QuoteModeClient({ pnu }: Props) {
                       : `${buildingArea.toLocaleString()}㎡ (${buildingPyeong.toLocaleString()}평)`
                   }
                 />
-                {buildings.length === 0 && (
+                {buildings.length === 0 && bldgRegister.length === 0 && (
                   <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
-                    이 필지에는 등록 건물이 없습니다. 비닐하우스/간이축사는
-                    가설건축물이라 미등록일 수 있습니다 — 다음 단계에서
-                    &quot;직접 그리기&quot;로 영역을 잡습니다.
+                    자동 감지된 건물도, 등록된 건축물대장도 없습니다.
+                    <br />
+                    노지/빈 토지 부지로 보입니다 — 다음 단계 [+ 영역 추가]
+                    로 패널 깔 영역을 잡습니다.
+                  </div>
+                )}
+                {buildings.length === 0 && bldgRegister.length > 0 && (
+                  <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5 leading-snug">
+                    ⚠️ 건축물대장에 <b>{bldgRegister.length}동</b> 등록되어 있지만
+                    도로명주소가 미부여되어 자동 폴리곤 데이터가 없습니다.
+                    <br />
+                    위성 사진을 보고 다음 단계 [+ 영역 추가] 로 직접 그려주세요.
                   </div>
                 )}
                 {buildings.length > 0 && (
@@ -404,3 +484,4 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

@@ -70,6 +70,16 @@ interface Props {
   onRefreshCapa?: () => void;
   refreshingCapa?: boolean;
   refreshCapaError?: string | null;
+  /**
+   * 견적 모드용 — VWorld 도로명주소건물(lt_c_spbd) 폴리곤 개수.
+   * undefined: 알 수 없음(메인 지도). 0 + 건축물대장≥1 일 때만 ⚠️ 도로명주소 미부여 안내.
+   */
+  polygonCount?: number;
+  /**
+   * 견적 모드 안에서 패널이 떴을 때 true — [📐 면적 산출 시작] 버튼 숨김
+   * (이미 견적 모드 안이라 중복).
+   */
+  inQuoteMode?: boolean;
 }
 
 const M2_TO_PYEONG = 0.3025;
@@ -129,6 +139,8 @@ export default function ParcelInfoPanel({
   onRefreshCapa,
   refreshingCapa,
   refreshCapaError,
+  polygonCount,
+  inQuoteMode,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("electric");
 
@@ -199,7 +211,12 @@ export default function ParcelInfoPanel({
       {!loading && jibun && (
         <div className="flex-1 overflow-auto px-3 py-3 md:px-4 md:py-3">
           {tab === "parcel" && (
-            <ParcelTab jibun={jibun} geometry={geometry} />
+            <ParcelTab
+              jibun={jibun}
+              geometry={geometry}
+              polygonCount={polygonCount}
+              inQuoteMode={inQuoteMode}
+            />
           )}
           {tab === "electric" && (
             <ElectricTab
@@ -235,9 +252,15 @@ export default function ParcelInfoPanel({
 function ParcelTab({
   jibun,
   geometry,
+  polygonCount,
+  inQuoteMode,
 }: {
   jibun: JibunInfo;
   geometry: ParcelGeometry | null;
+  /** 견적 모드 한정: VWorld 도로명주소건물 폴리곤 개수. undefined 면 안내 X */
+  polygonCount?: number;
+  /** 견적 모드 안에서 떴을 때 true — [면적 산출 시작] 버튼 숨김 */
+  inQuoteMode?: boolean;
 }) {
   // 탭 활성화 시점에 lazy fetch (1 atomic = 1 외부 호출).
   // 같은 PNU 재방문은 모듈 scope 캐시로 0회.
@@ -284,6 +307,15 @@ function ParcelTab({
           </div>
         ) : (
           <div className="space-y-2">
+            {/* 견적 모드 한정: 대장은 있지만 폴리곤 0건 → 도로명주소 미부여 의심 */}
+            {polygonCount === 0 && (
+              <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5 leading-snug">
+                ⚠️ 도로명주소가 부여되지 않은 건물입니다 (시골 농업시설 등에서 흔함).
+                <br />
+                자동 폴리곤이 잡히지 않으니 견적 모드에서{" "}
+                <b>위성 사진을 보고 직접 그려주세요</b>.
+              </div>
+            )}
             {buildings.map((b, i) => (
               <BuildingCard key={i} info={b} />
             ))}
@@ -291,7 +323,7 @@ function ParcelTab({
         )}
       </div>
 
-      <QuoteEntryButton pnu={jibun.pnu} />
+      {!inQuoteMode && <QuoteEntryButton pnu={jibun.pnu} />}
 
       <ParcelFooter jibun={jibun} />
     </div>

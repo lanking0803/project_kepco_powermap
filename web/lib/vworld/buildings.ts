@@ -21,6 +21,7 @@
 import area from "@turf/area";
 import centroid from "@turf/centroid";
 import type { Feature, MultiPolygon, Polygon, Position } from "geojson";
+import { getParcelByPnu } from "./parcel";
 
 const VWORLD_KEY = process.env.VWORLD_KEY || "";
 const WFS_URL = "https://api.vworld.kr/req/wfs";
@@ -32,10 +33,15 @@ export const VWORLD_DOMAIN = "sunlap.kr";
 /**
  * WFS fetch timeout (ms).
  *
- * lt_c_spbd 는 lt_c_landinfobasemap (~40ms) 대비 PNU 인덱스가 약한 듯
- * 첫 호출 5~10초까지 소요. 캐시 1d 라 두 번째부터 0회 호출.
+ * 2026-04-26: fes:Filter PNU (7초) → BBOX + 클라이언트 필터 (44ms) 로 전환.
+ * VWorld lt_c_spbd 는 PNU 컬럼 인덱스가 풀스캔 수준이지만 spatial(BBOX) 인덱스는 정상.
+ * 검증 스크립트 05-bottleneck.ts 결과: BBOX 가 99% 빠름.
+ * 짧은 timeout 로 충분.
  */
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 5000;
+
+/** 부지 경계 BBOX 에 추가하는 패딩 (도 단위, ≈10m) — 경계에 걸친 건물 누락 방지 */
+const BBOX_PADDING_DEG = 0.0001;
 
 // ───────────────────────────────────────────
 // 타입
@@ -147,25 +153,41 @@ export async function getBuildingsByPnu(
 export interface BuildingsDebugInfo {
   vworld_key_set: boolean;
   vworld_key_prefix: string;
-  url_length: number;
+  parcel_ms: number | null;
+  bbox_ms: number | null;
+  total_ms: number;
   http_status: number | null;
-  features_count: number;
+  bbox_features_count: number;
+  pnu_filtered_count: number;
   body_preview: string | null;
   error_message: string | null;
 }
 
+/**
+ * PNU → 그 필지 위 건물 폴리곤들.
+ *
+ * 흐름 (2026-04-26 BBOX 전환):
+ *   1. getParcelByPnu(PNU) — 필지 폴리곤 받아 BBOX 추출 (~40ms)
+ *   2. lt_c_spbd 를 BBOX 로 호출 (~44ms, spatial index)
+ *   3. 응답 features 중 properties.pnu === 입력 PNU 만 필터
+ *   4. 총 ~84ms (vs fes:Filter PNU 의 ~7000ms = 80배 빠름)
+ */
 export async function getBuildingsByPnuWithDebug(
   pnu: string,
 ): Promise<{ rows: BuildingPolygon[]; debug: BuildingsDebugInfo }> {
   const debug: BuildingsDebugInfo = {
     vworld_key_set: !!VWORLD_KEY,
     vworld_key_prefix: VWORLD_KEY.slice(0, 6),
-    url_length: 0,
+    parcel_ms: null,
+    bbox_ms: null,
+    total_ms: 0,
     http_status: null,
-    features_count: 0,
+    bbox_features_count: 0,
+    pnu_filtered_count: 0,
     body_preview: null,
     error_message: null,
   };
+  const t0 = Date.now();
 
   if (!VWORLD_KEY) {
     console.error("[VWorld Buildings] VWORLD_KEY 미설정");
@@ -178,14 +200,23 @@ export async function getBuildingsByPnuWithDebug(
     return { rows: [], debug };
   }
 
-  const filter =
-    `<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0">` +
-    `<fes:PropertyIsEqualTo>` +
-    `<fes:ValueReference>pnu</fes:ValueReference>` +
-    `<fes:Literal>${cleaned}</fes:Literal>` +
-    `</fes:PropertyIsEqualTo>` +
-    `</fes:Filter>`;
+  // Step 1: 필지 폴리곤 → BBOX
+  const tParcel = Date.now();
+  const parcel = await getParcelByPnu(cleaned);
+  debug.parcel_ms = Date.now() - tParcel;
+  if (!parcel) {
+    debug.error_message = "필지 폴리곤 없음 — BBOX 추출 불가";
+    debug.total_ms = Date.now() - t0;
+    return { rows: [], debug };
+  }
+  const bbox = computeBboxFromPolygon(parcel.geometry.polygon);
+  if (!bbox) {
+    debug.error_message = "필지 폴리곤에서 BBOX 추출 실패";
+    debug.total_ms = Date.now() - t0;
+    return { rows: [], debug };
+  }
 
+  // Step 2: BBOX 로 lt_c_spbd 호출 (spatial index, 빠름)
   const params = new URLSearchParams({
     key: VWORLD_KEY,
     domain: VWORLD_DOMAIN,
@@ -195,50 +226,85 @@ export async function getBuildingsByPnuWithDebug(
     typename: LAYER,
     output: "application/json",
     srsName: "EPSG:4326",
-    FILTER: filter,
+    bbox: [
+      bbox.minLng - BBOX_PADDING_DEG,
+      bbox.minLat - BBOX_PADDING_DEG,
+      bbox.maxLng + BBOX_PADDING_DEG,
+      bbox.maxLat + BBOX_PADDING_DEG,
+    ].join(","),
+    maxFeatures: "200",
   });
-
   const url = `${WFS_URL}?${params.toString()}`;
-  debug.url_length = url.length;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const tBbox = Date.now();
   try {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: { Referer: `https://${VWORLD_DOMAIN}` },
-      // Next.js 16 fetch 자동 캐싱 비활성 — 응답 크기/지역별 차이로 메모리 누수 방지.
-      // 클라이언트 모듈 캐시 + atomic endpoint Cache-Control 로 충분.
       cache: "no-store",
     });
+    debug.bbox_ms = Date.now() - tBbox;
     debug.http_status = res.status;
     if (!res.ok) {
       const body = await res.text();
       debug.body_preview = body.slice(0, 300);
-      console.error(`[VWorld Buildings] HTTP ${res.status} (${cleaned}) body=${body.slice(0, 300)}`);
+      debug.total_ms = Date.now() - t0;
+      console.error(
+        `[VWorld Buildings] HTTP ${res.status} (${cleaned}) body=${body.slice(0, 300)}`,
+      );
       return { rows: [], debug };
     }
-    const text = await res.text();
-    debug.body_preview = text.slice(0, 200);
-    const data = JSON.parse(text) as WfsResponse;
-    debug.features_count = data.features?.length ?? 0;
-    console.log(
-      `[VWorld Buildings] pnu=${cleaned} status=${res.status} features=${debug.features_count}`,
+    const data = (await res.json()) as WfsResponse;
+    debug.bbox_features_count = data.features?.length ?? 0;
+
+    // Step 3: PNU 필터
+    const matched = (data.features ?? []).filter(
+      (f) => (f.properties?.pnu ?? "") === cleaned,
     );
-    if (!data.features?.length) return { rows: [], debug };
-    return { rows: data.features.map(splitBuildingFeature), debug };
+    debug.pnu_filtered_count = matched.length;
+    debug.total_ms = Date.now() - t0;
+    console.log(
+      `[VWorld Buildings] pnu=${cleaned} parcel=${debug.parcel_ms}ms bbox=${debug.bbox_ms}ms total=${debug.total_ms}ms bbox_features=${debug.bbox_features_count} matched=${debug.pnu_filtered_count}`,
+    );
+    return { rows: matched.map(splitBuildingFeature), debug };
   } catch (err) {
+    debug.bbox_ms = Date.now() - tBbox;
+    debug.total_ms = Date.now() - t0;
     const e = err as Error;
     debug.error_message = e.name === "AbortError" ? `타임아웃 ${TIMEOUT_MS}ms` : e.message;
     if (e.name === "AbortError") {
-      console.error(`[VWorld Buildings] 타임아웃 ${TIMEOUT_MS}ms (${cleaned})`);
+      console.error(`[VWorld Buildings] BBOX 타임아웃 ${TIMEOUT_MS}ms (${cleaned})`);
     } else {
-      console.error(`[VWorld Buildings] 호출 실패 (${cleaned}):`, err);
+      console.error(`[VWorld Buildings] BBOX 호출 실패 (${cleaned}):`, err);
     }
     return { rows: [], debug };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Polygon[][] → BBOX (외곽 ring 좌표만 사용, MultiPolygon 도 지원) */
+function computeBboxFromPolygon(
+  polygon: Position[][],
+): { minLng: number; minLat: number; maxLng: number; maxLat: number } | null {
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let hasAny = false;
+  for (const ring of polygon) {
+    for (const [lng, lat] of ring) {
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      hasAny = true;
+    }
+  }
+  if (!hasAny) return null;
+  return { minLng, maxLng, minLat, maxLat };
 }
 
 // ───────────────────────────────────────────
