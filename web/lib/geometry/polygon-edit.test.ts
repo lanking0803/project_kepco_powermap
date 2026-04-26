@@ -14,6 +14,7 @@ import {
   closestEdgePoint,
   findLongestEdge,
   findFlattestVertex,
+  translatePolygon,
 } from "./polygon-edit";
 import type { Position } from "geojson";
 
@@ -201,6 +202,35 @@ describe("closestEdgePoint", () => {
 
   it("빈 polygon → null", () => {
     expect(closestEdgePoint([], { lat: 35.7, lng: 128.3 })).toBeNull();
+  });
+});
+
+describe("translatePolygon", () => {
+  it("모든 좌표가 dLng/dLat 만큼 이동", () => {
+    const r = translatePolygon(SQUARE, 0.001, 0.0005);
+    for (let i = 0; i < SQUARE[0].length; i += 1) {
+      expect(r[0][i][0]).toBeCloseTo(SQUARE[0][i][0] + 0.001, 6);
+      expect(r[0][i][1]).toBeCloseTo(SQUARE[0][i][1] + 0.0005, 6);
+    }
+  });
+
+  it("면적 보존 (위치만 변하고 모양 동일)", () => {
+    const original = calcAreaM2(SQUARE);
+    const moved = calcAreaM2(translatePolygon(SQUARE, 0.001, 0.001));
+    // 위경도 평면 근사라 위도 따라 약간 차이 — 1% 이내
+    expect(Math.abs(moved - original) / original).toBeLessThan(0.01);
+  });
+
+  it("dLng=0, dLat=0 → 원본과 좌표 동일 (값으로 비교, 객체 동일성 X)", () => {
+    const r = translatePolygon(SQUARE, 0, 0);
+    expect(r[0][0]).toEqual(SQUARE[0][0]);
+    expect(r[0][2]).toEqual(SQUARE[0][2]);
+  });
+
+  it("immutable", () => {
+    const before = SQUARE[0][0].slice();
+    translatePolygon(SQUARE, 1, 1);
+    expect(SQUARE[0][0]).toEqual(before);
   });
 });
 

@@ -114,6 +114,26 @@ export function createDefaultRect(
 }
 
 // ───────────────────────────────────────────
+// 평행 이동 (영역 전체 이동)
+// ───────────────────────────────────────────
+
+/**
+ * polygon 의 모든 좌표를 (dLng, dLat) 만큼 이동.
+ *
+ * 사용처: ✥ 핸들 마커 드래그 → 폴리곤 전체 평행 이동.
+ * 면적/모양은 보존, 위치만 변경.
+ */
+export function translatePolygon(
+  polygon: Position[][],
+  dLng: number,
+  dLat: number,
+): Position[][] {
+  return polygon.map((ring) =>
+    ring.map(([lng, lat]) => [lng + dLng, lat + dLat] as Position),
+  );
+}
+
+// ───────────────────────────────────────────
 // 점 추가 / 삭제
 // ───────────────────────────────────────────
 
