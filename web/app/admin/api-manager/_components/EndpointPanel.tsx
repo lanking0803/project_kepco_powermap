@@ -6,19 +6,22 @@
  * 표시:
  *   - path · method 탭 (multi-method 시)
  *   - source / cache / auth
- *   - 입력 파라미터 표 (sample 값 포함, Step 4 에서 라이브 테스트 폼으로 변환)
+ *   - 입력 파라미터 표 (sample 값 포함)
  *   - 응답 스키마
  *   - externalDeps → 외부 탭으로 점프
  *   - dangerous 경고 + dangerNote
  *   - notes
+ *   - 라이브 테스터 (Step 4) — 입력 폼 / 호출 / 응답 표시
  *   - 파일 위치 (Step 5 에서 VSCode 점프)
  *
- * meta 미정의 endpoint 도 동작 (path/method 만 표시 + ⚠ 배지)
+ * meta 미정의 endpoint 도 동작 (path/method 만 표시 + ⚠ 배지). 라이브 테스터는
+ * meta 가 있는 경우에만 노출.
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import type { CollectedEndpoint, EndpointMeta, HttpMethod } from "../_lib/types";
+import LiveTester from "./LiveTester";
 
 interface Props {
   endpoint: CollectedEndpoint;
@@ -155,24 +158,21 @@ export default function EndpointPanel({ endpoint, selectedMethod }: Props) {
             </InfoCell>
           </div>
 
-          {/* 위험 작업 경고 */}
+          {/* 위험 작업 안내 (메타 차원) — confirm 은 LiveTester 가 처리 */}
           {meta.dangerous && (
             <div className="p-3 bg-red-50 border-2 border-red-300 rounded">
               <div className="text-xs font-bold text-red-700 mb-1">
                 ⚠️ 위험 작업
               </div>
               {meta.dangerNote && (
-                <div className="text-[11px] text-red-700 leading-relaxed">
+                <div className="text-[11px] text-red-700 leading-relaxed whitespace-pre-wrap">
                   {meta.dangerNote}
                 </div>
               )}
-              <div className="text-[10px] text-red-500 mt-1.5">
-                ※ Step 4 라이브 테스터에서 confirm 단계 추가 예정
-              </div>
             </div>
           )}
 
-          {/* 입력 파라미터 */}
+          {/* 입력 파라미터 (메타 표) */}
           <Section
             title={`📥 입력 파라미터 (${meta.inputs?.length ?? 0})`}
           >
@@ -223,6 +223,14 @@ export default function EndpointPanel({ endpoint, selectedMethod }: Props) {
               <PreText>{meta.notes}</PreText>
             </Section>
           )}
+
+          {/* 라이브 테스터 — endpoint/method 변경 시 입력 sample 재초기화를 위해 key 부여 */}
+          <LiveTester
+            key={`${endpoint.id}:${activeMethod.method}`}
+            path={endpoint.path}
+            method={activeMethod.method}
+            meta={meta}
+          />
         </>
       )}
 
