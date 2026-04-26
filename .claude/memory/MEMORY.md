@@ -15,6 +15,8 @@
 - [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 로드뷰·수집기+2개 완료. 1차 1단계(지적편집도) 착수. 가격표 docs/견적_1차2차.md
 - 🏛 [공매 통합 의도](project_auction_intent.md) ⭐ — 의뢰자 의도: "저가 매입 기회 발굴". 공매(캠코)만 진행, 경매는 의뢰자 포기(2026-04-26)
 - [3차 개발 — 태양광설치여부+이격거리](project_phase3_proposal.md) ⭐ — 전국태양광허가 API + 법제처 조례 API + 도로현황 SHP 연계 가능 검증 완료. 400~550만/10~12주. 의뢰자 확답 대기 (2026-04-17)
+- ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
+- ⚠️ [태양광 허가 API 검증 결과](reference_solar_permit_api.md) — 검색 필터 미지원 (LCTN_LOTNO_ADDR/LATITUDE 등 전부 NODATA). 페이지네이션만 가능. Phase 3 시 12만건 DB 적재 후 by-pnu 신설 필요
 - [건축물대장 API 검증](reference_bldg_register_api.md) — endpoint/파라미터/응답필드 실측. 비닐하우스는 대부분 미등록 한계. 키는 SECRETS.local.md
 - [줌 레벨별 마커 최적화](project_zoom_level_optimization.md) — 130만 행 대비, 줌에 따라 시/군→읍/면→리 마커 전환 (미구현 숙제)
 - [DB row_hash 리팩토링 — 추후](project_db_row_hash_refactor.md) — kepco_capa_ukey 61MB → MD5 해시로 40MB 절감. 1차 2단계 완료 후 권장
