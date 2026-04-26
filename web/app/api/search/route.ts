@@ -14,6 +14,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { parseQuery } from "@/lib/search/parseQuery";
 import { searchKepco } from "@/lib/search/searchKepco";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "DB (lib/search/searchKepco — kepco_capa + bjd_master 조합)",
+  cache: "no-store",
+  auth: "user",
+  inputs: [
+    {
+      name: "q",
+      type: "string",
+      required: true,
+      sample: "용구리",
+      description: "자유 텍스트. 마을명/지번/주소 키워드 + 숫자 조합 가능 (예: '용구리 100')",
+    },
+  ],
+  outputSchema:
+    "{ ok, ri: SearchRiResult[], ji: KepcoDataRow[], jiFallback: boolean, parsed: { keywords: string[], lotNo: number | null } }",
+  externalDeps: ["supabase"],
+  notes:
+    "parsed.keywords 비어있고 lotNo 도 없으면 DB 호출 없이 빈 결과 반환 (효율). ji 응답은 raw — 클라이언트(Sidebar)가 enrichment 후 사용.",
+};
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();

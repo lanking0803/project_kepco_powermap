@@ -14,6 +14,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { KepcoDataRow } from "@/lib/types";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "DB RPC get_location_detail(bjd_code)",
+  cache: "no-store",
+  auth: "user",
+  inputs: [
+    {
+      name: "bjd_code",
+      type: "string",
+      required: true,
+      sample: "4673025025",
+      description: "행안부 법정동 코드 10자리",
+    },
+  ],
+  outputSchema: "{ ok, bjd_code, rows: KepcoDataRow[], total }",
+  externalDeps: ["supabase"],
+  notes:
+    "마을(리/읍면동) 의 모든 지번/시설 raw rows. 마을 마커 클릭 → 상세 모달 (lazy fetch). 평균 383행/P90 643행/max 1524행 → gzip ~30KB.",
+};
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();

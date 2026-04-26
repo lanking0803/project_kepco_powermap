@@ -13,9 +13,41 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "KEPCO online.kepco.co.kr 주소 계층 API 프록시 (CORS 우회)",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "gbn",
+                "type": "string",
+                "required": true,
+                "sample": "init",
+                "description": "init=시도 / 0=시 / 1=구군 / 2=동면 / 3=리"
+              },
+              {
+                "name": "addr_do",
+                "type": "string",
+                "required": false,
+                "sample": "경기도",
+                "description": "gbn=0+ 시 필요"
+              },
+              {
+                "name": "addr_si",
+                "type": "string",
+                "required": false,
+                "sample": "양평군",
+                "description": "gbn=1+ 시 필요"
+              }
+            ],
+            "outputSchema": "{ ok, items: Array<{ name, code }> }",
+            "externalDeps": [
+              "kepco"
+            ],
+            "notes": "Referer 헤더 주입 필수 (없으면 KEPCO 가 차단). 관리자 화면 드롭다운 (수집 대상 지역 선택) 용도."
+          },
+          "metaLine": 16,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -26,27 +58,132 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB (crawl_jobs 최신 50건)",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [],
+            "outputSchema": "{ ok, jobs: CrawlJob[] }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "관리자 화면의 작업 목록. 정렬: created_at DESC, limit 50."
+          },
+          "metaLine": 19,
+          "metaExportName": "metaGET"
         },
         {
           "method": "POST",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB insert (crawl_jobs) + GitHub Actions workflow_dispatch",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "thread",
+                "type": "number",
+                "required": true,
+                "sample": "1",
+                "description": "1~5 (스레드 슬롯)"
+              },
+              {
+                "name": "sido",
+                "type": "string",
+                "required": true,
+                "sample": "경기도"
+              },
+              {
+                "name": "si",
+                "type": "string",
+                "required": false,
+                "sample": "양평군"
+              },
+              {
+                "name": "gu",
+                "type": "string",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "dong",
+                "type": "string",
+                "required": false,
+                "sample": "청운면"
+              },
+              {
+                "name": "li",
+                "type": "string",
+                "required": false,
+                "sample": "갈운리"
+              },
+              {
+                "name": "mode",
+                "type": "string",
+                "required": false,
+                "sample": "single",
+                "description": "single | recurring"
+              }
+            ],
+            "outputSchema": "{ ok, job: CrawlJob }",
+            "externalDeps": [
+              "supabase",
+              "github-actions"
+            ],
+            "notes": "API 는 의도(intent='run') 만 기록. status 는 크롤러가 갱신 (2중 제어). 동시 같은 thread 점유 시 409 반환."
+          },
+          "metaLine": 29,
+          "metaExportName": "metaPOST"
         },
         {
           "method": "PATCH",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB update (intent='cancel') + GitHub Actions runs cancel",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "id",
+                "type": "number",
+                "required": true,
+                "sample": "1234",
+                "description": "Job ID (body)"
+              }
+            ],
+            "outputSchema": "{ ok }",
+            "externalDeps": [
+              "supabase",
+              "github-actions"
+            ],
+            "notes": "정지 요청 — intent 만 변경, 실제 status 는 Worker(/api/reconcile) 가 처리. 좀비 정리도 Worker 위임."
+          },
+          "metaLine": 48,
+          "metaExportName": "metaPATCH"
         },
         {
           "method": "DELETE",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB delete (crawl_jobs WHERE id=$1, 종료된 Job 만)",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "id",
+                "type": "number",
+                "required": true,
+                "sample": "1234",
+                "description": "Job ID (querystring)"
+              }
+            ],
+            "outputSchema": "{ ok }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "dangerous": true,
+            "dangerNote": "Job 기록 영구 삭제. running/pending 인 Job 은 422 (먼저 cancel 필요).",
+            "notes": "히스토리에서 한 줄 지우는 용도. 실행 중 Job 은 보호."
+          },
+          "metaLine": 61,
+          "metaExportName": "metaDELETE"
         }
       ]
     },
@@ -57,33 +194,157 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "Supabase Auth admin.listUsers + user_roles join",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [],
+            "outputSchema": "{ ok, users: Array<{ id, email, role, displayName, created_at }> }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "전체 사용자 목록."
+          },
+          "metaLine": 15,
+          "metaExportName": "metaGET"
         },
         {
           "method": "POST",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "Supabase Auth admin.createUser + user_roles insert",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "loginId",
+                "type": "string",
+                "required": true,
+                "sample": "newuser",
+                "description": "로그인 ID (자동으로 @kepco.local 붙음)"
+              },
+              {
+                "name": "password",
+                "type": "string",
+                "required": true,
+                "sample": "TestPw12!",
+                "description": "초기 비밀번호"
+              },
+              {
+                "name": "role",
+                "type": "string",
+                "required": false,
+                "sample": "viewer",
+                "description": "admin | viewer (기본 viewer)"
+              },
+              {
+                "name": "displayName",
+                "type": "string",
+                "required": false,
+                "sample": "홍길동"
+              }
+            ],
+            "outputSchema": "{ ok, user: { id, email, role, displayName } }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "loginId 에 @ 없으면 @kepco.local 자동 부착 (LoginForm 과 동일 규칙)."
+          },
+          "metaLine": 25,
+          "metaExportName": "metaPOST"
         },
         {
           "method": "PATCH",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB update (user_roles)",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "userId",
+                "type": "string",
+                "required": true,
+                "sample": "uuid-xxxx",
+                "description": "Supabase user.id"
+              },
+              {
+                "name": "role",
+                "type": "string",
+                "required": false,
+                "sample": "admin"
+              },
+              {
+                "name": "displayName",
+                "type": "string",
+                "required": false,
+                "sample": "홍길동"
+              }
+            ],
+            "outputSchema": "{ ok }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "권한 / 표시 이름 변경."
+          },
+          "metaLine": 40,
+          "metaExportName": "metaPATCH"
         },
         {
           "method": "PUT",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "Supabase Auth admin.updateUserById (password 만)",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "userId",
+                "type": "string",
+                "required": true,
+                "sample": "uuid-xxxx"
+              },
+              {
+                "name": "newPassword",
+                "type": "string",
+                "required": true,
+                "sample": "NewPw34!",
+                "description": "새 비밀번호"
+              }
+            ],
+            "outputSchema": "{ ok }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "dangerous": true,
+            "dangerNote": "사용자 비밀번호 강제 초기화. 관리자가 사용자에게 새 비밀번호 직접 전달 필요.",
+            "notes": "사용자가 비밀번호를 잊은 경우 관리자가 초기화."
+          },
+          "metaLine": 69,
+          "metaExportName": "metaPUT"
         },
         {
           "method": "DELETE",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "Supabase Auth admin.deleteUser",
+            "cache": "no-store",
+            "auth": "admin",
+            "inputs": [
+              {
+                "name": "userId",
+                "type": "string",
+                "required": true,
+                "sample": "uuid-xxxx",
+                "description": "Supabase user.id (querystring)"
+              }
+            ],
+            "outputSchema": "{ ok }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "dangerous": true,
+            "dangerNote": "사용자 영구 삭제 — 복구 불가. 해당 사용자의 모든 세션 무효화.",
+            "notes": "삭제 후 user_roles cascade 가 함께 정리."
+          },
+          "metaLine": 54,
+          "metaExportName": "metaDELETE"
         }
       ]
     },
@@ -94,9 +355,27 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "건축HUB getBrTitleInfo (국토부 BldRgstHubService) — 표제부 단건",
+            "cache": "private, s-maxage=86400, max-age=3600",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "1168010300100590000",
+                "description": "PNU 19자리. 11번째 자리(산구분)가 platGbCd 로 자동 변환"
+              }
+            ],
+            "outputSchema": "{ ok, pnu, rows: BuildingTitleInfo[] }   // 0건도 정상 (빈 땅/미등록)",
+            "externalDeps": [
+              "bldg-register"
+            ],
+            "notes": "한 지번 여러 동 → rows 배열. 표제부 응답 78필드 → 영업가치 22개만 발췌 정규화. 비닐하우스/간이 슬레이트 축사는 가설건축물이라 거의 미등록."
+          },
+          "metaLine": 21,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -107,9 +386,27 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB RPC get_location_detail(bjd_code)",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "bjd_code",
+                "type": "string",
+                "required": true,
+                "sample": "4673025025",
+                "description": "행안부 법정동 코드 10자리"
+              }
+            ],
+            "outputSchema": "{ ok, bjd_code, rows: KepcoDataRow[], total }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "마을(리/읍면동) 의 모든 지번/시설 raw rows. 마을 마커 클릭 → 상세 모달 (lazy fetch). 평균 383행/P90 643행/max 1524행 → gzip ~30KB."
+          },
+          "metaLine": 19,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -156,9 +453,56 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "POST",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB → KEPCO live (lookup-capacity 위임, DB miss 시 fallback)",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "addr",
+                "type": "string",
+                "required": false,
+                "sample": "경기도 양평군 청운면 갈운리 24-1",
+                "description": "한글주소 (또는 bjd_code 둘 중 하나 필수)"
+              },
+              {
+                "name": "bjd_code",
+                "type": "string",
+                "required": false,
+                "sample": "4673025025",
+                "description": "행안부 법정동 코드 (refresh 용)"
+              },
+              {
+                "name": "jibun",
+                "type": "string",
+                "required": true,
+                "sample": "24-1",
+                "description": "지번 번호 (예: 24-1, 산1-10)"
+              },
+              {
+                "name": "refresh",
+                "type": "boolean",
+                "required": false,
+                "sample": "false",
+                "description": "true 시 항상 KEPCO live 호출"
+              },
+              {
+                "name": "includeSplitDong",
+                "type": "boolean",
+                "required": false,
+                "sample": "false",
+                "description": "동분할 후보 추가"
+              }
+            ],
+            "outputSchema": "{ ok, source: 'db'|'live'|'not_found', bjd_code: string|null, addr_jibun, rows: KepcoDataRow[], fetched_at, candidate_used? }",
+            "externalDeps": [
+              "supabase",
+              "kepco"
+            ],
+            "notes": "DB hit 시 외부 호출 0. DB miss / refresh=true 시 KEPCO live 1회 + DB upsert. POST + JSON body — 라이브 테스트 시 querystring 아닌 body 로 입력."
+          },
+          "metaLine": 30,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -169,9 +513,27 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB RPC get_location_summary(bjd_code) — flat 7컬럼 GROUP COUNT FILTER",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "bjd_code",
+                "type": "string",
+                "required": true,
+                "sample": "4673025025",
+                "description": "행안부 법정동 코드 10자리"
+              }
+            ],
+            "outputSchema": "{ ok, bjd_code, summary: { total, subst:{avail,short}, mtr:{avail,short}, dl:{avail,short} } }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "마커 클릭 시 카드만 그릴 때 (~80B, raw rows 대비 99% 절감). DB flat → 시설별 중첩 객체 변환. 모달 펼칠 때 /api/capa/by-bjd 별도 호출."
+          },
+          "metaLine": 25,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -182,9 +544,19 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "Supabase auth.admin.listUsers (가장 안전한 헬스체크 호출)",
+            "cache": "no-store",
+            "auth": "none",
+            "inputs": [],
+            "outputSchema": "{ ok: true, url: string, userCount: number } | { ok: false, error }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "Supabase 연결 정상 여부 확인용. Phase 3 이후 제거 예정. 인증 없이 호출 가능 — 운영 모니터링용."
+          },
+          "metaLine": 10,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -195,9 +567,19 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB MV (kepco_map_summary, 페이지네이션 1000행씩 전량 수집)",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [],
+            "outputSchema": "{ rows: MapSummaryRow[], total: number, generatedAt: string }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "지도 마커 초기 로드용 light 데이터. PostgREST 1000행 제한 우회 위해 페이지네이션 전량 수집. no-store — 수집/지오코딩 즉시 반영 (캐시 시 '마커 0' 사고 사례)."
+          },
+          "metaLine": 13,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -208,9 +590,34 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "VWorld WFS BBOX (±5m) + point-in-polygon 선별",
+            "cache": "private, s-maxage=86400, max-age=3600",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "lat",
+                "type": "number",
+                "required": true,
+                "sample": "37.4946",
+                "description": "위도 (소수점 4~6자리)"
+              },
+              {
+                "name": "lng",
+                "type": "number",
+                "required": true,
+                "sample": "127.0276",
+                "description": "경도"
+              }
+            ],
+            "outputSchema": "{ ok, lat, lng, jibun: JibunInfo | null, geometry: ParcelGeometry | null } — 매칭 실패 시 jibun/geometry null",
+            "externalDeps": [
+              "vworld"
+            ],
+            "notes": "지도 직접 클릭 (PNU 미확보 상태) 진입점. 응답 형식은 by-pnu 와 동일 (pnu 대신 lat/lng 에코). 바다·미등록은 max-age=300."
+          },
+          "metaLine": 19,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -221,9 +628,27 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "VWorld WFS (fes:Filter PropertyIsEqualTo, 1:1 매칭, 실측 ~40ms)",
+            "cache": "private, s-maxage=86400, max-age=3600",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4683034023000070000",
+                "description": "PNU 19자리 숫자 (시도2+시군구3+읍면동3+산구분1+본번4+부번4+필지타입2)"
+              }
+            ],
+            "outputSchema": "{ ok, pnu, jibun: JibunInfo | null, geometry: ParcelGeometry | null }",
+            "externalDeps": [
+              "vworld"
+            ],
+            "notes": "필지 매칭 실패 시 jibun/geometry 모두 null + max-age=300 (5분 짧은 캐시). 가격 탭 공시지가 등 7~8가지 정보 atomic 1회. CDN 1d / 브라우저 1h."
+          },
+          "metaLine": 21,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -234,9 +659,27 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "VWorld lt_c_adri (리, bjd_code 끝2자리 != '00') / lt_c_ademd (읍면동, 끝2자리 == '00') WFS",
+            "cache": "public, s-maxage=604800, stale-while-revalidate=86400",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "bjd_code",
+                "type": "string",
+                "required": true,
+                "sample": "4673025025",
+                "description": "행안부 법정동 코드 10자리. 끝2자리로 리/읍면동 자동 분기"
+              }
+            ],
+            "outputSchema": "{ ok, bjd_code, level: 'ri'|'emd'|null, full_nm: string|null, polygon: number[][][]|null, center: {lat,lng}|null }",
+            "externalDeps": [
+              "vworld"
+            ],
+            "notes": "행정구역 폴리곤은 변경 거의 없음 → 1주 CDN 캐시 + stale-while-revalidate. 마을 마커 클릭 시 음영 시각화용."
+          },
+          "metaLine": 19,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -247,9 +690,20 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "POST",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB (crawl_jobs) 판단 + 필요 시 GitHub Actions API (cancel/dispatch)",
+            "cache": "no-store",
+            "auth": "system",
+            "inputs": [],
+            "outputSchema": "{ ok: true, reconciled: number, actions: Array<{ jobId, action, reason }> } — 12줄 판단표 기반",
+            "externalDeps": [
+              "supabase",
+              "github-actions"
+            ],
+            "notes": "Authorization: Bearer ${CRON_SECRET} 헤더 필요. Supabase pg_cron 매 1분 호출. 라이브 테스트 시 헤더 직접 입력 필요. 좀비 작업 정리 + 실패 작업 자동 재시도 (max 5회)."
+          },
+          "metaLine": 32,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -260,9 +714,21 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "POST",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB RPC refresh_kepco_summary — Materialized View 수동 새로고침",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [],
+            "outputSchema": "{ ok: true, skipped: false } | { ok: true, skipped: true, reason, age_sec? } | { ok: false, error }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "dangerous": true,
+            "dangerNote": "MV 전체 재구축 — 분 단위 소요. 동시 요청은 RPC 측 60s cooldown + advisory lock 으로 흡수되지만, 진행중 호출은 의미 없으니 cooldown 표시 확인.",
+            "notes": "사이드바 새로고침 버튼에서 호출. RPC 측에서 60s cooldown + advisory lock + 5분 statement_timeout. maxDuration=300 (라우트 timeout)."
+          },
+          "metaLine": 21,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -273,9 +739,27 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "DB (lib/search/searchKepco — kepco_capa + bjd_master 조합)",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "q",
+                "type": "string",
+                "required": true,
+                "sample": "용구리",
+                "description": "자유 텍스트. 마을명/지번/주소 키워드 + 숫자 조합 가능 (예: '용구리 100')"
+              }
+            ],
+            "outputSchema": "{ ok, ri: SearchRiResult[], ji: KepcoDataRow[], jiFallback: boolean, parsed: { keywords: string[], lotNo: number | null } }",
+            "externalDeps": [
+              "supabase"
+            ],
+            "notes": "parsed.keywords 비어있고 lotNo 도 없으면 DB 호출 없이 빈 결과 반환 (효율). ji 응답은 raw — 클라이언트(Sidebar)가 enrichment 후 사용."
+          },
+          "metaLine": 19,
+          "metaExportName": "meta"
         }
       ]
     },
@@ -286,14 +770,87 @@ export const MANIFEST: GeneratedManifest = {
       "methods": [
         {
           "method": "GET",
-          "meta": null,
-          "metaLine": 0,
-          "metaExportName": null
+          "meta": {
+            "source": "국토부 RTMS — kind=land 시 getRTMSDataSvcLandTrade / kind=nrg 시 getRTMSDataSvcNrgTrade",
+            "cache": "private, s-maxage=21600, max-age=3600",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "bjd_code",
+                "type": "string",
+                "required": true,
+                "sample": "4673025025",
+                "description": "행안부 법정동 코드 10자리. 앞 5자리 = LAWD_CD"
+              },
+              {
+                "name": "months",
+                "type": "number",
+                "required": false,
+                "sample": "12",
+                "description": "조회 개월 수 (1~24, 기본 12)"
+              },
+              {
+                "name": "kind",
+                "type": "string",
+                "required": false,
+                "sample": "land",
+                "description": "'land' (토지매매, 기본) | 'nrg' (상업·업무용)"
+              }
+            ],
+            "outputSchema": "{ ok, bjd_code, kind, months, rows: LandTransaction[]|NrgTransaction[], stats: { total, medianPricePerPyeong, trend, byCategory, monthly } }",
+            "externalDeps": [
+              "rtms-land",
+              "rtms-nrg"
+            ],
+            "notes": "atomic=1 외부=1 원칙 예외 — RTMS 가 시군구·월 단위 강제 → months 회 fan-out (Promise.all, 부분실패 허용). wrapper 가 bjd_code 시군구 정규화 → 같은 시군구 다른 지번도 cache hit. 6h CDN."
+          },
+          "metaLine": 28,
+          "metaExportName": "meta"
         }
       ]
     }
   ],
   "services": [
+    {
+      "id": "bldg-register",
+      "name": "국토부 건축HUB — 건축물대장 정보 서비스",
+      "category": "data.go.kr",
+      "consoleUrl": "https://www.data.go.kr/data/15044713/openapi.do",
+      "envKeys": [
+        "DATA_GO_KR_KEY"
+      ],
+      "expiry": null,
+      "dailyLimit": "10,000건/일 (개발계정, 운영계정 미전환)",
+      "issueGuide": "1. https://www.data.go.kr → \"건축HUB 건축물대장 정보 서비스\" 활용신청\n2. 자동승인 → 즉시 사용\n3. 운영계정 전환 가능 (필요 시) — 자동승인 + 한도 상향\n4. 인증키는 DATA_GO_KR_KEY 공유",
+      "usageExample": "# 표제부 (메인 건물)\nGET https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &sigunguCd=11680    # 시군구 5자리\n  &bjdongCd=10300     # 법정동 5자리\n  &platGbCd=0         # 0=일반/1=산\n  &bun=0073&ji=0001   # 본번/부번 4자리",
+      "notes": "- ⚠️ **트러블슈팅**: 401 Unauthorized 의 진짜 원인은 키 문제가 아니라 **존재하지 않는 시군구/법정동 조합**\n  → 의심되는 주소 시도 전 검증된 주소(서울 강남 삼성동 159)로 200 OK 먼저 확인\n- **결정적 한계**: 비닐하우스/간이 슬레이트 축사는 가설건축물 → 미등록 (대부분 안 잡힘)\n- 등록 잘 됨: 유리온실(100평↑), 콘크리트/철골 축사, 공장/창고/일반건물\n- 표제부(getBrTitleInfo) + 총괄표제부(getBrRecapTitleInfo) 가 메인 — 7개 오퍼레이션 중 표제부만 우선 도입\n- 응답 = 78 필드, 영업가치 22개만 발췌 정규화 (lib/building-hub/title.ts)\n- 한 지번에 여러 동(부속건축물 등) 가능 → rows 배열",
+      "filePath": "app/admin/api-manager/_lib/services/bldg-register.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "buildings-by-pnu"
+      ]
+    },
+    {
+      "id": "github-actions",
+      "name": "GitHub Actions (KEPCO 크롤링 실행 플랫폼)",
+      "category": "infra",
+      "consoleUrl": "https://github.com/hicor150010/project_kepco_powermap/actions",
+      "envKeys": [
+        "GH_PAT",
+        "GITHUB_REPO"
+      ],
+      "expiry": null,
+      "dailyLimit": "Public repo 무제한 (동시 Job 20개, 스토리지 500 MB)",
+      "issueGuide": "1. https://github.com 로그인\n2. 리포지토리: hicor150010/project_kepco_powermap (Public — Actions 무제한)\n3. Personal Access Token 발급:\n   - Settings → Developer settings → Personal access tokens → Fine-grained tokens\n   - **Workflow 스코프 필수** (workflow.yml dispatch + push 권한)\n   - .env.local 의 GH_PAT 에 등록\n4. GitHub Secrets 등록 (리포지토리 Settings → Secrets):\n   - SUPABASE_URL / SUPABASE_SERVICE_KEY\n   - KAKAO_REST_KEY\n5. GITHUB_REPO 환경변수: \"hicor150010/project_kepco_powermap\" 형식",
+      "usageExample": "# Workflow 트리거 (REST API)\nPOST https://api.github.com/repos/{owner}/{repo}/actions/workflows/crawl.yml/dispatches\nHeaders:\n  Authorization: Bearer ${GH_PAT}\n  Accept: application/vnd.github+json\nBody:\n  { \"ref\": \"main\", \"inputs\": { \"thread\": \"1\", \"regions\": \"...\" } }\n\n# Workflow 취소\nPOST .../actions/runs/{run_id}/cancel",
+      "notes": "- ⚠️ GH_PAT 만료 주의 — 일반적으로 1년. 만료 시 모든 크롤링 중단\n- Public repo 라 Actions 무제한 무료 (Private 이면 2,000분/월 제한)\n- 동시 3개 스레드 사용 중 (concurrency group 분리)\n- Job 당 최대 6시간 → 3시간 체이닝으로 해결\n- 상세 아키텍처: docs/CRAWLING.md",
+      "filePath": "app/admin/api-manager/_lib/services/github-actions.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "admin-crawl",
+        "reconcile"
+      ]
+    },
     {
       "id": "kakao",
       "name": "Kakao Developers",
@@ -311,31 +868,146 @@ export const MANIFEST: GeneratedManifest = {
       "filePath": "app/admin/api-manager/_lib/services/kakao.ts",
       "metaLine": 3,
       "consumedBy": []
+    },
+    {
+      "id": "kepco",
+      "name": "한국전력공사 — 배전선로 여유용량 (비공식 API)",
+      "category": "scraping",
+      "consoleUrl": "https://online.kepco.co.kr",
+      "envKeys": [],
+      "expiry": null,
+      "dailyLimit": "비공식 (차단 위험) — User-Agent 랜덤 + 세션 재생성 + 점진적 백오프",
+      "issueGuide": "**공식 API 없음**. 한전 홈페이지 내부 API 를 역호출하는 방식.\n\n별도 키 발급/계정 등록 불필요. 단, 차단 방지 대책 적용 필수:\n1. User-Agent 풀 (7개 브라우저 UA) 랜덤 회전\n2. 2,000건마다 세션 재생성\n3. 1,000건마다 30초 휴식\n4. 연속 에러 시 60~180초 점진적 백오프\n5. delay 조정 (0.15초 ~ 2.0초, UI 에서 설정)\n\nGitHub Actions 러너에서 크롤링 실행 — IP 차단 시 러너 IP 변경으로 자연 해제",
+      "usageExample": "# 주소 계층 조회 (KEPCO 내부 API)\nPOST https://online.kepco.co.kr/EWM092D00SJ.do\nContent-Type: application/json\nHeaders:\n  Referer: https://online.kepco.co.kr/...\n  User-Agent: Mozilla/5.0 ...\n\nBody: { \"gbn\": \"init\" | \"0\" | \"1\" | \"2\" | \"3\", ... }",
+      "notes": "- 사용자가 직접 호출하는 endpoint 없음 (모두 GitHub Actions 크롤러가 호출)\n- 단, /api/admin/crawl/regions 가 KEPCO 주소 계층 API 를 프록시 (관리자 화면 드롭다운용)\n- 동시 3개 스레드 시 delay 0.5초 이상 권장\n- 연속 10회 에러 시 자동 중단 (TooManyErrorsException)\n- 크롤링 아키텍처: docs/CRAWLING.md",
+      "filePath": "app/admin/api-manager/_lib/services/kepco.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "admin-crawl-regions",
+        "capa-lookup"
+      ]
+    },
+    {
+      "id": "onbid",
+      "name": "캠코 온비드 — 부동산 공매 정보 서비스",
+      "category": "data.go.kr",
+      "consoleUrl": "https://www.data.go.kr/iim/api/selectAPIAcountView.do?publicDataDetailPk=uddi:35a76c3c-9712-4c9a-bf80-a78b25b9d3b8",
+      "envKeys": [
+        "DATA_GO_KR_KEY"
+      ],
+      "expiry": "2028-04-26",
+      "dailyLimit": "100,000건/일 (운영계정, 2026-04-26 전환)",
+      "issueGuide": "1. https://www.data.go.kr → \"한국자산관리공사_차세대 온비드 부동산 물건상세 조회서비스\" 활용신청\n2. 추가로 \"OnbidRlstListSrvc2\" (목록 조회) 도 함께 신청\n3. 자동승인 → 즉시 사용\n4. 운영계정 전환:\n   - 활용사례 입력 (활용사례명, 분류체계, 서비스URL, 서비스설명, 서비스 화면 캡처 1장)\n   - 자동승인 → 100,000건/일로 즉시 상향\n5. 인증키는 DATA_GO_KR_KEY 공유",
+      "usageExample": "# 부동산 물건 목록\nGET https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &resultType=json\n  &prptDivCd=10           # 10=부동산\n  &pvctTrgtYn=N           # 공고일 기준 N=현재진행\n  &pageNo=1&numOfRows=100\n\n# 부동산 물건 상세\nGET https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2/getRlstDtlInf2\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &cltrNo=...             # 물건관리번호\n  &plnmNo=...             # 공고관리번호",
+      "notes": "- 응답에 **지번PNU코드 (ltnoPnu) 19자리** 직접 제공 → VWorld 폴리곤 그대로 결합 가능 (★ 매우 유용)\n- 압류재산만 현재 30,178건 진행 중 (정기 공매 + 일별 갱신)\n- 명세 docx → 텍스트 보존: docs/api_specs/온비드_공매/_extract.txt / _extract_상세.txt\n- 호출 테스트 스크립트: crawler/test_onbid.py (gitignored, 키는 env 사용)\n- 영업 활용: 시세 대비 할인율 노출 (의뢰자 의도 — 토지 저가 매입 기회 발굴)",
+      "filePath": "app/admin/api-manager/_lib/services/onbid.ts",
+      "metaLine": 3,
+      "consumedBy": []
+    },
+    {
+      "id": "rtms-land",
+      "name": "국토부 RTMS — 토지 매매 실거래가",
+      "category": "data.go.kr",
+      "consoleUrl": "https://www.data.go.kr/data/15126466/openapi.do",
+      "envKeys": [
+        "DATA_GO_KR_KEY"
+      ],
+      "expiry": "2028-04-25",
+      "dailyLimit": "1,000,000건/일 (운영계정, 2026-04-25 전환)",
+      "issueGuide": "1. https://www.data.go.kr 로그인 → 마이페이지\n2. 데이터 활용 → Open API → 활용신청 현황\n3. \"국토교통부_토지 매매 실거래가 자료\" 검색 → 활용신청\n4. 자동승인 → 즉시 사용 가능 (개발계정 1,000건/일)\n5. 운영계정 전환:\n   - 활용신청 상세 → \"운영계정 활용신청\" 클릭\n   - 활용사례 정보 입력 (서비스URL, 설명, 화면 캡처)\n   - 자동승인 → 100만건/일로 즉시 상향\n6. 인증키는 다른 data.go.kr 서비스와 공유 (하나의 DATA_GO_KR_KEY)",
+      "usageExample": "GET https://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &LAWD_CD=46730     # 시군구 5자리\n  &DEAL_YMD=202604   # 거래월 YYYYMM\n  &numOfRows=100&pageNo=1\nHeaders:\n  User-Agent: Mozilla/5.0 (compatible; SUNLAP/1.0)",
+      "notes": "- ⚠️ **User-Agent 헤더 필수** — 없으면 WAF 가 400 Request Blocked\n- 응답 = XML 고정 (`_type=json` 무시됨) → fast-xml-parser\n- 시군구 + 거래월 단위로만 조회 가능 → N개월 = N회 fan-out (Promise.all)\n- 응답 jibun 끝자리 마스킹 (\"3*\", \"10*\") — 정확 매칭 불가, 통계 용도\n- resultCode \"03\" = NO_DATA (정상, 거래 0건)\n- 키 노출 시: data.go.kr 마이페이지에서 인증키 재발급 → DATA_GO_KR_KEY 갱신",
+      "filePath": "app/admin/api-manager/_lib/services/rtms-land.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "transactions-by-bjd"
+      ]
+    },
+    {
+      "id": "rtms-nrg",
+      "name": "국토부 RTMS — 상업업무용 부동산 매매 실거래가",
+      "category": "data.go.kr",
+      "consoleUrl": "https://www.data.go.kr/data/15057275/openapi.do",
+      "envKeys": [
+        "DATA_GO_KR_KEY"
+      ],
+      "expiry": "2028-04-25",
+      "dailyLimit": "1,000,000건/일 (운영계정, 2026-04-25 전환)",
+      "issueGuide": "1. https://www.data.go.kr 로그인 → 마이페이지\n2. \"국토교통부_상업업무용 부동산 매매 실거래가 자료\" 검색 → 활용신청\n3. 자동승인 → 즉시 사용 가능\n4. 운영계정 전환 절차는 RTMS 토지와 동일 (자동승인 100만/일)\n5. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)",
+      "usageExample": "GET https://apis.data.go.kr/1613000/RTMSDataSvcNrgTrade/getRTMSDataSvcNrgTrade\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &LAWD_CD=11680\n  &DEAL_YMD=202604\nHeaders:\n  User-Agent: Mozilla/5.0 (compatible; SUNLAP/1.0)",
+      "notes": "- 토지 RTMS 와 동일한 호출 패턴 (User-Agent + XML + 시군구·월 fan-out)\n- 응답 필드: 토지보다 풍부 — buildingType (일반/집합), buildingUse, buildingAr, floor, plottageAr 등\n- **마스킹 정책 (실측)**:\n  - buildingType=\"집합\" → jibun 정확 노출\n  - buildingType=\"일반\" → jibun 마스킹\n- **공장/창고 매매는 nrg 에 미포함** — 토지매매(rtms-land) 의 \"공장용지\" 지목 참조\n- 옥상 태양광 사업자 관점: 평당가는 buildingAr 기준 (대지 X, 건물면적)",
+      "filePath": "app/admin/api-manager/_lib/services/rtms-nrg.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "transactions-by-bjd"
+      ]
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase (Postgres + Auth + Storage)",
+      "category": "infra",
+      "consoleUrl": "https://supabase.com/dashboard/project/wtbwgjejfrrwgbzgcdjd",
+      "envKeys": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ],
+      "expiry": null,
+      "dailyLimit": "DB 500MB · egress 5GB/월 · API 요청 무제한",
+      "issueGuide": "1. https://supabase.com 회원가입 → 새 프로젝트 생성\n2. Region: Northeast Asia - Seoul 권장\n3. DB 패스워드 설정 (강한 패스워드, SECRETS.local.md 기록)\n4. Settings → API:\n   - Project URL → NEXT_PUBLIC_SUPABASE_URL\n   - anon public → NEXT_PUBLIC_SUPABASE_ANON_KEY (브라우저 노출 OK)\n   - service_role → SUPABASE_SERVICE_ROLE_KEY (서버 전용, 절대 클라이언트 X)\n5. .env.local + Vercel 환경변수 양쪽 등록\n6. 휴면 방지 cron 설정 (주 1회 ping, 7일 미접속 시 일시정지)",
+      "usageExample": "# 서버 컴포넌트\nimport { createAdminClient } from \"@/lib/supabase/admin\";\nconst supabase = createAdminClient();\nawait supabase.from(\"kepco_capa\").select(\"*\").eq(\"bjd_code\", \"...\");\n\n# 클라이언트 (브라우저)\nimport { createClient } from \"@/lib/supabase/client\";\nconst supabase = createClient();\nconst { data: { user } } = await supabase.auth.getUser();",
+      "notes": "- 프로젝트명: kepco-web-map (Project ID: wtbwgjejfrrwgbzgcdjd)\n- 핵심 테이블: kepco_addr / kepco_capa / kepco_map_summary(MV) / bjd_master / crawl_jobs / user_roles\n- DB 최적화 이력 (2026-04-11): 110MB → 53MB (52% 감소) — row_hash 도입 + 불필요 인덱스 8개 제거\n- 좌표 저장 정책: kepco_addr.lat/lng = 리 단위 / 지번 좌표는 Vercel KV TTL 3일 (geocode_cache 폐기됨)\n- ⚠️ 휴면 정책: 7일 미접속 → 일시정지. cron ping 으로 방지 필수",
+      "filePath": "app/admin/api-manager/_lib/services/supabase.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "admin-crawl",
+        "admin-users",
+        "capa-by-bjd",
+        "capa-lookup",
+        "capa-summary-by-bjd",
+        "health",
+        "map-summary",
+        "reconcile",
+        "refresh-mv",
+        "search"
+      ]
+    },
+    {
+      "id": "vercel",
+      "name": "Vercel (호스팅 + Edge Functions + KV)",
+      "category": "infra",
+      "consoleUrl": "https://vercel.com/dashboard",
+      "envKeys": [],
+      "expiry": null,
+      "dailyLimit": "100 GB 대역폭/월 · 빌드 6,000분/월 · Edge 500K 호출/월 (Hobby)",
+      "issueGuide": "1. https://vercel.com 회원가입 (Google 소셜 로그인 권장 — hicor150010@gmail.com)\n2. New Project → GitHub 리포 import: hicor150010/project_kepco_powermap\n3. Root Directory: web (모노레포 — Next.js 가 web/ 하위에 있음)\n4. Framework: Next.js (자동 감지)\n5. 환경변수 등록 (Settings → Environment Variables):\n   - NEXT_PUBLIC_KAKAO_JS_KEY / KAKAO_REST_KEY\n   - VWORLD_KEY / DATA_GO_KR_KEY\n   - SUPABASE_URL / ANON_KEY / SERVICE_ROLE_KEY\n   - GH_PAT / GITHUB_REPO / CRON_SECRET\n6. 도메인: Settings → Domains → sunlap.kr 추가 (가비아 DNS 설정 필요)",
+      "usageExample": "# 배포 도메인\nhttps://kepco-powermap.vercel.app\nhttps://sunlap.kr\n\n# Vercel KV (Upstash)\nimport { kv } from \"@vercel/kv\";\nawait kv.set(\"key\", value, { ex: 3600 });   // 1h TTL\n\n# 환경변수 (server-side)\nprocess.env.DATA_GO_KR_KEY",
+      "notes": "- 플랜: Hobby (무료) — 한도 초과 시 Pro 업그레이드 검토\n- /admin/api-manager 는 process.env.VERCEL === \"1\" 체크로 차단\n- KV 한도: 256 MB / 10K 명령/일 (현재 지번 좌표 캐시 3일 TTL 로 사용 중)\n- 빌드 환경변수가 누락되면 Next.js 가 의외의 fallback 으로 빌드됨 → 배포 후 즉시 환경변수 확인 권장\n- Logs: 7일 retain (Hobby)",
+      "filePath": "app/admin/api-manager/_lib/services/vercel.ts",
+      "metaLine": 3,
+      "consumedBy": []
+    },
+    {
+      "id": "vworld",
+      "name": "VWorld (국토교통부 공간정보 오픈플랫폼)",
+      "category": "geocoding",
+      "consoleUrl": "https://www.vworld.kr/dev/v4api.do",
+      "envKeys": [
+        "VWORLD_KEY"
+      ],
+      "expiry": "2026-10-08",
+      "dailyLimit": "사실상 무제한 (분당/초당 제한만 존재)",
+      "issueGuide": "1. https://www.vworld.kr 회원가입 (공공기관 무료)\n2. [개발자센터] → [오픈API] → 인증키 발급 신청\n3. 활용 API: 검색 API + 2D 지도 API + WFS (필지/폴리곤)\n4. 등록 서비스 URL: `*` (와일드카드 — 모든 도메인 허용)\n   ※ 운영 안정화 후 좁히기 권장\n5. 발급된 인증키를 .env.local 의 VWORLD_KEY 에 등록\n6. 만료 1개월 전 콘솔에서 연장 신청 (현재 만료: 2026-10-08)",
+      "usageExample": "# 필지 폴리곤 (PNU 단건)\nGET https://api.vworld.kr/req/wfs?KEY=${VWORLD_KEY}\n  &SERVICE=WFS&REQUEST=GetFeature&TYPENAME=lp_pa_cbnd_bonbun\n  &FILTER=<Filter><PropertyIsEqualTo>...</PropertyIsEqualTo></Filter>\n\n# 행정구역 폴리곤\nGET .../wfs?TYPENAME=lt_c_adri  (리)\nGET .../wfs?TYPENAME=lt_c_ademd (읍면동)",
+      "notes": "- ⚠️ **만료일 D-day 주시**: 2026-10-08 = 약 D-166 (작성 시점 기준)\n- Referer 헤더 검증: 등록한 URL 외 호출 차단 → 브라우저 직접 호출 시 CORS 막힘 → 반드시 API Route 경유\n- \"기타지역\" 같은 비표준 주소는 카카오와 동일하게 실패 가능\n- 만료 시 모든 필지/폴리곤/지오코딩 fallback 마비 — 갱신 까먹지 말 것",
+      "filePath": "app/admin/api-manager/_lib/services/vworld.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "parcel-by-latlng",
+        "parcel-by-pnu",
+        "polygon-by-bjd"
+      ]
     }
   ],
-  "warnings": [
-    "/api/admin/crawl DELETE: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaDELETE` 추가 필요",
-    "/api/admin/crawl GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/admin/crawl PATCH: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPATCH` 추가 필요",
-    "/api/admin/crawl POST: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPOST` 추가 필요",
-    "/api/admin/crawl/regions GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/admin/users DELETE: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaDELETE` 추가 필요",
-    "/api/admin/users GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/admin/users PATCH: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPATCH` 추가 필요",
-    "/api/admin/users POST: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPOST` 추가 필요",
-    "/api/admin/users PUT: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPUT` 추가 필요",
-    "/api/buildings/by-pnu GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/capa/by-bjd GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/capa/lookup POST: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPOST` 추가 필요",
-    "/api/capa/summary-by-bjd GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/health GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/map-summary GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/parcel/by-latlng GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/parcel/by-pnu GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/polygon/by-bjd GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/reconcile POST: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPOST` 추가 필요",
-    "/api/refresh-mv POST: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaPOST` 추가 필요",
-    "/api/search GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요",
-    "/api/transactions/by-bjd GET: meta 미정의 — route.ts 에 `export const meta` 또는 `export const metaGET` 추가 필요"
-  ]
+  "warnings": []
 } as GeneratedManifest;

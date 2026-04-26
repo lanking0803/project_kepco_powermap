@@ -8,6 +8,19 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MapSummaryResponse, MapSummaryRow } from "@/lib/types";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "DB MV (kepco_map_summary, 페이지네이션 1000행씩 전량 수집)",
+  cache: "no-store",
+  auth: "user",
+  inputs: [],
+  outputSchema:
+    "{ rows: MapSummaryRow[], total: number, generatedAt: string }",
+  externalDeps: ["supabase"],
+  notes:
+    "지도 마커 초기 로드용 light 데이터. PostgREST 1000행 제한 우회 위해 페이지네이션 전량 수집. no-store — 수집/지오코딩 즉시 반영 (캐시 시 '마커 0' 사고 사례).",
+};
 
 export async function GET() {
   // 인증 체크

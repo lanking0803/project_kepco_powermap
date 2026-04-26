@@ -20,6 +20,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { KepcoCapaSummary } from "@/lib/types";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "DB RPC get_location_summary(bjd_code) — flat 7컬럼 GROUP COUNT FILTER",
+  cache: "no-store",
+  auth: "user",
+  inputs: [
+    {
+      name: "bjd_code",
+      type: "string",
+      required: true,
+      sample: "4673025025",
+      description: "행안부 법정동 코드 10자리",
+    },
+  ],
+  outputSchema:
+    "{ ok, bjd_code, summary: { total, subst:{avail,short}, mtr:{avail,short}, dl:{avail,short} } }",
+  externalDeps: ["supabase"],
+  notes:
+    "마커 클릭 시 카드만 그릴 때 (~80B, raw rows 대비 99% 절감). DB flat → 시설별 중첩 객체 변환. 모달 펼칠 때 /api/capa/by-bjd 별도 호출.",
+};
 
 interface SummaryRow {
   total: number;

@@ -14,6 +14,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getParcelByPoint } from "@/lib/vworld/parcel";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "VWorld WFS BBOX (±5m) + point-in-polygon 선별",
+  cache: "private, s-maxage=86400, max-age=3600",
+  auth: "user",
+  inputs: [
+    {
+      name: "lat",
+      type: "number",
+      required: true,
+      sample: "37.4946",
+      description: "위도 (소수점 4~6자리)",
+    },
+    {
+      name: "lng",
+      type: "number",
+      required: true,
+      sample: "127.0276",
+      description: "경도",
+    },
+  ],
+  outputSchema:
+    "{ ok, lat, lng, jibun: JibunInfo | null, geometry: ParcelGeometry | null } — 매칭 실패 시 jibun/geometry null",
+  externalDeps: ["vworld"],
+  notes:
+    "지도 직접 클릭 (PNU 미확보 상태) 진입점. 응답 형식은 by-pnu 와 동일 (pnu 대신 lat/lng 에코). 바다·미등록은 max-age=300.",
+};
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();

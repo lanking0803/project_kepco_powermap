@@ -9,8 +9,42 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
 const KEPCO_BASE = "https://online.kepco.co.kr";
+
+export const meta: EndpointMeta = {
+  source: "KEPCO online.kepco.co.kr 주소 계층 API 프록시 (CORS 우회)",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    {
+      name: "gbn",
+      type: "string",
+      required: true,
+      sample: "init",
+      description: "init=시도 / 0=시 / 1=구군 / 2=동면 / 3=리",
+    },
+    {
+      name: "addr_do",
+      type: "string",
+      required: false,
+      sample: "경기도",
+      description: "gbn=0+ 시 필요",
+    },
+    {
+      name: "addr_si",
+      type: "string",
+      required: false,
+      sample: "양평군",
+      description: "gbn=1+ 시 필요",
+    },
+  ],
+  outputSchema: "{ ok, items: Array<{ name, code }> }",
+  externalDeps: ["kepco"],
+  notes:
+    "Referer 헤더 주입 필수 (없으면 KEPCO 가 차단). 관리자 화면 드롭다운 (수집 대상 지역 선택) 용도.",
+};
 
 export async function GET(request: NextRequest) {
   const me = await requireAdmin();

@@ -10,6 +10,76 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, listAllUsers } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const metaGET: EndpointMeta = {
+  source: "Supabase Auth admin.listUsers + user_roles join",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [],
+  outputSchema: "{ ok, users: Array<{ id, email, role, displayName, created_at }> }",
+  externalDeps: ["supabase"],
+  notes: "전체 사용자 목록.",
+};
+
+export const metaPOST: EndpointMeta = {
+  source: "Supabase Auth admin.createUser + user_roles insert",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "loginId", type: "string", required: true, sample: "newuser", description: "로그인 ID (자동으로 @kepco.local 붙음)" },
+    { name: "password", type: "string", required: true, sample: "TestPw12!", description: "초기 비밀번호" },
+    { name: "role", type: "string", required: false, sample: "viewer", description: "admin | viewer (기본 viewer)" },
+    { name: "displayName", type: "string", required: false, sample: "홍길동" },
+  ],
+  outputSchema: "{ ok, user: { id, email, role, displayName } }",
+  externalDeps: ["supabase"],
+  notes: "loginId 에 @ 없으면 @kepco.local 자동 부착 (LoginForm 과 동일 규칙).",
+};
+
+export const metaPATCH: EndpointMeta = {
+  source: "DB update (user_roles)",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "userId", type: "string", required: true, sample: "uuid-xxxx", description: "Supabase user.id" },
+    { name: "role", type: "string", required: false, sample: "admin" },
+    { name: "displayName", type: "string", required: false, sample: "홍길동" },
+  ],
+  outputSchema: "{ ok }",
+  externalDeps: ["supabase"],
+  notes: "권한 / 표시 이름 변경.",
+};
+
+export const metaDELETE: EndpointMeta = {
+  source: "Supabase Auth admin.deleteUser",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "userId", type: "string", required: true, sample: "uuid-xxxx", description: "Supabase user.id (querystring)" },
+  ],
+  outputSchema: "{ ok }",
+  externalDeps: ["supabase"],
+  dangerous: true,
+  dangerNote:
+    "사용자 영구 삭제 — 복구 불가. 해당 사용자의 모든 세션 무효화.",
+  notes: "삭제 후 user_roles cascade 가 함께 정리.",
+};
+
+export const metaPUT: EndpointMeta = {
+  source: "Supabase Auth admin.updateUserById (password 만)",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "userId", type: "string", required: true, sample: "uuid-xxxx" },
+    { name: "newPassword", type: "string", required: true, sample: "NewPw34!", description: "새 비밀번호" },
+  ],
+  outputSchema: "{ ok }",
+  externalDeps: ["supabase"],
+  dangerous: true,
+  dangerNote: "사용자 비밀번호 강제 초기화. 관리자가 사용자에게 새 비밀번호 직접 전달 필요.",
+  notes: "사용자가 비밀번호를 잊은 경우 관리자가 초기화.",
+};
 
 /** 로그인 ID → 이메일 변환 (LoginForm과 동일 규칙) */
 function toEmail(input: string): string {

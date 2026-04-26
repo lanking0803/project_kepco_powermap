@@ -25,6 +25,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { lookupCapacity } from "@/lib/kepco-live/lookup-capacity";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "DB → KEPCO live (lookup-capacity 위임, DB miss 시 fallback)",
+  cache: "no-store",
+  auth: "user",
+  inputs: [
+    {
+      name: "addr",
+      type: "string",
+      required: false,
+      sample: "경기도 양평군 청운면 갈운리 24-1",
+      description: "한글주소 (또는 bjd_code 둘 중 하나 필수)",
+    },
+    {
+      name: "bjd_code",
+      type: "string",
+      required: false,
+      sample: "4673025025",
+      description: "행안부 법정동 코드 (refresh 용)",
+    },
+    {
+      name: "jibun",
+      type: "string",
+      required: true,
+      sample: "24-1",
+      description: "지번 번호 (예: 24-1, 산1-10)",
+    },
+    {
+      name: "refresh",
+      type: "boolean",
+      required: false,
+      sample: "false",
+      description: "true 시 항상 KEPCO live 호출",
+    },
+    {
+      name: "includeSplitDong",
+      type: "boolean",
+      required: false,
+      sample: "false",
+      description: "동분할 후보 추가",
+    },
+  ],
+  outputSchema:
+    "{ ok, source: 'db'|'live'|'not_found', bjd_code: string|null, addr_jibun, rows: KepcoDataRow[], fetched_at, candidate_used? }",
+  externalDeps: ["supabase", "kepco"],
+  notes:
+    "DB hit 시 외부 호출 0. DB miss / refresh=true 시 KEPCO live 1회 + DB upsert. POST + JSON body — 라이브 테스트 시 querystring 아닌 body 로 입력.",
+};
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();

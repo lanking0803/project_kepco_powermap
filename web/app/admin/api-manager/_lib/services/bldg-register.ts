@@ -1,0 +1,29 @@
+import type { ExternalServiceMeta } from "../types";
+
+export const meta: ExternalServiceMeta = {
+  id: "bldg-register",
+  name: "국토부 건축HUB — 건축물대장 정보 서비스",
+  category: "data.go.kr",
+  consoleUrl: "https://www.data.go.kr/data/15044713/openapi.do",
+  envKeys: ["DATA_GO_KR_KEY"],
+  expiry: null,
+  dailyLimit: "10,000건/일 (개발계정, 운영계정 미전환)",
+  issueGuide: `1. https://www.data.go.kr → "건축HUB 건축물대장 정보 서비스" 활용신청
+2. 자동승인 → 즉시 사용
+3. 운영계정 전환 가능 (필요 시) — 자동승인 + 한도 상향
+4. 인증키는 DATA_GO_KR_KEY 공유`,
+  usageExample: `# 표제부 (메인 건물)
+GET https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo
+  ?serviceKey=\${DATA_GO_KR_KEY}
+  &sigunguCd=11680    # 시군구 5자리
+  &bjdongCd=10300     # 법정동 5자리
+  &platGbCd=0         # 0=일반/1=산
+  &bun=0073&ji=0001   # 본번/부번 4자리`,
+  notes: `- ⚠️ **트러블슈팅**: 401 Unauthorized 의 진짜 원인은 키 문제가 아니라 **존재하지 않는 시군구/법정동 조합**
+  → 의심되는 주소 시도 전 검증된 주소(서울 강남 삼성동 159)로 200 OK 먼저 확인
+- **결정적 한계**: 비닐하우스/간이 슬레이트 축사는 가설건축물 → 미등록 (대부분 안 잡힘)
+- 등록 잘 됨: 유리온실(100평↑), 콘크리트/철골 축사, 공장/창고/일반건물
+- 표제부(getBrTitleInfo) + 총괄표제부(getBrRecapTitleInfo) 가 메인 — 7개 오퍼레이션 중 표제부만 우선 도입
+- 응답 = 78 필드, 영업가치 22개만 발췌 정규화 (lib/building-hub/title.ts)
+- 한 지번에 여러 동(부속건축물 등) 가능 → rows 배열`,
+};

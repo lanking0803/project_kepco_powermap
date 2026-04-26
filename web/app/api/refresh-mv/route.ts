@@ -13,9 +13,25 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
 // REFRESH 가 분 단위로 길어질 수 있으므로 라우트 timeout 도 함께 풀어둔다.
 export const maxDuration = 300;
+
+export const meta: EndpointMeta = {
+  source: "DB RPC refresh_kepco_summary — Materialized View 수동 새로고침",
+  cache: "no-store",
+  auth: "user",
+  inputs: [],
+  outputSchema:
+    "{ ok: true, skipped: false } | { ok: true, skipped: true, reason, age_sec? } | { ok: false, error }",
+  externalDeps: ["supabase"],
+  dangerous: true,
+  dangerNote:
+    "MV 전체 재구축 — 분 단위 소요. 동시 요청은 RPC 측 60s cooldown + advisory lock 으로 흡수되지만, 진행중 호출은 의미 없으니 cooldown 표시 확인.",
+  notes:
+    "사이드바 새로고침 버튼에서 호출. RPC 측에서 60s cooldown + advisory lock + 5분 statement_timeout. maxDuration=300 (라우트 timeout).",
+};
 
 export async function POST() {
   const user = await getCurrentUser();

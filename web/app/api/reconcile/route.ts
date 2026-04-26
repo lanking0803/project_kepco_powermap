@@ -27,6 +27,20 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source:
+    "DB (crawl_jobs) 판단 + 필요 시 GitHub Actions API (cancel/dispatch)",
+  cache: "no-store",
+  auth: "system",
+  inputs: [],
+  outputSchema:
+    "{ ok: true, reconciled: number, actions: Array<{ jobId, action, reason }> } — 12줄 판단표 기반",
+  externalDeps: ["supabase", "github-actions"],
+  notes:
+    "Authorization: Bearer ${CRON_SECRET} 헤더 필요. Supabase pg_cron 매 1분 호출. 라이브 테스트 시 헤더 직접 입력 필요. 좀비 작업 정리 + 실패 작업 자동 재시도 (max 5회).",
+};
 
 const GITHUB_PAT = process.env.GH_PAT || process.env.GITHUB_PAT || "";
 const GITHUB_REPO = process.env.GITHUB_REPO || "";

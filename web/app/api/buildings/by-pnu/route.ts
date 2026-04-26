@@ -16,6 +16,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getBuildingTitleByPnu } from "@/lib/building-hub/title";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source: "건축HUB getBrTitleInfo (국토부 BldRgstHubService) — 표제부 단건",
+  cache: "private, s-maxage=86400, max-age=3600",
+  auth: "user",
+  inputs: [
+    {
+      name: "pnu",
+      type: "string",
+      required: true,
+      sample: "1168010300100590000",
+      description: "PNU 19자리. 11번째 자리(산구분)가 platGbCd 로 자동 변환",
+    },
+  ],
+  outputSchema:
+    "{ ok, pnu, rows: BuildingTitleInfo[] }   // 0건도 정상 (빈 땅/미등록)",
+  externalDeps: ["bldg-register"],
+  notes:
+    "한 지번 여러 동 → rows 배열. 표제부 응답 78필드 → 영업가치 22개만 발췌 정규화. 비닐하우스/간이 슬레이트 축사는 가설건축물이라 거의 미등록.",
+};
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();

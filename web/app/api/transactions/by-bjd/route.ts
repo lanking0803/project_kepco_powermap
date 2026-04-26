@@ -23,6 +23,42 @@ import { getCurrentUser } from "@/lib/auth";
 import { getLandTradesByBjd } from "@/lib/rtms/land-trade";
 import { getNrgTradesByBjd } from "@/lib/rtms/nrg-trade";
 import { computeLandStats, computeNrgStats } from "@/lib/rtms/trade-stats";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source:
+    "국토부 RTMS — kind=land 시 getRTMSDataSvcLandTrade / kind=nrg 시 getRTMSDataSvcNrgTrade",
+  cache: "private, s-maxage=21600, max-age=3600",
+  auth: "user",
+  inputs: [
+    {
+      name: "bjd_code",
+      type: "string",
+      required: true,
+      sample: "4673025025",
+      description: "행안부 법정동 코드 10자리. 앞 5자리 = LAWD_CD",
+    },
+    {
+      name: "months",
+      type: "number",
+      required: false,
+      sample: "12",
+      description: "조회 개월 수 (1~24, 기본 12)",
+    },
+    {
+      name: "kind",
+      type: "string",
+      required: false,
+      sample: "land",
+      description: "'land' (토지매매, 기본) | 'nrg' (상업·업무용)",
+    },
+  ],
+  outputSchema:
+    "{ ok, bjd_code, kind, months, rows: LandTransaction[]|NrgTransaction[], stats: { total, medianPricePerPyeong, trend, byCategory, monthly } }",
+  externalDeps: ["rtms-land", "rtms-nrg"],
+  notes:
+    "atomic=1 외부=1 원칙 예외 — RTMS 가 시군구·월 단위 강제 → months 회 fan-out (Promise.all, 부분실패 허용). wrapper 가 bjd_code 시군구 정규화 → 같은 시군구 다른 지번도 cache hit. 6h CDN.",
+};
 
 type Kind = "land" | "nrg";
 

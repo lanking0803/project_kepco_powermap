@@ -14,6 +14,64 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const metaGET: EndpointMeta = {
+  source: "DB (crawl_jobs 최신 50건)",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [],
+  outputSchema: "{ ok, jobs: CrawlJob[] }",
+  externalDeps: ["supabase"],
+  notes: "관리자 화면의 작업 목록. 정렬: created_at DESC, limit 50.",
+};
+
+export const metaPOST: EndpointMeta = {
+  source: "DB insert (crawl_jobs) + GitHub Actions workflow_dispatch",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "thread", type: "number", required: true, sample: "1", description: "1~5 (스레드 슬롯)" },
+    { name: "sido", type: "string", required: true, sample: "경기도" },
+    { name: "si", type: "string", required: false, sample: "양평군" },
+    { name: "gu", type: "string", required: false, sample: "" },
+    { name: "dong", type: "string", required: false, sample: "청운면" },
+    { name: "li", type: "string", required: false, sample: "갈운리" },
+    { name: "mode", type: "string", required: false, sample: "single", description: "single | recurring" },
+  ],
+  outputSchema: "{ ok, job: CrawlJob }",
+  externalDeps: ["supabase", "github-actions"],
+  notes:
+    "API 는 의도(intent='run') 만 기록. status 는 크롤러가 갱신 (2중 제어). 동시 같은 thread 점유 시 409 반환.",
+};
+
+export const metaPATCH: EndpointMeta = {
+  source: "DB update (intent='cancel') + GitHub Actions runs cancel",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "id", type: "number", required: true, sample: "1234", description: "Job ID (body)" },
+  ],
+  outputSchema: "{ ok }",
+  externalDeps: ["supabase", "github-actions"],
+  notes:
+    "정지 요청 — intent 만 변경, 실제 status 는 Worker(/api/reconcile) 가 처리. 좀비 정리도 Worker 위임.",
+};
+
+export const metaDELETE: EndpointMeta = {
+  source: "DB delete (crawl_jobs WHERE id=$1, 종료된 Job 만)",
+  cache: "no-store",
+  auth: "admin",
+  inputs: [
+    { name: "id", type: "number", required: true, sample: "1234", description: "Job ID (querystring)" },
+  ],
+  outputSchema: "{ ok }",
+  externalDeps: ["supabase"],
+  dangerous: true,
+  dangerNote:
+    "Job 기록 영구 삭제. running/pending 인 Job 은 422 (먼저 cancel 필요).",
+  notes: "히스토리에서 한 줄 지우는 용도. 실행 중 Job 은 보호.",
+};
 
 const GITHUB_PAT = process.env.GH_PAT || process.env.GITHUB_PAT || "";
 const GITHUB_REPO = process.env.GITHUB_REPO || ""; // "owner/repo"

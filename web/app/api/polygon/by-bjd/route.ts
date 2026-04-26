@@ -14,6 +14,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getAdminPolygonByBjd } from "@/lib/vworld/admin-polygon";
+import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+export const meta: EndpointMeta = {
+  source:
+    "VWorld lt_c_adri (리, bjd_code 끝2자리 != '00') / lt_c_ademd (읍면동, 끝2자리 == '00') WFS",
+  cache: "public, s-maxage=604800, stale-while-revalidate=86400",
+  auth: "user",
+  inputs: [
+    {
+      name: "bjd_code",
+      type: "string",
+      required: true,
+      sample: "4673025025",
+      description: "행안부 법정동 코드 10자리. 끝2자리로 리/읍면동 자동 분기",
+    },
+  ],
+  outputSchema:
+    "{ ok, bjd_code, level: 'ri'|'emd'|null, full_nm: string|null, polygon: number[][][]|null, center: {lat,lng}|null }",
+  externalDeps: ["vworld"],
+  notes:
+    "행정구역 폴리곤은 변경 거의 없음 → 1주 CDN 캐시 + stale-while-revalidate. 마을 마커 클릭 시 음영 시각화용.",
+};
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
