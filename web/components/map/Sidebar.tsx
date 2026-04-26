@@ -475,6 +475,34 @@ export default function Sidebar({
                         <span className="text-gray-600 font-medium">용구리 100</span>
                       </div>
                     </div>
+
+                    {/* 한전온 외부 링크 — 우리 데이터에 없는 실시간 용량 확인용 */}
+                    <a
+                      href="https://online.kepco.co.kr/EWM092D00"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg px-3 py-2.5 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="https://online.kepco.co.kr/cm/images/img-navi-logo.png"
+                          alt="한전온"
+                          className="h-4 w-auto flex-shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-semibold text-gray-700">
+                            선로용량 확인하기
+                          </div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                            한전온에서 실시간 용량 확인 (새 창)
+                          </div>
+                        </div>
+                        <span className="text-gray-400 text-xs">↗</span>
+                      </div>
+                    </a>
                   </div>
                 )}
               </div>
