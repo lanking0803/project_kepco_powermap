@@ -44,6 +44,8 @@ declare global {
 /** 편집 가능한 건물 단위 — id 로 부모 state 와 sync */
 export interface EditableBuilding {
   id: string;
+  /** 라벨 표시용 동 이름 — 우측 카드와 동일 ("1동" / "공장A" 등) */
+  name: string;
   polygon: Position[][];
   area_m2: number;
 }
@@ -319,7 +321,7 @@ export default function QuoteMap({
         const labelEl = document.createElement("div");
         labelEl.className =
           "px-2 py-0.5 bg-white/95 border border-orange-500 rounded text-orange-700 text-xs font-bold shadow tabular-nums select-none pointer-events-none";
-        labelEl.textContent = `${toPyeong(building.area_m2).toLocaleString()}평`;
+        labelEl.textContent = `${building.name} · ${toPyeong(building.area_m2).toLocaleString()}평`;
         labelOverlay = new window.kakao.maps.CustomOverlay({
           map,
           position: new window.kakao.maps.LatLng(center.lat, center.lng),

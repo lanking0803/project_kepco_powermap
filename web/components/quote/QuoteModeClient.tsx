@@ -44,6 +44,18 @@ import {
   findLongestEdge,
   findFlattestVertex,
 } from "@/lib/geometry/polygon-edit";
+import {
+  FACILITY_KINDS,
+  FACILITY_LABEL,
+  FACILITY_SPEC,
+  calcCost,
+  calcKw,
+  formatCost,
+  formatKw,
+  recommendFacility,
+  type FacilityKind,
+  type FacilitySpec,
+} from "@/lib/quote/facility";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 
@@ -299,16 +311,95 @@ export default function QuoteModeClient({ pnu }: Props) {
   /** 우측 카드의 🗑 클릭 시 빨간 모드 진입 — id 일치하면 [정말 삭제] / [취소] 표시 */
   const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
 
-  /** QuoteMap props 형태로 변환 — 편집된 polygon/area 사용 */
+  // ── 2섹션 시설별 견적 — 사용자 변경 사항만 별도 state. 자동 추천은 derive.
+  /** 동별 시설 종류 사용자 선택. 미설정이면 recommendFacility() 결과 사용. */
+  const [facilityOverrides, setFacilityOverrides] = useState<
+    Record<string, FacilityKind>
+  >({});
+  /** 동별 단가 사용자 변경. 미설정이면 FACILITY_SPEC[kind] 디폴트 사용.
+   *  시설 종류가 바뀌면 자동 클리어 (새 시설의 디폴트 단가로 복귀). */
+  const [specOverrides, setSpecOverrides] = useState<
+    Record<string, FacilitySpec>
+  >({});
+  /** 단가 인라인 편집 펼친 동의 id (한 번에 한 동만 편집) */
+  const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
+
+  const handleFacilityChange = useCallback(
+    (id: string, kind: FacilityKind) => {
+      setFacilityOverrides((prev) => ({ ...prev, [id]: kind }));
+      // 시설 종류 변경 → 단가 override 클리어 (새 시설 디폴트 적용)
+      setSpecOverrides((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleSpecChange = useCallback((id: string, spec: FacilitySpec) => {
+    setSpecOverrides((prev) => ({ ...prev, [id]: spec }));
+  }, []);
+
+  const handleResetSpec = useCallback((id: string) => {
+    setSpecOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const handleResetFacility = useCallback((id: string) => {
+    setFacilityOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  /** QuoteMap props 형태로 변환 — 편집된 polygon/area + 우측 카드와 동일한 동 이름 */
   const editableBuildings: EditableBuilding[] = useMemo(
     () =>
-      buildings.map((b) => ({
+      buildings.map((b, i) => ({
         id: makeBuildingId(b),
+        name: b.buld_nm || `${i + 1}동`,
         polygon: b.edited_polygon,
         area_m2: b.edited_area_m2,
       })),
     [buildings],
   );
+
+  /** 동별 시설 종류 + 단가 + kW + 시공비 한 번에 계산 (자동 추천 포함) */
+  const facilityRows = useMemo(() => {
+    const jimok = geometry?.jimok ?? "";
+    return buildings.map((b) => {
+      const id = makeBuildingId(b);
+      const auto = recommendFacility(b.source, jimok, bldgRegister);
+      const kind = facilityOverrides[id] ?? auto;
+      const spec = specOverrides[id] ?? FACILITY_SPEC[kind];
+      const py = b.edited_area_m2 * M2_TO_PYEONG;
+      const kw = calcKw(py, spec);
+      const cost = calcCost(kw, spec);
+      return {
+        id,
+        building: b,
+        auto,
+        kind,
+        spec,
+        py,
+        kw,
+        cost,
+        isAutoKind: !facilityOverrides[id],
+        isCustomSpec: !!specOverrides[id],
+      };
+    });
+  }, [buildings, geometry, bldgRegister, facilityOverrides, specOverrides]);
+
+  const totalKw = facilityRows.reduce((s, r) => s + r.kw, 0);
+  const totalCost = facilityRows.reduce((s, r) => s + r.cost, 0);
 
   const buildingArea = buildings.reduce(
     (sum, b) => sum + b.edited_area_m2,
@@ -453,9 +544,57 @@ export default function QuoteModeClient({ pnu }: Props) {
               </>
             )}
           </div>
-          <SectionHeader step={2} title="시설별 견적" status="pending" />
-          <div className="px-4 py-3 text-xs text-gray-400">
-            영역 선택 후 자동 산출 (다음 푸시)
+          <SectionHeader
+            step={2}
+            title="시설별 견적"
+            status={buildings.length > 0 ? "active" : "pending"}
+          />
+          <div className="px-4 py-3 space-y-2">
+            {buildings.length === 0 ? (
+              <div className="text-xs text-gray-400">
+                먼저 1단계에서 영역을 정의해주세요.
+              </div>
+            ) : (
+              <>
+                {facilityRows.map((row, i) => (
+                  <FacilityCard
+                    key={row.id}
+                    index={i + 1}
+                    row={row}
+                    isEditingSpec={editingSpecId === row.id}
+                    onFacilityChange={(kind) =>
+                      handleFacilityChange(row.id, kind)
+                    }
+                    onResetFacility={() => handleResetFacility(row.id)}
+                    onSpecChange={(spec) => handleSpecChange(row.id, spec)}
+                    onResetSpec={() => handleResetSpec(row.id)}
+                    onToggleEditSpec={() =>
+                      setEditingSpecId((prev) =>
+                        prev === row.id ? null : row.id,
+                      )
+                    }
+                  />
+                ))}
+                <div className="mt-3 px-3 py-2.5 bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-200 rounded">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-emerald-800 font-semibold">
+                      💰 합계
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      {buildings.length}동
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-base font-bold text-emerald-900 tabular-nums">
+                      {formatKw(totalKw)}
+                    </span>
+                    <span className="text-base font-bold text-emerald-900 tabular-nums">
+                      {formatCost(totalCost)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <SectionHeader step={3} title="패널 시각화" status="pending" />
           <div className="px-4 py-3 text-xs text-gray-400">3단계 작업 예정</div>
@@ -719,7 +858,207 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-gray-500 text-xs">{label}</span>
-      <span className="font-semibold tabular-nums">{value}</span>
+      <span className="font-semibold text-gray-900 tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+interface FacilityRow {
+  id: string;
+  building: EditedBuilding;
+  auto: FacilityKind;
+  kind: FacilityKind;
+  spec: FacilitySpec;
+  py: number;
+  kw: number;
+  cost: number;
+  isAutoKind: boolean;
+  isCustomSpec: boolean;
+}
+
+interface FacilityCardProps {
+  index: number;
+  row: FacilityRow;
+  isEditingSpec: boolean;
+  onFacilityChange: (kind: FacilityKind) => void;
+  onResetFacility: () => void;
+  onSpecChange: (spec: FacilitySpec) => void;
+  onResetSpec: () => void;
+  onToggleEditSpec: () => void;
+}
+
+/**
+ * 좌측 "2 시설별 견적" 동별 카드.
+ * 시설 종류 셀렉트박스 + 단가 인라인 편집 + kW/시공비 표시.
+ */
+function FacilityCard({
+  index,
+  row,
+  isEditingSpec,
+  onFacilityChange,
+  onResetFacility,
+  onSpecChange,
+  onResetSpec,
+  onToggleEditSpec,
+}: FacilityCardProps) {
+  const { building: b, auto, kind, spec, py, kw, cost, isAutoKind, isCustomSpec } =
+    row;
+  const py_round = Math.round(py);
+  const isUserAdded = b.source === "user_added";
+
+  // 단가 인라인 편집 로컬 입력값 (확정 전까지 휘발)
+  const [draftPyeong, setDraftPyeong] = useState(spec.pyeongPerKw.toString());
+  const [draftCostMan, setDraftCostMan] = useState(
+    (spec.costPerKw / 10000).toString(),
+  );
+
+  // 외부 spec 변경(시설 종류 변경/원래대로 등) 시 입력칸도 동기화
+  useEffect(() => {
+    setDraftPyeong(spec.pyeongPerKw.toString());
+    setDraftCostMan((spec.costPerKw / 10000).toString());
+  }, [spec, isEditingSpec]);
+
+  const handleApply = () => {
+    const p = Number(draftPyeong);
+    const c = Number(draftCostMan);
+    if (!Number.isFinite(p) || p <= 0) return;
+    if (!Number.isFinite(c) || c <= 0) return;
+    onSpecChange({ pyeongPerKw: p, costPerKw: c * 10000 });
+    onToggleEditSpec();
+  };
+
+  return (
+    <div
+      className={`px-2.5 py-2 border rounded ${
+        isCustomSpec || !isAutoKind
+          ? "bg-blue-50/60 border-blue-200"
+          : "bg-white border-gray-200"
+      }`}
+    >
+      {/* 동명 + 평수 */}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="text-xs text-gray-700 truncate">
+            <b>{b.buld_nm || `${index}동`}</b>
+          </span>
+          {isUserAdded && (
+            <span className="text-[9px] px-1 py-px bg-emerald-100 text-emerald-700 rounded shrink-0">
+              사용자추가
+            </span>
+          )}
+          {!isAutoKind && (
+            <button
+              onClick={onResetFacility}
+              className="text-[9px] px-1 py-px bg-amber-100 text-amber-700 rounded hover:bg-amber-200 shrink-0"
+              title={`자동 추천(${FACILITY_LABEL[auto]})으로 되돌리기`}
+            >
+              수동
+            </button>
+          )}
+        </div>
+        <span className="text-[11px] text-gray-500 tabular-nums shrink-0">
+          {py_round.toLocaleString()}평
+        </span>
+      </div>
+
+      {/* 시설 종류 셀렉트 */}
+      <select
+        value={kind}
+        onChange={(e) => onFacilityChange(e.target.value as FacilityKind)}
+        className="w-full text-xs text-gray-900 px-2 py-1 border border-gray-300 rounded bg-white hover:border-gray-400 focus:border-blue-500 focus:outline-none"
+      >
+        {FACILITY_KINDS.map((k) => (
+          <option key={k} value={k}>
+            {FACILITY_LABEL[k]}
+            {k === auto ? " (자동)" : ""}
+          </option>
+        ))}
+      </select>
+
+      {/* 단가 표시 또는 편집 */}
+      {!isEditingSpec ? (
+        <div className="flex items-center justify-between gap-2 mt-1.5 text-[10px] text-gray-500">
+          <span className="truncate">
+            {spec.pyeongPerKw}평/kW ·{" "}
+            {(spec.costPerKw / 10000).toLocaleString()}만/kW
+            {isCustomSpec && (
+              <span className="ml-1 text-blue-700 font-semibold">수정됨</span>
+            )}
+          </span>
+          <button
+            onClick={onToggleEditSpec}
+            className="text-[10px] px-1.5 py-0.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0"
+          >
+            ✏ 단가
+          </button>
+        </div>
+      ) : (
+        <div className="mt-1.5 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded space-y-1.5">
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-gray-700 w-20 shrink-0">1kW당 평수</span>
+            <input
+              type="number"
+              step="0.1"
+              min="0.1"
+              value={draftPyeong}
+              onChange={(e) => setDraftPyeong(e.target.value)}
+              className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+            />
+            <span className="text-gray-500 shrink-0">평</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-gray-700 w-20 shrink-0">kW당 시공비</span>
+            <input
+              type="number"
+              step="1"
+              min="1"
+              value={draftCostMan}
+              onChange={(e) => setDraftCostMan(e.target.value)}
+              className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+            />
+            <span className="text-gray-500 shrink-0">만원</span>
+          </div>
+          <div className="flex justify-between gap-1">
+            {isCustomSpec ? (
+              <button
+                onClick={() => {
+                  onResetSpec();
+                  onToggleEditSpec();
+                }}
+                className="text-[10px] px-2 py-1 text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+              >
+                원래대로
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-1">
+              <button
+                onClick={onToggleEditSpec}
+                className="text-[10px] px-2 py-1 text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleApply}
+                className="text-[10px] px-2 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded"
+              >
+                ✓ 적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* kW + 시공비 (큰 숫자 강조) */}
+      <div className="flex items-baseline justify-between gap-2 mt-1.5 pt-1.5 border-t border-gray-100">
+        <span className="text-sm font-bold text-emerald-700 tabular-nums">
+          {formatKw(kw)}
+        </span>
+        <span className="text-sm font-bold text-gray-900 tabular-nums">
+          {formatCost(cost)}
+        </span>
+      </div>
     </div>
   );
 }
