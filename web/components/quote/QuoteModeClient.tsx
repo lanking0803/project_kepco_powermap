@@ -35,6 +35,15 @@ import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import type { BuildingPolygon } from "@/lib/vworld/buildings";
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 import type { Position } from "geojson";
+import {
+  createDefaultRect,
+  calcAreaM2,
+  polygonCenter,
+  addVertex,
+  removeVertex,
+  findLongestEdge,
+  findFlattestVertex,
+} from "@/lib/geometry/polygon-edit";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 
@@ -42,12 +51,16 @@ const M2_TO_PYEONG = 0.3025;
 
 /**
  * 편집 상태가 추가된 건물 — VWorld 원본 + 사용자 수정 폴리곤/면적.
+ * source = "vworld" 자동 감지 / "user_added" 사용자가 [+ 영역 추가] 로 만든 것.
  * 원본은 변경 안 함 → "원래대로" 복원 가능 (다음 푸시에서 UI 추가).
  */
 interface EditedBuilding extends BuildingPolygon {
   edited_polygon: Position[][];
   edited_area_m2: number;
   is_edited: boolean;
+  source: "vworld" | "user_added";
+  /** 사용자 추가 동의 안정적 ID (pk 가 비어있으니 별도 부여) */
+  local_id?: string;
 }
 
 function toEdited(b: BuildingPolygon): EditedBuilding {
@@ -56,11 +69,13 @@ function toEdited(b: BuildingPolygon): EditedBuilding {
     edited_polygon: b.polygon,
     edited_area_m2: b.area_m2,
     is_edited: false,
+    source: "vworld",
   };
 }
 
-/** QuoteMap 에 넘길 안정적 식별자 — VWorld pk 우선, 없으면 bd_mgt_sn */
-function makeBuildingId(b: BuildingPolygon): string {
+/** QuoteMap 에 넘길 안정적 식별자 — VWorld pk 우선, 사용자 추가는 local_id */
+function makeBuildingId(b: EditedBuilding): string {
+  if (b.source === "user_added" && b.local_id) return b.local_id;
   return b.pk || b.bd_mgt_sn || `${b.pnu}-${b.buld_no}`;
 }
 
@@ -161,6 +176,128 @@ export default function QuoteModeClient({ pnu }: Props) {
     },
     [],
   );
+
+  /**
+   * [+ 영역 추가] — 부지 중심에 기본 15m × 15m 사각형 생성.
+   * 사용자가 꼭지점 드래그로 위치/크기 조정.
+   */
+  const handleAddBuilding = useCallback(() => {
+    if (!geometry) return; // 부지 없으면 추가 불가 (현재로선 발생 X)
+    // 부지 폴리곤 centroid 를 기본 위치로 — 폴리곤 안에 등장
+    const center = polygonCenter(geometry.polygon) ?? geometry.center;
+    const polygon = createDefaultRect(center, 15);
+    const area_m2 = calcAreaM2(polygon);
+
+    setBuildings((prev) => {
+      // 사용자추가 라벨용 카운터 — 기존 user_added 동수 + 1
+      const userCount = prev.filter((b) => b.source === "user_added").length + 1;
+      const local_id = `user_${Date.now()}_${userCount}`;
+      const newBuilding: EditedBuilding = {
+        // VWorld 필드는 빈 문자열/0 으로 채움
+        pk: "",
+        bd_mgt_sn: "",
+        pnu,
+        sido: "",
+        sigungu: "",
+        gu: "",
+        rd_nm: "",
+        buld_no: "",
+        gro_flo_co: 1,
+        und_flo_co: 0,
+        buld_nm: `사용자추가 ${userCount}`,
+        polygon,
+        area_m2,
+        center,
+        // 편집 상태
+        edited_polygon: polygon,
+        edited_area_m2: area_m2,
+        is_edited: false,
+        source: "user_added",
+        local_id,
+      };
+      return [...prev, newBuilding];
+    });
+  }, [geometry, pnu]);
+
+  /** 동 삭제 — 우측 카드 🗑 클릭 → 빨간 모드 → [정말 삭제] 시 호출 */
+  const handleDeleteBuilding = useCallback((id: string) => {
+    setBuildings((prev) => prev.filter((b) => makeBuildingId(b) !== id));
+  }, []);
+
+  /**
+   * 우측 카드 [+] 클릭 → 가장 긴 변 가운데에 새 꼭지점 자동 삽입.
+   * 사용자는 추가된 점을 드래그로 원하는 위치로 이동.
+   */
+  const handleAutoAddVertex = useCallback((id: string) => {
+    setBuildings((prev) =>
+      prev.map((b) => {
+        if (makeBuildingId(b) !== id) return b;
+        const longest = findLongestEdge(b.edited_polygon);
+        if (!longest) return b;
+        const newPolygon = addVertex(
+          b.edited_polygon,
+          longest.ringIdx,
+          longest.edgeIdx,
+          longest.midpoint,
+        );
+        return {
+          ...b,
+          edited_polygon: newPolygon,
+          edited_area_m2: calcAreaM2(newPolygon),
+          is_edited: true,
+        };
+      }),
+    );
+  }, []);
+
+  /**
+   * 우측 카드 [−] 클릭 → 각도 가장 평평한 점(거의 직선상) 자동 삭제.
+   * 모양 거의 안 바뀜. 최소 3점은 findFlattestVertex 가 자체 검증 (null 반환).
+   */
+  const handleAutoRemoveVertex = useCallback((id: string) => {
+    setBuildings((prev) =>
+      prev.map((b) => {
+        if (makeBuildingId(b) !== id) return b;
+        const flat = findFlattestVertex(b.edited_polygon);
+        if (!flat) return b; // 3점 이하면 거부
+        const newPolygon = removeVertex(
+          b.edited_polygon,
+          flat.ringIdx,
+          flat.vertexIdx,
+        );
+        if (newPolygon === b.edited_polygon) return b;
+        return {
+          ...b,
+          edited_polygon: newPolygon,
+          edited_area_m2: calcAreaM2(newPolygon),
+          is_edited: true,
+        };
+      }),
+    );
+  }, []);
+
+  /** 꼭지점 마커 dblclick → 점 삭제. 최소 3점은 removeVertex 가 자체 검증. */
+  const handleRemoveVertex = useCallback(
+    (id: string, ringIdx: number, vertexIdx: number) => {
+      setBuildings((prev) =>
+        prev.map((b) => {
+          if (makeBuildingId(b) !== id) return b;
+          const newPolygon = removeVertex(b.edited_polygon, ringIdx, vertexIdx);
+          if (newPolygon === b.edited_polygon) return b; // 거부됨 (3점 미만 방어)
+          return {
+            ...b,
+            edited_polygon: newPolygon,
+            edited_area_m2: calcAreaM2(newPolygon),
+            is_edited: true,
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  /** 우측 카드의 🗑 클릭 시 빨간 모드 진입 — id 일치하면 [정말 삭제] / [취소] 표시 */
+  const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
 
   /** QuoteMap props 형태로 변환 — 편집된 polygon/area 사용 */
   const editableBuildings: EditableBuilding[] = useMemo(
@@ -299,16 +436,20 @@ export default function QuoteModeClient({ pnu }: Props) {
                   </div>
                 )}
                 {buildings.length > 0 && (
-                  <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 leading-snug">
-                    💡 폴리곤 모서리의 흰 점을 드래그해 옥상 영역을 정밀하게
-                    수정할 수 있습니다.
+                  <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 leading-snug space-y-0.5">
+                    <div>💡 흰 점 <b>드래그</b> = 위치 수정</div>
+                    <div>우측 카드 <b>[− 점 N +]</b> = 점 갯수 조절 (자동)</div>
+                    <div>흰 점 <b>더블클릭</b> = 그 점 정확히 삭제</div>
                     {editedCount > 0 && (
-                      <span className="block mt-0.5 text-blue-900 font-semibold">
+                      <div className="text-blue-900 font-semibold">
                         수정됨 {editedCount}동
-                      </span>
+                      </div>
                     )}
                   </div>
                 )}
+                <div className="text-[10px] text-gray-400 pt-0.5">
+                  영역 추가/삭제는 우측 패널의 [+ 영역 추가] / 🗑 사용
+                </div>
               </>
             )}
           </div>
@@ -337,6 +478,7 @@ export default function QuoteModeClient({ pnu }: Props) {
               parcelPolygon={geometry?.polygon ?? null}
               buildings={editableBuildings}
               onBuildingChange={handleBuildingChange}
+              onRemoveVertex={handleRemoveVertex}
               fallbackCenter={geometry?.center}
             />
           )}
@@ -380,29 +522,92 @@ export default function QuoteModeClient({ pnu }: Props) {
                 : `${buildings.length}동 · ${buildingArea.toLocaleString()}㎡`}
             </div>
           </div>
-          {buildings.length > 0 && (
-            <div className="px-4 py-3">
-              <div className="text-[11px] text-gray-500 font-semibold mb-2">
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[11px] text-gray-500 font-semibold">
                 동별 상세
               </div>
+              <button
+                onClick={handleAddBuilding}
+                disabled={!geometry}
+                className="text-[11px] font-semibold px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed border border-dashed border-blue-300 rounded transition-colors"
+                title="부지 중앙에 15m × 15m 사각형이 등장합니다 — 꼭지점 드래그로 조정"
+              >
+                + 영역 추가
+              </button>
+            </div>
+            {buildings.length === 0 ? (
+              <div className="text-[11px] text-gray-400 text-center py-3 bg-gray-50 rounded border border-dashed border-gray-200">
+                추가된 영역이 없습니다.
+                <br />
+                위 [+ 영역 추가] 로 시작하세요.
+              </div>
+            ) : (
               <ul className="space-y-1.5 text-xs">
                 {buildings.map((b, i) => {
+                  const id = makeBuildingId(b);
                   const py = Math.round(b.edited_area_m2 * M2_TO_PYEONG);
                   const origPy = Math.round(b.area_m2 * M2_TO_PYEONG);
+                  const isUserAdded = b.source === "user_added";
+                  const isPendingDelete = deletePendingId === id;
+
+                  // 빨간 모드 (삭제 확인) — 동 카드를 통째로 빨간 배경 + 두 버튼
+                  if (isPendingDelete) {
+                    return (
+                      <li
+                        key={id}
+                        className="flex flex-col gap-1.5 px-2 py-1.5 bg-red-50 border border-red-300 rounded"
+                      >
+                        <div className="text-[11px] text-red-800 leading-snug">
+                          <b>{b.buld_nm || `${i + 1}동`}</b>{" "}
+                          <span className="text-red-600">{py.toLocaleString()}평</span>{" "}
+                          을(를) 삭제하시겠습니까?
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => {
+                              handleDeleteBuilding(id);
+                              setDeletePendingId(null);
+                            }}
+                            className="flex-1 py-1 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
+                          >
+                            정말 삭제
+                          </button>
+                          <button
+                            onClick={() => setDeletePendingId(null)}
+                            className="flex-1 py-1 text-[11px] text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  }
+
+                  // 점 갯수 (closed ring 의 마지막 중복 제외)
+                  const vertexCount = b.edited_polygon[0]
+                    ? Math.max(0, b.edited_polygon[0].length - 1)
+                    : 0;
+
+                  // 일반 모드
                   return (
                     <li
-                      key={b.pk || i}
-                      className={`flex items-center justify-between gap-2 px-2 py-1.5 border rounded ${
-                        b.is_edited
-                          ? "bg-blue-50/80 border-blue-200"
-                          : "bg-orange-50/60 border-orange-100"
+                      key={id}
+                      className={`flex items-center justify-between gap-1.5 px-2 py-1.5 border rounded group ${
+                        isUserAdded
+                          ? "bg-emerald-50/70 border-emerald-200"
+                          : b.is_edited
+                            ? "bg-blue-50/80 border-blue-200"
+                            : "bg-orange-50/60 border-orange-100"
                       }`}
                     >
-                      <span className="text-gray-700 truncate">
+                      <span className="text-gray-700 truncate flex-1 min-w-0">
                         {b.buld_nm || `${i + 1}동`}
-                        <span className="text-gray-400 ml-1">
-                          {b.gro_flo_co}F
-                        </span>
+                        {!isUserAdded && (
+                          <span className="text-gray-400 ml-1">
+                            {b.gro_flo_co}F
+                          </span>
+                        )}
                         {b.is_edited && (
                           <span className="ml-1 text-[10px] text-blue-700 font-semibold">
                             수정
@@ -411,18 +616,52 @@ export default function QuoteModeClient({ pnu }: Props) {
                       </span>
                       <span className="font-semibold tabular-nums shrink-0">
                         {py.toLocaleString()}평
-                        {b.is_edited && (
+                        {b.is_edited && !isUserAdded && (
                           <span className="text-gray-400 font-normal ml-1 line-through">
                             {origPy.toLocaleString()}평
                           </span>
                         )}
                       </span>
+                      <div className="flex items-stretch shrink-0 border border-emerald-300 rounded overflow-hidden text-[10px] font-semibold leading-none">
+                        <button
+                          onClick={() => handleAutoRemoveVertex(id)}
+                          disabled={vertexCount <= 3}
+                          className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed px-1.5 py-1"
+                          title={
+                            vertexCount <= 3
+                              ? "최소 3점 — 더 줄일 수 없습니다"
+                              : "각도 가장 평평한 점 자동 삭제 (모양 거의 보존)"
+                          }
+                          aria-label="점 줄이기"
+                        >
+                          −
+                        </button>
+                        <span className="text-emerald-800 bg-emerald-100 px-1.5 py-1 tabular-nums">
+                          점 {vertexCount}
+                        </span>
+                        <button
+                          onClick={() => handleAutoAddVertex(id)}
+                          className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 px-1.5 py-1"
+                          title="가장 긴 변 가운데에 점 추가"
+                          aria-label="점 늘리기"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setDeletePendingId(id)}
+                        className="text-gray-400 hover:text-red-600 text-sm leading-none px-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                        title="이 동 삭제"
+                        aria-label="삭제"
+                      >
+                        🗑
+                      </button>
                     </li>
                   );
                 })}
               </ul>
-            </div>
-          )}
+            )}
+          </div>
           <div className="px-4 py-3 border-t border-gray-200">
             <div className="text-[11px] text-gray-400 leading-relaxed">
               💡 옥상 영역 미세 조정 단계. 폴리곤 모서리의 흰 점을 드래그하면

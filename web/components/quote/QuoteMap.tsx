@@ -58,6 +58,8 @@ interface Props {
     newPolygon: Position[][],
     newAreaM2: number,
   ) => void;
+  /** 꼭지점 마커 dblclick 시 — 점 삭제 (최소 3점 유지는 부모에서 검증) */
+  onRemoveVertex?: (id: string, ringIdx: number, vertexIdx: number) => void;
   /** 첫 표시용 fallback 중심 */
   fallbackCenter?: { lat: number; lng: number };
 }
@@ -85,6 +87,7 @@ export default function QuoteMap({
   parcelPolygon,
   buildings,
   onBuildingChange,
+  onRemoveVertex,
   fallbackCenter,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -96,15 +99,19 @@ export default function QuoteMap({
   const vertexMarkersRef = useRef<any[]>([]);
   const labelOverlaysRef = useRef<any[]>([]);
 
-  // dragend 콜백 안에서 최신 buildings/onChange 참조 — closure 꼬임 방지.
+  // dragend / dblclick 콜백 안에서 최신 buildings/onChange 참조 — closure 꼬임 방지.
   // ref 갱신은 effect 안에서 (render 중 ref.current 변경은 React 19에서 anti-pattern).
   const buildingsRef = useRef(buildings);
   const onChangeRef = useRef(onBuildingChange);
+  const onRemoveVertexRef = useRef(onRemoveVertex);
   useEffect(() => {
     buildingsRef.current = buildings;
   });
   useEffect(() => {
     onChangeRef.current = onBuildingChange;
+  });
+  useEffect(() => {
+    onRemoveVertexRef.current = onRemoveVertex;
   });
 
   // SDK 로드
@@ -265,6 +272,17 @@ export default function QuoteMap({
             );
             const newAreaM2 = calcAreaM2(newPolygon);
             onChangeRef.current?.(capturedId, newPolygon, newAreaM2);
+          });
+
+          /**
+           * dblclick — 점 삭제. 부모 콜백에서 최소 3점 검증.
+           */
+          window.kakao.maps.event.addListener(marker, "dblclick", () => {
+            onRemoveVertexRef.current?.(
+              capturedId,
+              capturedRing,
+              capturedVertex,
+            );
           });
           vertexMarkersRef.current.push(marker);
         }
