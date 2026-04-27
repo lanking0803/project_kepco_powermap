@@ -36,50 +36,12 @@ SLEEP_SEC = 0.1   # VWorld rate limit 보호
 
 
 # ──────────────────────────────────────────
-# PNU 구성 — 검증 대상 핵심 함수
+# PNU 구성 — 검증 대상 핵심 함수 (모듈로 분리됨)
 # ──────────────────────────────────────────
+# 알고리즘 정의는 crawler/pnu_builder.py 한 곳. 본 검증 도구 + 솔라 워커 +
+# 향후 KEPCO 워커가 모두 동일 함수를 import 해서 사용 (유지보수 단일 포인트).
 
-def to_pnu(bjd_code: str, jibun: str) -> str:
-    """
-    (bjd_code, jibun) → PNU 19자리 구성.
-
-    PNU = bjd_code(10) + 산구분(1) + 본번(4 padded) + 부번(4 padded)
-
-    jibun 형식 처리:
-      "1"      → 본번 1, 부번 0
-      "1-2"    → 본번 1, 부번 2
-      "산 1-2" → 산구분 1, 본번 1, 부번 2
-      "산1-2"  → 동일 (띄어쓰기 무시)
-    """
-    if not jibun:
-        raise ValueError("jibun 빈값")
-
-    # 산 지번 판별 + 정규화
-    rest = jibun.strip()
-    is_san = rest.startswith("산")
-    if is_san:
-        rest = rest.lstrip("산").strip()
-
-    # 본번-부번 분해
-    parts = rest.split("-", 1)
-    bonbun_raw = parts[0].strip()
-    bubun_raw = parts[1].strip() if len(parts) > 1 else "0"
-
-    # 숫자만 추출 (한자/영문 혼용 방어)
-    bonbun_digits = "".join(c for c in bonbun_raw if c.isdigit())
-    bubun_digits = "".join(c for c in bubun_raw if c.isdigit())
-
-    if not bonbun_digits:
-        raise ValueError(f"본번 숫자 없음: '{jibun}'")
-
-    bonbun = bonbun_digits.zfill(4)
-    bubun = (bubun_digits or "0").zfill(4)
-
-    if len(bonbun) > 4 or len(bubun) > 4:
-        raise ValueError(f"본번/부번 4자리 초과: '{jibun}'")
-
-    # PNU 11번째 자리: 1=일반, 2=산 (행안부 표준 — 0/1 아님)
-    return f"{bjd_code}{'2' if is_san else '1'}{bonbun}{bubun}"
+from pnu_builder import to_pnu  # noqa: F401
 
 
 # ──────────────────────────────────────────
