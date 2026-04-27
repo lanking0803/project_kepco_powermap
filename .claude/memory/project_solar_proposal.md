@@ -96,9 +96,11 @@ type: project
 - **수집기 3개 → 5개 증설** (인프라 1회성 20만) — [db/migrations/019_expand_threads_to_5.sql](../../db/migrations/019_expand_threads_to_5.sql) `thread IN (1,2,3,4,5)` 반영
 - **도메인 연결 sunlap.kr** (2026-04-21) — AnyDesk 원격으로 의뢰자 PC 에서 가비아 DNS 입력. Vercel + 카카오 SDK 도메인 등록 완료. 브랜드명도 PowerMap → SUNLAP 통일 (탭 제목 "SUNLAP · Power Grid Map")
 - **1차 1단계 지적편집도 + 필지 클릭 정보 카드** (100만) — 다른 세션 커밋 완료 (`11024d8`)
+- **1차 2단계 영역 정의** (170만 중 부분) — 견적 모드 라우트 + 영역 편집 시스템 완성 (2026-04-26).
+  세부 구조/패턴/다음 작업 → [project_quote_mode.md](project_quote_mode.md)
 
-### 🔜 다음 착수 (1차 2단계)
-- 면적 산출 + 시설별 견적 (170만 / 2~3주) — 1단계 필지 클릭 흐름 이어받음
+### 🔜 다음 착수 (1차 2단계 — 시설별 견적 부분)
+- 영역 → kW → 시공비 자동 산출 (2~5단계 placeholder 채우기). 수지분석/PDF 까지 같이.
 
 ### 병렬 개발 후보 (의뢰자 세션 2 활용)
 - 1차 5단계 수지분석 엑셀/PDF (80만) — 파일 충돌 0, 공식 검증 완료, 최우선 추천
