@@ -48,14 +48,21 @@ log = logging.getLogger("solar_permits")
 ENDPOINT = "https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api"
 USER_AGENT = "Mozilla/5.0 (compatible; SUNLAP/1.0; +https://sunlap.kr)"
 INSERT_CHUNK = 1000
+PAGE_SLEEP_SEC = 0.3   # 페이지 간 휴식 — 외부 서버 부담 완화
+
+# 세션 재사용 — TCP keep-alive 로 연결 안정성 / 속도 향상
+_session = requests.Session()
+_session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
 
 
 # ─────────────────────────────────────────────
 # 외부 API — data.go.kr 페이지 단위
 # ─────────────────────────────────────────────
 
-def fetch_page(page: int, size: int = 1000, retries: int = 3) -> tuple[int, list[dict]]:
+def fetch_page(page: int, size: int = 1000, retries: int = 5) -> tuple[int, list[dict]]:
     """data.go.kr 페이지 단위 fetch.
+
+    재시도 정책 (1, 2, 4, 8, 16초 지수 백오프) — 외부 서버 일시 불안정 대비.
 
     Returns:
         (total_count, items) — items 는 raw camelCase dict 리스트.
@@ -74,12 +81,11 @@ def fetch_page(page: int, size: int = 1000, retries: int = 3) -> tuple[int, list
         "numOfRows": str(safe_size),
         "type": "json",
     }
-    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 
     last_err = None
     for attempt in range(retries):
         try:
-            r = requests.get(ENDPOINT, params=params, headers=headers, timeout=60)
+            r = _session.get(ENDPOINT, params=params, timeout=60)
             text = r.text
             if r.status_code != 200:
                 last_err = f"HTTP {r.status_code}: {text[:200]}"
@@ -230,7 +236,11 @@ def main() -> int:
     log.info(f"수집 대상: {n_pages} 페이지 × {page_size} = ~{n_pages * page_size:,} 건")
 
     for page in range(1, n_pages + 1):
-        items = first_items if page == 1 else fetch_page(page, page_size)[1]
+        if page == 1:
+            items = first_items
+        else:
+            time.sleep(PAGE_SLEEP_SEC)   # 외부 서버 부담 완화
+            items = fetch_page(page, page_size)[1]
         fetched_pages += 1
 
         for raw in items:
