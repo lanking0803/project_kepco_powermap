@@ -48,6 +48,8 @@ export interface EditableBuilding {
   name: string;
   polygon: Position[][];
   area_m2: number;
+  /** 3단계 격자 알고리즘 결과 — 패널 N개 4꼭지점 폴리곤 (closed ring, [lng, lat]) */
+  panels?: Position[][];
 }
 
 interface Props {
@@ -70,6 +72,8 @@ interface Props {
 const PARCEL_STROKE = "#FBBF24"; // amber-400
 const BUILDING_FILL = "#FF4500"; // orangered
 const BUILDING_STROKE = "#FFFFFF"; // 흰색 외곽
+const PANEL_FILL = "#FF6B6B"; // 봉남리 PDF 빨강 채움
+const PANEL_STROKE = "#C92A2A"; // 진한 빨강 외곽
 /**
  * 필지 단위 표시 줌 — 카카오는 숫자가 작을수록 확대.
  * level 1 ≈ 50m (옥상 굴뚝/실외기 식별), level 2 ≈ 100m.
@@ -122,6 +126,7 @@ export default function QuoteMap({
   const vertexMarkersRef = useRef<any[]>([]);
   const labelOverlaysRef = useRef<any[]>([]);
   const moveHandleMarkersRef = useRef<any[]>([]);
+  const panelPolyRef = useRef<any[]>([]);
 
   // dragend / dblclick 콜백 안에서 최신 buildings/onChange 참조 — closure 꼬임 방지.
   // ref 갱신은 effect 안에서 (render 중 ref.current 변경은 React 19에서 anti-pattern).
@@ -205,6 +210,8 @@ export default function QuoteMap({
     labelOverlaysRef.current = [];
     moveHandleMarkersRef.current.forEach((m) => m.setMap(null));
     moveHandleMarkersRef.current = [];
+    panelPolyRef.current.forEach((p) => p.setMap(null));
+    panelPolyRef.current = [];
 
     const dotImage = new window.kakao.maps.MarkerImage(
       VERTEX_DOT_URI,
@@ -331,6 +338,28 @@ export default function QuoteMap({
           zIndex: 999,
         });
         labelOverlaysRef.current.push(labelOverlay);
+      }
+
+      // 3단계 패널 폴리곤 — 격자 알고리즘 결과 N개. 영역 위에 빨강 채움.
+      // zIndex 800 = 영역 폴리곤(기본) 위, 라벨/마커(>=999) 아래.
+      if (building.panels && building.panels.length > 0) {
+        for (const panelRing of building.panels) {
+          const panelPath = panelRing.map(
+            ([lng, lat]) => new window.kakao.maps.LatLng(lat, lng),
+          );
+          const panelPoly = new window.kakao.maps.Polygon({
+            map,
+            path: panelPath,
+            strokeWeight: 0.5,
+            strokeColor: PANEL_STROKE,
+            strokeOpacity: 0.9,
+            strokeStyle: "solid",
+            fillColor: PANEL_FILL,
+            fillOpacity: 0.55,
+            zIndex: 800,
+          });
+          panelPolyRef.current.push(panelPoly);
+        }
       }
 
       // ✥ 이동 핸들 마커 — 폴리곤 중앙. 드래그로 영역 전체 평행 이동.
@@ -512,6 +541,7 @@ export default function QuoteMap({
       vertexMarkersRef.current.forEach((m) => m.setMap(null));
       labelOverlaysRef.current.forEach((o) => o.setMap(null));
       moveHandleMarkersRef.current.forEach((m) => m.setMap(null));
+      panelPolyRef.current.forEach((p) => p.setMap(null));
     };
   }, []);
 

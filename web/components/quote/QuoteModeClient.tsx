@@ -56,6 +56,12 @@ import {
   type FacilityKind,
   type FacilitySpec,
 } from "@/lib/quote/facility";
+import {
+  DEFAULT_MODULE,
+  FACILITY_PLACEMENT,
+  calcInstalledKw,
+} from "@/lib/quote/panel";
+import { fillPanelGrid, calcAutoRotation } from "@/lib/quote/grid";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 
@@ -360,17 +366,50 @@ export default function QuoteModeClient({ pnu }: Props) {
     });
   }, []);
 
-  /** QuoteMap props 형태로 변환 — 편집된 polygon/area + 우측 카드와 동일한 동 이름 */
+  /** QuoteMap props 형태로 변환 — 편집된 polygon/area + 우측 카드와 동일한 동 이름 + 3단계 패널 격자 */
   const editableBuildings: EditableBuilding[] = useMemo(
     () =>
-      buildings.map((b, i) => ({
-        id: makeBuildingId(b),
-        name: b.buld_nm || `${i + 1}동`,
-        polygon: b.edited_polygon,
-        area_m2: b.edited_area_m2,
-      })),
-    [buildings],
+      buildings.map((b, i) => {
+        const id = makeBuildingId(b);
+        const facility =
+          facilityOverrides[id] ??
+          recommendFacility(
+            b.source,
+            geometry?.jimok ?? "",
+            bldgRegister,
+          );
+        const placement = FACILITY_PLACEMENT[facility];
+        // Step 3-2: 시설별 자동 회전 (정남 / 건물 가장 긴 변 평행)
+        const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
+        const layout = fillPanelGrid(
+          b.edited_polygon,
+          DEFAULT_MODULE,
+          placement,
+          rotation,
+        );
+        return {
+          id,
+          name: b.buld_nm || `${i + 1}동`,
+          polygon: b.edited_polygon,
+          area_m2: b.edited_area_m2,
+          panels: layout.panels,
+        };
+      }),
+    [buildings, facilityOverrides, geometry, bldgRegister],
   );
+
+  /** 3단계 동별 패널 카드용 — id → (count, kw) 매핑 */
+  const panelLayouts = useMemo(() => {
+    return editableBuildings.map((eb) => ({
+      id: eb.id,
+      name: eb.name,
+      count: eb.panels?.length ?? 0,
+      kwActual: calcInstalledKw(eb.panels?.length ?? 0, DEFAULT_MODULE),
+    }));
+  }, [editableBuildings]);
+
+  const totalPanels = panelLayouts.reduce((s, l) => s + l.count, 0);
+  const totalKwActual = panelLayouts.reduce((s, l) => s + l.kwActual, 0);
 
   /** 동별 시설 종류 + 단가 + kW + 시공비 한 번에 계산 (자동 추천 포함) */
   const facilityRows = useMemo(() => {
@@ -596,8 +635,67 @@ export default function QuoteModeClient({ pnu }: Props) {
               </>
             )}
           </div>
-          <SectionHeader step={3} title="패널 시각화" status="pending" />
-          <div className="px-4 py-3 text-xs text-gray-400">3단계 작업 예정</div>
+          <SectionHeader
+            step={3}
+            title="패널 시각화"
+            status={totalPanels > 0 ? "active" : "pending"}
+          />
+          <div className="px-4 py-3 space-y-2">
+            {buildings.length === 0 ? (
+              <div className="text-xs text-gray-400">
+                먼저 1단계에서 영역을 정의해주세요.
+              </div>
+            ) : totalPanels === 0 ? (
+              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
+                영역이 모듈 1장보다 작거나 가장자리 이격 적용 후 공간이
+                남지 않습니다. 영역을 더 크게 잡아주세요.
+              </div>
+            ) : (
+              <>
+                {panelLayouts.map((l) => (
+                  <div
+                    key={l.id}
+                    className="px-2.5 py-2 bg-white border border-rose-200 rounded"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-700">
+                        <b>{l.name}</b>
+                      </span>
+                      <span className="text-[11px] text-gray-500 tabular-nums">
+                        🔲 {l.count.toLocaleString()}장
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-rose-700 tabular-nums text-right">
+                      {l.kwActual.toFixed(2)} kW
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-3 px-3 py-2.5 bg-gradient-to-br from-rose-50 to-amber-50 border border-rose-200 rounded">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-rose-800 font-semibold">
+                      🔲 합계
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      {DEFAULT_MODULE.name}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-base font-bold text-rose-900 tabular-nums">
+                      {totalPanels.toLocaleString()} 장
+                    </span>
+                    <span className="text-base font-bold text-rose-900 tabular-nums">
+                      {totalKwActual.toFixed(2)} kW
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-gray-500 leading-snug">
+                    {DEFAULT_MODULE.widthMm.toLocaleString()} ×{" "}
+                    {DEFAULT_MODULE.heightMm.toLocaleString()} ×{" "}
+                    {DEFAULT_MODULE.thicknessMm}mm · {DEFAULT_MODULE.watt}Wp
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <SectionHeader step={4} title="배치도 PDF" status="pending" />
           <div className="px-4 py-3 text-xs text-gray-400">4단계 작업 예정</div>
           <SectionHeader step={5} title="수지분석" status="pending" />
