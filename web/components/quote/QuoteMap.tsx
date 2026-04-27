@@ -290,7 +290,7 @@ export default function QuoteMap({
           strokeOpacity: 1,
           strokeStyle: "solid",
           fillColor: BUILDING_FILL,
-          fillOpacity: 0.55,
+          fillOpacity: 0.3,
         });
         // 폴리곤 click → 동 선택 (강조). 외곽 ring(0번) 에만 부착해도 충분.
         const clickedId = building.id;
@@ -462,10 +462,10 @@ export default function QuoteMap({
             path: panelPath,
             strokeWeight: 0.5,
             strokeColor: PANEL_STROKE,
-            strokeOpacity: 0.9,
+            strokeOpacity: 0.7,
             strokeStyle: "solid",
             fillColor: PANEL_FILL,
-            fillOpacity: 0.55,
+            fillOpacity: 0.35,
             zIndex: 800,
           });
           window.kakao.maps.event.addListener(panelPoly, "click", () => {
@@ -659,7 +659,7 @@ export default function QuoteMap({
       poly.setOptions({
         strokeWeight: isSelected ? 6 : 3,
         strokeColor: isSelected ? "#FACC15" : BUILDING_STROKE, // yellow-400
-        fillOpacity: isSelected ? 0.7 : 0.55,
+        fillOpacity: isSelected ? 0.4 : 0.3,
       });
     }
   }, [selectedBuildingId, buildings]);

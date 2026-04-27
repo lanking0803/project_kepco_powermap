@@ -66,8 +66,15 @@ import {
   calcAutoRotation,
   calcAreaDimensions,
 } from "@/lib/quote/grid";
+import {
+  calcFinance,
+  DEFAULT_FINANCE_INPUT,
+  type FinanceInput,
+  type LoanScenario,
+} from "@/lib/quote/finance";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
+import FinanceTable from "./FinanceTable";
 
 const M2_TO_PYEONG = 0.3025;
 
@@ -398,7 +405,11 @@ export default function QuoteModeClient({ pnu }: Props) {
     });
   }, []);
 
-  /** QuoteMap props 형태로 변환 — 편집된 polygon/area + 우측 카드와 동일한 동 이름 + 3단계 패널 격자 */
+  /**
+   * QuoteMap props 형태 — 편집 polygon/area + 동 이름 + 패널 격자.
+   * 패널은 2단계(시설별 견적) 부터 노출 — 1단계 영역 편집 중에는 윤곽만 보이게.
+   */
+  const showPanels = activeStep != null && activeStep >= 2;
   const editableBuildings: EditableBuilding[] = useMemo(
     () =>
       buildings.map((b, i) => {
@@ -413,12 +424,9 @@ export default function QuoteModeClient({ pnu }: Props) {
         const placement = FACILITY_PLACEMENT[facility];
         // Step 3-2: 시설별 자동 회전 (정남 / 건물 가장 긴 변 평행)
         const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
-        const layout = fillPanelGrid(
-          b.edited_polygon,
-          activeModule,
-          placement,
-          rotation,
-        );
+        const layout = showPanels
+          ? fillPanelGrid(b.edited_polygon, activeModule, placement, rotation)
+          : { panels: [], count: 0, rotation };
         // Step 3-5: 회전된 bbox 가로 × 세로 (m) — 영역 라벨 표시용
         const dims = calcAreaDimensions(b.edited_polygon, rotation);
         return {
@@ -431,7 +439,14 @@ export default function QuoteModeClient({ pnu }: Props) {
           heightM: dims.heightM,
         };
       }),
-    [buildings, facilityOverrides, geometry, bldgRegister, activeModule],
+    [
+      buildings,
+      facilityOverrides,
+      geometry,
+      bldgRegister,
+      activeModule,
+      showPanels,
+    ],
   );
 
   /** 3단계 동별 패널 카드용 — id → (count, kw) 매핑 */
@@ -456,6 +471,7 @@ export default function QuoteModeClient({ pnu }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [deletePendingId]);
+
 
   /** 삭제 확인 모달용 — 현재 삭제 대기 동 정보 */
   const pendingDeleteBuilding = useMemo(() => {
@@ -498,6 +514,82 @@ export default function QuoteModeClient({ pnu }: Props) {
 
   const totalKw = facilityRows.reduce((s, r) => s + r.kw, 0);
   const totalCost = facilityRows.reduce((s, r) => s + r.cost, 0);
+
+  // ── 5단계 수지분석 ─────────────────────────────────
+  // 의뢰자 컨펌 (2026-04-27): 봉남리 양식 그대로 + 시나리오 토글 + ROI/손익분기
+  // 시공비 = 2단계 합계 자동, 사용자 수정 가능. 대출액 = 총사업비의 % 입력.
+  const [loanScenario, setLoanScenario] = useState<LoanScenario>("자기자본");
+  const [loanRatioPct, setLoanRatioPct] = useState(100);
+  const [costOverride, setCostOverride] = useState<number | null>(null);
+  const [showFinanceVars, setShowFinanceVars] = useState(false);
+  const [showFinanceTable, setShowFinanceTable] = useState(false);
+  const [varOverrides, setVarOverrides] = useState<
+    Partial<
+      Pick<
+        FinanceInput,
+        | "dailyHours"
+        | "annualDecay"
+        | "smpPrice"
+        | "recPrice"
+        | "recWeight"
+        | "maintenanceRate"
+        | "vatRate"
+        | "loanRate"
+        | "graceMonths"
+      >
+    >
+  >({});
+
+  const financeInput = useMemo<FinanceInput>(() => {
+    const construction = costOverride ?? totalCost;
+    const vatRate = varOverrides.vatRate ?? DEFAULT_FINANCE_INPUT.vatRate;
+    const totalCostEstimated = construction * (1 + vatRate);
+    const loanPrincipal =
+      loanScenario === "자기자본"
+        ? 0
+        : (totalCostEstimated * loanRatioPct) / 100;
+    return {
+      ...DEFAULT_FINANCE_INPUT,
+      ...varOverrides,
+      capacityKw: totalKw,
+      constructionCost: construction,
+      scenario: loanScenario,
+      loanPrincipal,
+    };
+  }, [
+    totalKw,
+    totalCost,
+    costOverride,
+    loanScenario,
+    loanRatioPct,
+    varOverrides,
+  ]);
+
+  const resetFinanceVars = useCallback(() => {
+    setVarOverrides({});
+    setCostOverride(null);
+    setLoanRatioPct(100);
+  }, []);
+
+  const isFinanceCustomized =
+    costOverride != null ||
+    loanRatioPct !== 100 ||
+    Object.keys(varOverrides).length > 0;
+
+  // ESC 키 → 시계열 표 모달 닫기
+  useEffect(() => {
+    if (!showFinanceTable) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowFinanceTable(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showFinanceTable]);
+
+  const financeResult = useMemo(
+    () => calcFinance(financeInput),
+    [financeInput],
+  );
 
   const buildingArea = buildings.reduce(
     (sum, b) => sum + b.edited_area_m2,
@@ -772,6 +864,23 @@ export default function QuoteModeClient({ pnu }: Props) {
               </div>
             ) : (
               <>
+                {/* 모듈 카드 — 시공비/실제 kW에 직결되는 변수라 2단계 상단에 고정 */}
+                <ModuleCard
+                  module={activeModule}
+                  isCustom={isCustomModule}
+                  isEditing={isEditingModule}
+                  onToggleEdit={() => setIsEditingModule((v) => !v)}
+                  onApply={(m) => {
+                    setCustomModule(m);
+                    setIsEditingModule(false);
+                  }}
+                  onReset={() => {
+                    setCustomModule(null);
+                    setIsEditingModule(false);
+                  }}
+                  onCancel={() => setIsEditingModule(false)}
+                />
+
                 {facilityRows.map((row, i) => (
                   <FacilityCard
                     key={row.id}
@@ -827,23 +936,6 @@ export default function QuoteModeClient({ pnu }: Props) {
               </div>
             ) : (
               <>
-                {/* 모듈 카드 — 맨 위 고정 (동 추가돼도 위치 안 밀림) */}
-                <ModuleCard
-                  module={activeModule}
-                  isCustom={isCustomModule}
-                  isEditing={isEditingModule}
-                  onToggleEdit={() => setIsEditingModule((v) => !v)}
-                  onApply={(m) => {
-                    setCustomModule(m);
-                    setIsEditingModule(false);
-                  }}
-                  onReset={() => {
-                    setCustomModule(null);
-                    setIsEditingModule(false);
-                  }}
-                  onCancel={() => setIsEditingModule(false)}
-                />
-
                 {totalPanels === 0 ? (
                   <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
                     영역이 모듈 1장보다 작거나 가장자리 이격 적용 후 공간이
@@ -911,8 +1003,306 @@ export default function QuoteModeClient({ pnu }: Props) {
             onClick={() => toggleStep(5)}
           />
           {activeStep === 5 && (
-            <div className="px-4 py-3 text-xs text-gray-400">
-              5단계 작업 예정
+            <div className="px-4 py-3 space-y-3">
+              {totalKw <= 0 ? (
+                <div className="text-xs text-gray-400 leading-snug">
+                  먼저 1·2단계에서 영역과 시설 종류를 정해주세요.
+                </div>
+              ) : (
+                <>
+                  {/* 입력 변수 박스 — 펼침/접힘 (모든 변수 관리자 조정 가능 / 의뢰자 컨펌) */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowFinanceVars((v) => !v)}
+                      className="w-full flex items-center justify-between text-xs font-semibold py-1.5 px-2 bg-white border border-gray-200 rounded hover:bg-gray-50 text-gray-700"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>⚙</span>
+                        <span>입력 변수</span>
+                        {isFinanceCustomized && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                            수정됨
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-gray-400">
+                        {showFinanceVars ? "▼" : "▶"}
+                      </span>
+                    </button>
+                    {showFinanceVars && (
+                      <div className="mt-1.5 px-2 py-2 bg-gray-50 border border-gray-200 rounded space-y-2.5">
+                        {/* 발전 */}
+                        <VarGroup label="발전">
+                          <NumberField
+                            label="일발전시간 (h)"
+                            value={
+                              varOverrides.dailyHours ??
+                              DEFAULT_FINANCE_INPUT.dailyHours
+                            }
+                            step={0.1}
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({ ...p, dailyHours: n }))
+                            }
+                          />
+                          <NumberField
+                            label="열화율 (%/년)"
+                            value={
+                              (varOverrides.annualDecay ??
+                                DEFAULT_FINANCE_INPUT.annualDecay) * 100
+                            }
+                            step={0.1}
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({
+                                ...p,
+                                annualDecay: n / 100,
+                              }))
+                            }
+                          />
+                        </VarGroup>
+
+                        {/* 수익 */}
+                        <VarGroup label="수익">
+                          <NumberField
+                            label="SMP (원/kWh)"
+                            value={
+                              varOverrides.smpPrice ??
+                              DEFAULT_FINANCE_INPUT.smpPrice
+                            }
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({ ...p, smpPrice: n }))
+                            }
+                          />
+                          <NumberField
+                            label="REC (원/kWh)"
+                            value={
+                              varOverrides.recPrice ??
+                              DEFAULT_FINANCE_INPUT.recPrice
+                            }
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({ ...p, recPrice: n }))
+                            }
+                          />
+                          <NumberField
+                            label="REC 가중치"
+                            value={
+                              varOverrides.recWeight ??
+                              DEFAULT_FINANCE_INPUT.recWeight
+                            }
+                            step={0.1}
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({ ...p, recWeight: n }))
+                            }
+                          />
+                          <NumberField
+                            label="유지보수 (매출%)"
+                            value={
+                              (varOverrides.maintenanceRate ??
+                                DEFAULT_FINANCE_INPUT.maintenanceRate) * 100
+                            }
+                            step={0.1}
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({
+                                ...p,
+                                maintenanceRate: n / 100,
+                              }))
+                            }
+                          />
+                        </VarGroup>
+
+                        {/* 비용 */}
+                        <VarGroup label="비용">
+                          <NumberField
+                            label="공사비 (만원, 부가세별도)"
+                            value={Math.round(
+                              (costOverride ?? totalCost) / 10_000,
+                            )}
+                            step={100}
+                            onChange={(n) =>
+                              setCostOverride(n * 10_000)
+                            }
+                            colSpan={2}
+                          />
+                          <NumberField
+                            label="부가세율 (%)"
+                            value={
+                              (varOverrides.vatRate ??
+                                DEFAULT_FINANCE_INPUT.vatRate) * 100
+                            }
+                            step={0.5}
+                            onChange={(n) =>
+                              setVarOverrides((p) => ({
+                                ...p,
+                                vatRate: n / 100,
+                              }))
+                            }
+                          />
+                          <div className="text-[10px] text-gray-500 leading-snug self-end pb-1">
+                            2단계 합계 = {formatMoneyShort(totalCost)}
+                          </div>
+                        </VarGroup>
+
+                        {/* 대출 — 대출 시나리오만 노출 */}
+                        {loanScenario !== "자기자본" && (
+                          <VarGroup label="대출">
+                            <NumberField
+                              label="대출액 (총사업비 %)"
+                              value={loanRatioPct}
+                              step={5}
+                              onChange={(n) =>
+                                setLoanRatioPct(Math.max(0, Math.min(100, n)))
+                              }
+                            />
+                            <NumberField
+                              label="금리 (%/년)"
+                              value={
+                                (varOverrides.loanRate ??
+                                  DEFAULT_FINANCE_INPUT.loanRate) * 100
+                              }
+                              step={0.1}
+                              onChange={(n) =>
+                                setVarOverrides((p) => ({
+                                  ...p,
+                                  loanRate: n / 100,
+                                }))
+                              }
+                            />
+                            <NumberField
+                              label="거치기간 (개월)"
+                              value={
+                                varOverrides.graceMonths ??
+                                DEFAULT_FINANCE_INPUT.graceMonths
+                              }
+                              onChange={(n) =>
+                                setVarOverrides((p) => ({
+                                  ...p,
+                                  graceMonths: Math.max(0, Math.round(n)),
+                                }))
+                              }
+                            />
+                            <div className="text-[10px] text-gray-500 leading-snug self-end pb-1">
+                              상환 = {loanScenario === "10년" ? "120" : "240"}
+                              개월
+                            </div>
+                          </VarGroup>
+                        )}
+
+                        {/* 리셋 */}
+                        {isFinanceCustomized && (
+                          <button
+                            type="button"
+                            onClick={resetFinanceVars}
+                            className="w-full text-[11px] py-1 text-gray-500 hover:text-blue-700 border border-dashed border-gray-300 hover:border-blue-300 rounded"
+                          >
+                            ↺ 모든 변수 디폴트로 되돌리기
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 시나리오 토글 — 자기자본 / 10년 / 20년 (의뢰자 양식 그대로) */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(["자기자본", "10년", "20년"] as LoanScenario[]).map(
+                      (s) => {
+                        const active = loanScenario === s;
+                        const label =
+                          s === "자기자본" ? "자기자본" : `${s} 대출`;
+                        return (
+                          <button
+                            key={s}
+                            onClick={() => setLoanScenario(s)}
+                            className={`text-xs font-semibold py-1.5 rounded border transition-colors ${
+                              active
+                                ? "bg-blue-600 text-white border-blue-700 shadow-sm"
+                                : "bg-white text-gray-700 border-gray-300 hover:bg-blue-50"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+
+                  {/* 결과 요약 카드 4종 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <FinanceSummaryCard
+                      label="ROI"
+                      value={`${(financeResult.roi * 100).toFixed(1)}%`}
+                      sub="1년차 / 총사업비"
+                      tone="amber"
+                    />
+                    <FinanceSummaryCard
+                      label="손익분기"
+                      value={
+                        financeResult.paybackYears == null
+                          ? "20년+"
+                          : `${financeResult.paybackYears.toFixed(1)}년`
+                      }
+                      sub={
+                        financeResult.paybackYears == null
+                          ? "20년 내 회수 어려움"
+                          : "투자금 회수 시점"
+                      }
+                      tone="emerald"
+                    />
+                    <FinanceSummaryCard
+                      label={
+                        loanScenario === "자기자본"
+                          ? "20년 총수익"
+                          : "20년 총수익 (대출후)"
+                      }
+                      value={formatMoneyShort(
+                        loanScenario === "자기자본"
+                          ? financeResult.totalNetIncome
+                          : financeResult.totalAfterLoan,
+                      )}
+                      sub={`${formatMoneyShort(financeResult.totalCost)} 투자`}
+                      tone="blue"
+                    />
+                    <FinanceSummaryCard
+                      label={
+                        loanScenario === "자기자본"
+                          ? "평균 순수익(年)"
+                          : "평균 순수익(年, 대출후)"
+                      }
+                      value={formatMoneyShort(
+                        loanScenario === "자기자본"
+                          ? financeResult.avgAnnualNet
+                          : financeResult.totalAfterLoan /
+                              financeInput.years,
+                      )}
+                      sub={`月 ${formatMoneyShort(
+                        (loanScenario === "자기자본"
+                          ? financeResult.avgAnnualNet
+                          : financeResult.totalAfterLoan /
+                            financeInput.years) / 12,
+                      )}`}
+                      tone="sky"
+                    />
+                  </div>
+
+                  {/* 20년 시계열 표 — 모달로 (좌측 패널 좁아서 풀 사이즈로 빼냄) */}
+                  <button
+                    type="button"
+                    onClick={() => setShowFinanceTable(true)}
+                    className="w-full flex items-center justify-between text-xs font-semibold py-2 px-2.5 bg-white border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 text-gray-700"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>📊</span>
+                      <span>20년 시계열 표 보기</span>
+                      <span className="text-[9px] text-gray-400 font-normal">
+                        (봉남리 양식)
+                      </span>
+                    </span>
+                    <span className="text-blue-600">⤢</span>
+                  </button>
+                  <div className="text-[10px] text-gray-400 italic">
+                    20년 시계열 표 — 다음 단계에서 추가
+                  </div>
+                </>
+              )}
             </div>
           )}
         </aside>
@@ -991,6 +1381,58 @@ export default function QuoteModeClient({ pnu }: Props) {
           </div>
         </div>
       )}
+
+      {/* 20년 시계열 표 모달 — 좌측 패널 좁아 풀 사이즈 모달로 */}
+      {showFinanceTable && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setShowFinanceTable(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-lg shadow-2xl border border-gray-200 max-w-6xl w-full max-h-[90vh] flex flex-col"
+          >
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <div className="flex items-baseline gap-3">
+                <h2 className="text-base font-bold text-gray-900">
+                  📊 20년 수지분석 시계열
+                </h2>
+                <span className="text-xs text-gray-500">
+                  {loanScenario === "자기자본"
+                    ? "자기자본 100%"
+                    : `${loanScenario} 대출`}{" "}
+                  · ROI {(financeResult.roi * 100).toFixed(1)}% · 손익분기{" "}
+                  {financeResult.paybackYears == null
+                    ? "20년+"
+                    : `${financeResult.paybackYears.toFixed(1)}년`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFinanceTable(false)}
+                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded w-7 h-7 flex items-center justify-center text-lg"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            {/* 본문 — 표 (가로 스크롤 + 세로 스크롤) */}
+            <div className="flex-1 overflow-auto p-4">
+              <FinanceTable
+                result={financeResult}
+                scenario={loanScenario}
+              />
+            </div>
+            {/* 푸터 — 단위 안내 */}
+            <div className="px-5 py-2 border-t border-gray-200 text-[10px] text-gray-500 bg-gray-50 rounded-b-lg">
+              단위: 발전량 kWh / 그 외 원. 봉남리 양식 그대로.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1060,6 +1502,118 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2">
       <span className="text-gray-500 text-xs">{label}</span>
       <span className="font-semibold text-gray-900 tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+// ── 5단계 수지분석 보조 ──────────────────────────────
+
+/** 큰 금액 → 짧게 (억/만 단위, 봉남리 영업 자료 톤) */
+function formatMoneyShort(won: number): string {
+  if (!Number.isFinite(won) || won === 0) return "0원";
+  const sign = won < 0 ? "-" : "";
+  const abs = Math.abs(won);
+  if (abs >= 100_000_000) {
+    const eok = abs / 100_000_000;
+    return `${sign}${eok.toFixed(eok >= 10 ? 1 : 2)}억`;
+  }
+  if (abs >= 10_000) {
+    return `${sign}${Math.round(abs / 10_000).toLocaleString()}만`;
+  }
+  return `${sign}${Math.round(abs).toLocaleString()}원`;
+}
+
+const SUMMARY_TONE: Record<
+  "amber" | "emerald" | "blue" | "sky",
+  { bar: string; bg: string; label: string }
+> = {
+  amber: { bar: "bg-amber-400", bg: "bg-amber-50/70", label: "text-amber-800" },
+  emerald: {
+    bar: "bg-emerald-400",
+    bg: "bg-emerald-50/70",
+    label: "text-emerald-800",
+  },
+  blue: { bar: "bg-blue-400", bg: "bg-blue-50/70", label: "text-blue-800" },
+  sky: { bar: "bg-sky-400", bg: "bg-sky-50/70", label: "text-sky-800" },
+};
+
+function VarGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+        {label}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  step,
+  colSpan,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  step?: number;
+  colSpan?: 1 | 2;
+}) {
+  return (
+    <label
+      className={`block ${colSpan === 2 ? "col-span-2" : ""}`}
+    >
+      <span className="block text-[10px] text-gray-600 mb-0.5 truncate">
+        {label}
+      </span>
+      <input
+        type="number"
+        value={Number.isFinite(value) ? value : 0}
+        step={step ?? 1}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onChange(n);
+        }}
+        className="w-full px-1.5 py-1 text-xs text-gray-900 bg-white border border-gray-300 rounded tabular-nums focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+      />
+    </label>
+  );
+}
+
+function FinanceSummaryCard({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone: keyof typeof SUMMARY_TONE;
+}) {
+  const t = SUMMARY_TONE[tone];
+  return (
+    <div
+      className={`relative pl-2.5 pr-2 py-1.5 ${t.bg} border border-gray-200 rounded overflow-hidden`}
+    >
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${t.bar}`} />
+      <div className={`text-[10px] font-semibold ${t.label}`}>{label}</div>
+      <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">
+        {value}
+      </div>
+      {sub && (
+        <div className="text-[10px] text-gray-500 tabular-nums truncate">
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -1168,12 +1722,16 @@ function FacilityCard({
         onChange={(e) => onFacilityChange(e.target.value as FacilityKind)}
         className="w-full text-xs text-gray-900 px-2 py-1 border border-gray-300 rounded bg-white hover:border-gray-400 focus:border-blue-500 focus:outline-none"
       >
-        {FACILITY_KINDS.map((k) => (
-          <option key={k} value={k}>
-            {FACILITY_LABEL[k]}
-            {k === auto ? " (자동)" : ""}
-          </option>
-        ))}
+        {FACILITY_KINDS.map((k) => {
+          const s = FACILITY_SPEC[k];
+          const cost = (s.costPerKw / 10000).toLocaleString();
+          return (
+            <option key={k} value={k}>
+              {FACILITY_LABEL[k]} — {s.pyeongPerKw}평/kW · {cost}만/kW
+              {k === auto ? " (자동)" : ""}
+            </option>
+          );
+        })}
       </select>
 
       {/* 단가 표시 또는 편집 */}

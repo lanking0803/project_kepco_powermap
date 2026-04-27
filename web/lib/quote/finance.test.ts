@@ -184,6 +184,118 @@ describe("calcFinance — 10년 대출 시나리오", () => {
   });
 });
 
+// ── 봉남리 PDF 다년차 정밀 검증 ───────────────────────
+// PDF에서 직접 추출한 매년 행 값 (1, 2, 3, 4, 5, 10, 15, 20년차)
+// 모두 우리 계산식 결과와 ±100원/±10kWh 이내 일치해야 함.
+describe("봉남리 다년차 검증", () => {
+  const r = calcFinance(BONGNAM_INPUT);
+
+  it.each([
+    [5, 385_057],
+    [10, 377_417],
+    [15, 369_929],
+    [20, 362_589],
+  ])("발전량 %d년차 ≈ %d kWh (±10)", (year, expected) => {
+    const got = Math.round(r.rows[year - 1].generationKwh);
+    expect(Math.abs(got - expected)).toBeLessThanOrEqual(10);
+  });
+
+  it.each([
+    [5, 88_178_049],
+    [10, 86_428_540],
+    [15, 84_713_743],
+    [20, 83_032_968],
+  ])("총매출 %d년차 ≈ %d (±100)", (year, expected) => {
+    const got = Math.round(r.rows[year - 1].totalIncome);
+    expect(Math.abs(got - expected)).toBeLessThanOrEqual(100);
+  });
+
+  it.each([
+    [5, 85_532_708],
+    [10, 83_835_684],
+    [15, 82_172_331],
+    [20, 80_541_979],
+  ])("순수익 %d년차 ≈ %d (±100)", (year, expected) => {
+    const got = Math.round(r.rows[year - 1].netIncome);
+    expect(Math.abs(got - expected)).toBeLessThanOrEqual(100);
+  });
+
+  it.each([
+    [5, 431_112_410],
+    [10, 853_671_274],
+    [15, 1_267_846_300],
+    [20, 1_673_803_829],
+  ])("누적 순수익 %d년차 ≈ %d (±500)", (year, expected) => {
+    const got = Math.round(r.rows[year - 1].cumulativeNet);
+    expect(Math.abs(got - expected)).toBeLessThanOrEqual(500);
+  });
+});
+
+// ── 변수 변경 → 결과 변동 검증 ─────────────────────────
+describe("calcFinance — 변수 변동 영향", () => {
+  it("열화율 0 → 매년 동일 발전량", () => {
+    const result = calcFinance({ ...BONGNAM_INPUT, annualDecay: 0 });
+    const yearOne = result.rows[0].generationKwh;
+    for (const r of result.rows) {
+      expect(r.generationKwh).toBeCloseTo(yearOne, 5);
+    }
+  });
+
+  it("REC 가중치 0 → REC 매출 0 (SMP만 매출)", () => {
+    const result = calcFinance({ ...BONGNAM_INPUT, recWeight: 0 });
+    for (const r of result.rows) {
+      expect(r.recIncome).toBe(0);
+      expect(r.totalIncome).toBeCloseTo(r.smpIncome, 5);
+    }
+  });
+
+  it("부가세율 0 → 총사업비 = 공사비", () => {
+    const result = calcFinance({ ...BONGNAM_INPUT, vatRate: 0 });
+    expect(result.vat).toBe(0);
+    expect(result.totalCost).toBe(BONGNAM_INPUT.constructionCost);
+  });
+
+  it("공사비 2배 → ROI 절반", () => {
+    const a = calcFinance(BONGNAM_INPUT);
+    const b = calcFinance({
+      ...BONGNAM_INPUT,
+      constructionCost: BONGNAM_INPUT.constructionCost * 2,
+    });
+    expect(b.roi).toBeCloseTo(a.roi / 2, 4);
+  });
+
+  it("유지보수율 0 → 순수익 = 총매출", () => {
+    const result = calcFinance({ ...BONGNAM_INPUT, maintenanceRate: 0 });
+    for (const r of result.rows) {
+      expect(r.maintenance).toBe(0);
+      expect(r.netIncome).toBeCloseTo(r.totalIncome, 5);
+    }
+  });
+
+  it("일발전시간 2배 → 발전량 2배", () => {
+    const a = calcFinance(BONGNAM_INPUT);
+    const b = calcFinance({ ...BONGNAM_INPUT, dailyHours: 8 });
+    expect(b.rows[0].generationKwh).toBeCloseTo(
+      a.rows[0].generationKwh * 2,
+      0,
+    );
+  });
+});
+
+describe("calcAnnualLoanPayment — edge case", () => {
+  it("금리 0 → 단순 분할 (이자 0)", () => {
+    // 1억 · 금리 0 · 거치 0 · 상환 120 · 분석 20년 = (0 + 1억) / 20 = 500만/년
+    const annual = calcAnnualLoanPayment(100_000_000, 0, 0, 120, 20);
+    expect(Math.round(annual)).toBe(5_000_000);
+  });
+
+  it("거치 0 → 거치 이자 부담 없음", () => {
+    const withGrace = calcAnnualLoanPayment(100_000_000, 0.055, 12, 120, 20);
+    const noGrace = calcAnnualLoanPayment(100_000_000, 0.055, 0, 120, 20);
+    expect(noGrace).toBeLessThan(withGrace);
+  });
+});
+
 describe("calcPaybackYears", () => {
   it("총사업비 0 → 0", () => {
     expect(calcPaybackYears([], 0)).toBe(0);
