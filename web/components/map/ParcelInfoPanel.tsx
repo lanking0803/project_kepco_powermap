@@ -157,36 +157,38 @@ export default function ParcelInfoPanel({
         ) as string[])
       : [];
 
+  // 견적 모드 임베드 시 = 좌측 패널 0번 섹션 안. floating overlay X / 자체 헤더 X.
+  const wrapperClass = inQuoteMode
+    ? "bg-white flex flex-col"
+    : "absolute left-4 right-4 bottom-4 md:left-auto md:right-4 md:bottom-4 md:w-[520px] max-w-[calc(100%-32px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-10 flex flex-col h-[62dvh] md:h-[min(560px,calc(100dvh-120px))] kepco-slide-up";
+
   return (
-    <div
-      className="absolute left-4 right-4 bottom-4 md:left-auto md:right-4 md:bottom-4
-                 md:w-[520px] max-w-[calc(100%-32px)] bg-white rounded-xl shadow-2xl
-                 border border-gray-200 overflow-hidden z-10 flex flex-col
-                 h-[62dvh] md:h-[min(560px,calc(100dvh-120px))] kepco-slide-up"
-    >
-      {/* 헤더 */}
-      <div className="px-3 py-2.5 md:px-4 md:py-3 border-b bg-gray-50 flex items-start justify-between gap-2 flex-shrink-0">
-        <div className="flex-1 min-w-0">
-          {headerParts.length === 0 ? (
-            loading ? (
-              <div className="text-sm text-gray-500 py-1">필지 정보 불러오는 중...</div>
+    <div className={wrapperClass}>
+      {/* 헤더 — 견적 모드(임베드) 시 SectionHeader 가 대체하므로 숨김 */}
+      {!inQuoteMode && (
+        <div className="px-3 py-2.5 md:px-4 md:py-3 border-b bg-gray-50 flex items-start justify-between gap-2 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            {headerParts.length === 0 ? (
+              loading ? (
+                <div className="text-sm text-gray-500 py-1">필지 정보 불러오는 중...</div>
+              ) : (
+                <div className="text-sm text-gray-600 py-1">이 위치에 필지 없음</div>
+              )
             ) : (
-              <div className="text-sm text-gray-600 py-1">이 위치에 필지 없음</div>
-            )
-          ) : (
-            <div className="font-bold text-sm md:text-base text-gray-900 truncate">
-              <AddrLine parts={headerParts} />
-            </div>
-          )}
+              <div className="font-bold text-sm md:text-base text-gray-900 truncate">
+                <AddrLine parts={headerParts} />
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
+            aria-label="닫기"
+          >
+            ×
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
-          aria-label="닫기"
-        >
-          ×
-        </button>
-      </div>
+      )}
 
       {/* 탭 */}
       {!loading && jibun && (

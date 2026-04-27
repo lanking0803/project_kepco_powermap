@@ -7,6 +7,7 @@ import {
   fillPanelGrid,
   calcLongestEdgeAngle,
   calcAutoRotation,
+  calcAreaDimensions,
 } from "./grid";
 import { DEFAULT_MODULE, FACILITY_PLACEMENT } from "./panel";
 import type { Position } from "geojson";
@@ -253,6 +254,43 @@ describe("calcAutoRotation — 시설 규칙 분기", () => {
     expect(calcAutoRotation(sq, "건물긴변")).toBe(
       calcLongestEdgeAngle(sq),
     );
+  });
+});
+
+describe("calcAreaDimensions — 영역 가로 × 세로 (m)", () => {
+  it("정사각형 30m × 30m / 회전 0 → 가로 ~30m, 세로 ~30m", () => {
+    const sq = makeSquare(30);
+    const { widthM, heightM } = calcAreaDimensions(sq, 0);
+    expect(widthM).toBeGreaterThan(28);
+    expect(widthM).toBeLessThan(32);
+    expect(heightM).toBeGreaterThan(28);
+    expect(heightM).toBeLessThan(32);
+  });
+
+  it("가로 50m × 세로 10m / 회전 0 → 가로 ~50m, 세로 ~10m", () => {
+    const lat0 = 35.7163;
+    const lng0 = 128.325;
+    const dLat = 10 * 0.0000090;
+    const dLng = 50 * 0.0000111;
+    const rect: Position[][] = [
+      [
+        [lng0, lat0],
+        [lng0 + dLng, lat0],
+        [lng0 + dLng, lat0 + dLat],
+        [lng0, lat0 + dLat],
+        [lng0, lat0],
+      ],
+    ];
+    const { widthM, heightM } = calcAreaDimensions(rect, 0);
+    expect(widthM).toBeGreaterThan(48);
+    expect(widthM).toBeLessThan(52);
+    expect(heightM).toBeGreaterThan(8);
+    expect(heightM).toBeLessThan(12);
+  });
+
+  it("빈 폴리곤 → 0 × 0", () => {
+    expect(calcAreaDimensions([], 0)).toEqual({ widthM: 0, heightM: 0 });
+    expect(calcAreaDimensions([[]], 0)).toEqual({ widthM: 0, heightM: 0 });
   });
 });
 

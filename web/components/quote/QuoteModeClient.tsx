@@ -60,8 +60,13 @@ import {
   DEFAULT_MODULE,
   FACILITY_PLACEMENT,
   calcInstalledKw,
+  type PanelModule,
 } from "@/lib/quote/panel";
-import { fillPanelGrid, calcAutoRotation } from "@/lib/quote/grid";
+import {
+  fillPanelGrid,
+  calcAutoRotation,
+  calcAreaDimensions,
+} from "@/lib/quote/grid";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 
@@ -111,7 +116,6 @@ export default function QuoteModeClient({ pnu }: Props) {
   // 부지 정보 floating overlay 용 — 메인 지도와 동일 ParcelInfoPanel
   const [capa, setCapa] = useState<KepcoDataRow[]>([]);
   const [meta, setMeta] = useState<AddrMeta | null>(null);
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [loadingParcel, setLoadingParcel] = useState(true);
   const [loadingBuildings, setLoadingBuildings] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -330,6 +334,20 @@ export default function QuoteModeClient({ pnu }: Props) {
   /** 단가 인라인 편집 펼친 동의 id (한 번에 한 동만 편집) */
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
 
+  // ── 3단계 — 패널 모듈 사용자 변경 (의뢰자 추가 요청 2026-04-27)
+  /** 사용자가 변경한 모듈. null 이면 DEFAULT_MODULE (AIKO 670W) 사용 */
+  const [customModule, setCustomModule] = useState<PanelModule | null>(null);
+  const [isEditingModule, setIsEditingModule] = useState(false);
+  const activeModule = customModule ?? DEFAULT_MODULE;
+  const isCustomModule = customModule !== null;
+
+  // ── 좌측 패널 아코디언 — 활성 1개 step 만 펼침 (기본 1: 영역 정의).
+  // 활성 헤더 다시 클릭하면 null (모두 접힘).
+  const [activeStep, setActiveStep] = useState<number | null>(1);
+  const toggleStep = useCallback((step: number) => {
+    setActiveStep((prev) => (prev === step ? null : step));
+  }, []);
+
   const handleFacilityChange = useCallback(
     (id: string, kind: FacilityKind) => {
       setFacilityOverrides((prev) => ({ ...prev, [id]: kind }));
@@ -383,19 +401,23 @@ export default function QuoteModeClient({ pnu }: Props) {
         const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
         const layout = fillPanelGrid(
           b.edited_polygon,
-          DEFAULT_MODULE,
+          activeModule,
           placement,
           rotation,
         );
+        // Step 3-5: 회전된 bbox 가로 × 세로 (m) — 영역 라벨 표시용
+        const dims = calcAreaDimensions(b.edited_polygon, rotation);
         return {
           id,
           name: b.buld_nm || `${i + 1}동`,
           polygon: b.edited_polygon,
           area_m2: b.edited_area_m2,
           panels: layout.panels,
+          widthM: dims.widthM,
+          heightM: dims.heightM,
         };
       }),
-    [buildings, facilityOverrides, geometry, bldgRegister],
+    [buildings, facilityOverrides, geometry, bldgRegister, activeModule],
   );
 
   /** 3단계 동별 패널 카드용 — id → (count, kw) 매핑 */
@@ -404,9 +426,9 @@ export default function QuoteModeClient({ pnu }: Props) {
       id: eb.id,
       name: eb.name,
       count: eb.panels?.length ?? 0,
-      kwActual: calcInstalledKw(eb.panels?.length ?? 0, DEFAULT_MODULE),
+      kwActual: calcInstalledKw(eb.panels?.length ?? 0, activeModule),
     }));
-  }, [editableBuildings]);
+  }, [editableBuildings, activeModule]);
 
   const totalPanels = panelLayouts.reduce((s, l) => s + l.count, 0);
   const totalKwActual = panelLayouts.reduce((s, l) => s + l.kwActual, 0);
@@ -445,7 +467,6 @@ export default function QuoteModeClient({ pnu }: Props) {
     0,
   );
   const buildingPyeong = Math.round(buildingArea * M2_TO_PYEONG);
-  const editedCount = buildings.filter((b) => b.is_edited).length;
   const parcelPyeong = geometry
     ? Math.round(geometry.area_m2 * M2_TO_PYEONG)
     : null;
@@ -467,17 +488,6 @@ export default function QuoteModeClient({ pnu }: Props) {
           <span className="text-base">←</span>
           <span className="hidden md:inline">지도로</span>
         </Link>
-        <button
-          onClick={() => setIsInfoOpen((v) => !v)}
-          className={`px-2.5 py-1.5 text-sm rounded transition-colors ${
-            isInfoOpen
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-          title="이 부지의 필지/전기/가격/입지/규제 정보"
-        >
-          ⓘ <span className="hidden md:inline ml-0.5">부지 정보</span>
-        </button>
         <div className="flex-1 min-w-0 text-center">
           <div className="text-sm md:text-base font-bold text-gray-900 truncate">
             {headerAddr}
@@ -494,25 +504,6 @@ export default function QuoteModeClient({ pnu }: Props) {
           PDF 출력
         </button>
       </header>
-
-      {/* 부지 정보 floating overlay — 메인 지도 ParcelInfoPanel 그대로 재사용.
-          [ⓘ 부지 정보] 버튼으로 토글. 데이터는 위 useEffect 들이 atomic endpoint
-          호출 (HTTP 캐시 hit 으로 사실상 0 fetch) → props 로 전달. */}
-      {isInfoOpen && (
-        <ParcelInfoPanel
-          jibun={jibun}
-          geometry={geometry}
-          capa={capa}
-          meta={meta}
-          clickedJibun={jibun?.jibun ?? ""}
-          matchMode={jibun ? "exact" : null}
-          nearestJibun={null}
-          loading={loadingParcel}
-          onClose={() => setIsInfoOpen(false)}
-          polygonCount={loadingBuildings ? undefined : buildings.length}
-          inQuoteMode
-        />
-      )}
 
       {/* 폰 안내 — 태블릿 이상에선 숨김 */}
       <div className="md:hidden flex-1 flex items-center justify-center px-6 text-center bg-white">
@@ -531,63 +522,238 @@ export default function QuoteModeClient({ pnu }: Props) {
 
       {/* 본문 (태블릿+) */}
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
-        {/* 좌측 도구 패널 — 영역 정의/시설/PDF/수지 (작업 도구 전용).
-            부지 정보(필지/전기/가격/입지/규제) 는 상단바 [ⓘ] 토글로 별도 표시. */}
-        <aside className="w-72 lg:w-80 bg-white border-r border-gray-200 overflow-y-auto">
-          <SectionHeader step={1} title="영역 정의" status="active" />
-          <div className="px-4 py-3 space-y-2 text-sm">
+        {/* 좌측 도구 패널 — 모든 견적 작업 (영역/시설/패널/PDF/수지) + 합계 + 부지정보 */}
+        <aside className="w-80 lg:w-96 bg-white border-r border-gray-200 overflow-y-auto">
+          {/* 0번 부지 정보 — ParcelInfoPanel 임베드 (inQuoteMode) */}
+          <SectionHeader
+            step={0}
+            title="부지 정보"
+            isExpanded={activeStep === 0}
+            onClick={() => toggleStep(0)}
+          />
+          {activeStep === 0 && (
+            <ParcelInfoPanel
+              jibun={jibun}
+              geometry={geometry}
+              capa={capa}
+              meta={meta}
+              clickedJibun={jibun?.jibun ?? ""}
+              matchMode={jibun ? "exact" : null}
+              nearestJibun={null}
+              loading={loadingParcel}
+              onClose={() => {}}
+              polygonCount={loadingBuildings ? undefined : buildings.length}
+              inQuoteMode
+            />
+          )}
+          <SectionHeader
+            step={1}
+            title="영역 정의"
+            isExpanded={activeStep === 1}
+            onClick={() => toggleStep(1)}
+          />
+          {activeStep === 1 && (
+          <div className="px-4 py-3 space-y-3">
             {loadingBuildings ? (
-              <div className="text-gray-500">건물 폴리곤 불러오는 중…</div>
+              <div className="text-gray-500 text-sm">
+                건물 폴리곤 불러오는 중…
+              </div>
             ) : (
               <>
-                <Row label="건물 동수" value={`${buildings.length}동`} />
-                <Row
-                  label="건물 합계"
-                  value={
-                    buildings.length === 0
-                      ? "—"
-                      : `${buildingArea.toLocaleString()}㎡ (${buildingPyeong.toLocaleString()}평)`
-                  }
-                />
-                {buildings.length === 0 && bldgRegister.length === 0 && (
-                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
-                    자동 감지된 건물도, 등록된 건축물대장도 없습니다.
-                    <br />
-                    노지/빈 토지 부지로 보입니다 — 다음 단계 [+ 영역 추가]
-                    로 패널 깔 영역을 잡습니다.
+                {/* 합계 카드 — 필지 면적 / 자동 감지 건물 */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="px-2 py-1.5 bg-amber-50 border border-amber-200 rounded">
+                    <div className="text-[10px] text-amber-800 font-semibold">
+                      필지 면적
+                    </div>
+                    <div className="text-base font-bold text-gray-900 tabular-nums">
+                      {parcelPyeong != null
+                        ? `${parcelPyeong.toLocaleString()}평`
+                        : "—"}
+                    </div>
+                    <div className="text-[10px] text-gray-500 tabular-nums truncate">
+                      {geometry
+                        ? `${geometry.area_m2.toLocaleString()}㎡`
+                        : ""}
+                      {geometry?.jimok ? ` · ${geometry.jimok}` : ""}
+                    </div>
                   </div>
-                )}
-                {buildings.length === 0 && bldgRegister.length > 0 && (
-                  <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5 leading-snug">
-                    ⚠️ 건축물대장에 <b>{bldgRegister.length}동</b> 등록되어 있지만
-                    도로명주소가 미부여되어 자동 폴리곤 데이터가 없습니다.
-                    <br />
-                    위성 사진을 보고 다음 단계 [+ 영역 추가] 로 직접 그려주세요.
+                  <div className="px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded">
+                    <div className="text-[10px] text-emerald-800 font-semibold">
+                      자동 감지
+                    </div>
+                    <div className="text-base font-bold text-gray-900 tabular-nums">
+                      {buildings.length === 0
+                        ? "0평"
+                        : `${buildingPyeong.toLocaleString()}평`}
+                    </div>
+                    <div className="text-[10px] text-gray-500 tabular-nums">
+                      {buildings.length}동 ·{" "}
+                      {buildingArea.toLocaleString()}㎡
+                    </div>
                   </div>
-                )}
-                {buildings.length > 0 && (
-                  <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 leading-snug space-y-0.5">
-                    <div>💡 흰 점 <b>드래그</b> = 위치 수정</div>
-                    <div>우측 카드 <b>[− 점 N +]</b> = 점 갯수 조절 (자동)</div>
-                    <div>흰 점 <b>더블클릭</b> = 그 점 정확히 삭제</div>
-                    {editedCount > 0 && (
-                      <div className="text-blue-900 font-semibold">
-                        수정됨 {editedCount}동
+                </div>
+
+                {/* 동별 영역 편집 카드 + 빈 상태 안내 */}
+                {buildings.length === 0 ? (
+                  <>
+                    {bldgRegister.length === 0 && (
+                      <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
+                        자동 감지된 건물도, 등록된 건축물대장도 없습니다.
+                        <br />
+                        노지/빈 토지 부지로 보입니다 — 위 [+ 영역 추가]
+                        로 패널 깔 영역을 잡습니다.
                       </div>
                     )}
-                  </div>
+                    {bldgRegister.length > 0 && (
+                      <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5 leading-snug">
+                        ⚠️ 건축물대장에 <b>{bldgRegister.length}동</b> 등록되어
+                        있지만 도로명주소가 미부여되어 자동 폴리곤 데이터가
+                        없습니다.
+                        <br />
+                        위성 사진을 보고 위 [+ 영역 추가] 로 직접 그려주세요.
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <ul className="space-y-1.5 text-xs">
+                    {buildings.map((b, i) => {
+                      const id = makeBuildingId(b);
+                      const py = Math.round(b.edited_area_m2 * M2_TO_PYEONG);
+                      const origPy = Math.round(b.area_m2 * M2_TO_PYEONG);
+                      const isUserAdded = b.source === "user_added";
+                      const isPendingDelete = deletePendingId === id;
+
+                      if (isPendingDelete) {
+                        return (
+                          <li
+                            key={id}
+                            className="flex flex-col gap-1.5 px-2 py-1.5 bg-red-50 border border-red-300 rounded"
+                          >
+                            <div className="text-[11px] text-red-800 leading-snug">
+                              <b>{b.buld_nm || `${i + 1}동`}</b>{" "}
+                              <span className="text-red-600">
+                                {py.toLocaleString()}평
+                              </span>{" "}
+                              을(를) 삭제하시겠습니까?
+                            </div>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => {
+                                  handleDeleteBuilding(id);
+                                  setDeletePendingId(null);
+                                }}
+                                className="flex-1 py-1 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
+                              >
+                                정말 삭제
+                              </button>
+                              <button
+                                onClick={() => setDeletePendingId(null)}
+                                className="flex-1 py-1 text-[11px] text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      }
+
+                      const vertexCount = b.edited_polygon[0]
+                        ? Math.max(0, b.edited_polygon[0].length - 1)
+                        : 0;
+
+                      return (
+                        <li
+                          key={id}
+                          className={`flex items-center justify-between gap-1.5 px-2 py-1.5 border rounded group ${
+                            isUserAdded
+                              ? "bg-emerald-50/70 border-emerald-200"
+                              : b.is_edited
+                                ? "bg-blue-50/80 border-blue-200"
+                                : "bg-orange-50/60 border-orange-100"
+                          }`}
+                        >
+                          <span className="text-gray-700 truncate flex-1 min-w-0">
+                            {b.buld_nm || `${i + 1}동`}
+                            {!isUserAdded && (
+                              <span className="text-gray-400 ml-1">
+                                {b.gro_flo_co}F
+                              </span>
+                            )}
+                            {b.is_edited && (
+                              <span className="ml-1 text-[10px] text-blue-700 font-semibold">
+                                수정
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-semibold tabular-nums shrink-0 text-gray-900">
+                            {py.toLocaleString()}평
+                            {b.is_edited && !isUserAdded && (
+                              <span className="text-gray-400 font-normal ml-1 line-through">
+                                {origPy.toLocaleString()}평
+                              </span>
+                            )}
+                          </span>
+                          <div className="flex items-stretch shrink-0 border border-emerald-300 rounded overflow-hidden text-[10px] font-semibold leading-none">
+                            <button
+                              onClick={() => handleAutoRemoveVertex(id)}
+                              disabled={vertexCount <= 3}
+                              className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed px-1.5 py-1"
+                              title={
+                                vertexCount <= 3
+                                  ? "최소 3점 — 더 줄일 수 없습니다"
+                                  : "각도 가장 평평한 점 자동 삭제 (모양 거의 보존)"
+                              }
+                              aria-label="점 줄이기"
+                            >
+                              −
+                            </button>
+                            <span className="text-emerald-800 bg-emerald-100 px-1.5 py-1 tabular-nums">
+                              점 {vertexCount}
+                            </span>
+                            <button
+                              onClick={() => handleAutoAddVertex(id)}
+                              className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 px-1.5 py-1"
+                              title="가장 긴 변 가운데에 점 추가"
+                              aria-label="점 늘리기"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => setDeletePendingId(id)}
+                            className="text-gray-400 hover:text-red-600 text-sm leading-none px-1"
+                            title="이 동 삭제"
+                            aria-label="삭제"
+                          >
+                            🗑
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
-                <div className="text-[10px] text-gray-400 pt-0.5">
-                  영역 추가/삭제는 우측 패널의 [+ 영역 추가] / 🗑 사용
-                </div>
+
+                {/* + 영역 추가 — 동별 카드 리스트 아래 (더 추가하는 흐름) */}
+                <button
+                  onClick={handleAddBuilding}
+                  disabled={!geometry}
+                  className="w-full text-xs font-semibold py-2 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed border border-dashed border-blue-300 rounded transition-colors"
+                  title="부지 중앙에 15m × 15m 사각형이 등장합니다 — 꼭지점 드래그로 조정"
+                >
+                  + 영역 추가
+                </button>
               </>
             )}
           </div>
+          )}
           <SectionHeader
             step={2}
             title="시설별 견적"
-            status={buildings.length > 0 ? "active" : "pending"}
+            isExpanded={activeStep === 2}
+            onClick={() => toggleStep(2)}
           />
+          {activeStep === 2 && (
           <div className="px-4 py-3 space-y-2">
             {buildings.length === 0 ? (
               <div className="text-xs text-gray-400">
@@ -635,24 +801,46 @@ export default function QuoteModeClient({ pnu }: Props) {
               </>
             )}
           </div>
+          )}
           <SectionHeader
             step={3}
             title="패널 시각화"
-            status={totalPanels > 0 ? "active" : "pending"}
+            isExpanded={activeStep === 3}
+            onClick={() => toggleStep(3)}
           />
+          {activeStep === 3 && (
           <div className="px-4 py-3 space-y-2">
             {buildings.length === 0 ? (
               <div className="text-xs text-gray-400">
                 먼저 1단계에서 영역을 정의해주세요.
               </div>
-            ) : totalPanels === 0 ? (
-              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
-                영역이 모듈 1장보다 작거나 가장자리 이격 적용 후 공간이
-                남지 않습니다. 영역을 더 크게 잡아주세요.
-              </div>
             ) : (
               <>
-                {panelLayouts.map((l) => (
+                {/* 모듈 카드 — 맨 위 고정 (동 추가돼도 위치 안 밀림) */}
+                <ModuleCard
+                  module={activeModule}
+                  isCustom={isCustomModule}
+                  isEditing={isEditingModule}
+                  onToggleEdit={() => setIsEditingModule((v) => !v)}
+                  onApply={(m) => {
+                    setCustomModule(m);
+                    setIsEditingModule(false);
+                  }}
+                  onReset={() => {
+                    setCustomModule(null);
+                    setIsEditingModule(false);
+                  }}
+                  onCancel={() => setIsEditingModule(false)}
+                />
+
+                {totalPanels === 0 ? (
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
+                    영역이 모듈 1장보다 작거나 가장자리 이격 적용 후 공간이
+                    남지 않습니다. 영역을 더 크게 잡아주세요.
+                  </div>
+                ) : (
+                  <>
+                    {panelLayouts.map((l) => (
                   <div
                     key={l.id}
                     className="px-2.5 py-2 bg-white border border-rose-200 rounded"
@@ -676,7 +864,7 @@ export default function QuoteModeClient({ pnu }: Props) {
                       🔲 합계
                     </span>
                     <span className="text-[10px] text-gray-500">
-                      {DEFAULT_MODULE.name}
+                      {activeModule.name}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
@@ -687,19 +875,35 @@ export default function QuoteModeClient({ pnu }: Props) {
                       {totalKwActual.toFixed(2)} kW
                     </span>
                   </div>
-                  <div className="mt-1 text-[10px] text-gray-500 leading-snug">
-                    {DEFAULT_MODULE.widthMm.toLocaleString()} ×{" "}
-                    {DEFAULT_MODULE.heightMm.toLocaleString()} ×{" "}
-                    {DEFAULT_MODULE.thicknessMm}mm · {DEFAULT_MODULE.watt}Wp
-                  </div>
                 </div>
+                  </>
+                )}
               </>
             )}
           </div>
-          <SectionHeader step={4} title="배치도 PDF" status="pending" />
-          <div className="px-4 py-3 text-xs text-gray-400">4단계 작업 예정</div>
-          <SectionHeader step={5} title="수지분석" status="pending" />
-          <div className="px-4 py-3 text-xs text-gray-400">5단계 작업 예정</div>
+          )}
+          <SectionHeader
+            step={4}
+            title="배치도 PDF"
+            isExpanded={activeStep === 4}
+            onClick={() => toggleStep(4)}
+          />
+          {activeStep === 4 && (
+            <div className="px-4 py-3 text-xs text-gray-400">
+              4단계 작업 예정
+            </div>
+          )}
+          <SectionHeader
+            step={5}
+            title="수지분석"
+            isExpanded={activeStep === 5}
+            onClick={() => toggleStep(5)}
+          />
+          {activeStep === 5 && (
+            <div className="px-4 py-3 text-xs text-gray-400">
+              5단계 작업 예정
+            </div>
+          )}
         </aside>
 
         {/* 중앙 지도 */}
@@ -725,188 +929,6 @@ export default function QuoteModeClient({ pnu }: Props) {
             </div>
           )}
         </main>
-
-        {/* 우측 결과 패널 */}
-        <aside className="w-80 lg:w-96 bg-white border-l border-gray-200 overflow-y-auto">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <div className="text-[11px] text-gray-500 font-semibold">
-              필지 면적
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tabular-nums">
-              {parcelPyeong != null
-                ? `${parcelPyeong.toLocaleString()}평`
-                : "—"}
-            </div>
-            <div className="text-[11px] text-gray-400 tabular-nums">
-              {geometry ? `${geometry.area_m2.toLocaleString()}㎡` : ""}
-              {geometry?.jimok ? ` · ${geometry.jimok}` : ""}
-            </div>
-          </div>
-          <div className="px-4 py-3 border-b border-gray-200">
-            <div className="text-[11px] text-emerald-700 font-semibold">
-              건물 옥상 (자동 감지)
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tabular-nums">
-              {loadingBuildings
-                ? "…"
-                : buildings.length === 0
-                  ? "0평"
-                  : `${buildingPyeong.toLocaleString()}평`}
-            </div>
-            <div className="text-[11px] text-gray-400 tabular-nums">
-              {loadingBuildings
-                ? ""
-                : `${buildings.length}동 · ${buildingArea.toLocaleString()}㎡`}
-            </div>
-          </div>
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] text-gray-500 font-semibold">
-                동별 상세
-              </div>
-              <button
-                onClick={handleAddBuilding}
-                disabled={!geometry}
-                className="text-[11px] font-semibold px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed border border-dashed border-blue-300 rounded transition-colors"
-                title="부지 중앙에 15m × 15m 사각형이 등장합니다 — 꼭지점 드래그로 조정"
-              >
-                + 영역 추가
-              </button>
-            </div>
-            {buildings.length === 0 ? (
-              <div className="text-[11px] text-gray-400 text-center py-3 bg-gray-50 rounded border border-dashed border-gray-200">
-                추가된 영역이 없습니다.
-                <br />
-                위 [+ 영역 추가] 로 시작하세요.
-              </div>
-            ) : (
-              <ul className="space-y-1.5 text-xs">
-                {buildings.map((b, i) => {
-                  const id = makeBuildingId(b);
-                  const py = Math.round(b.edited_area_m2 * M2_TO_PYEONG);
-                  const origPy = Math.round(b.area_m2 * M2_TO_PYEONG);
-                  const isUserAdded = b.source === "user_added";
-                  const isPendingDelete = deletePendingId === id;
-
-                  // 빨간 모드 (삭제 확인) — 동 카드를 통째로 빨간 배경 + 두 버튼
-                  if (isPendingDelete) {
-                    return (
-                      <li
-                        key={id}
-                        className="flex flex-col gap-1.5 px-2 py-1.5 bg-red-50 border border-red-300 rounded"
-                      >
-                        <div className="text-[11px] text-red-800 leading-snug">
-                          <b>{b.buld_nm || `${i + 1}동`}</b>{" "}
-                          <span className="text-red-600">{py.toLocaleString()}평</span>{" "}
-                          을(를) 삭제하시겠습니까?
-                        </div>
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => {
-                              handleDeleteBuilding(id);
-                              setDeletePendingId(null);
-                            }}
-                            className="flex-1 py-1 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
-                          >
-                            정말 삭제
-                          </button>
-                          <button
-                            onClick={() => setDeletePendingId(null)}
-                            className="flex-1 py-1 text-[11px] text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  }
-
-                  // 점 갯수 (closed ring 의 마지막 중복 제외)
-                  const vertexCount = b.edited_polygon[0]
-                    ? Math.max(0, b.edited_polygon[0].length - 1)
-                    : 0;
-
-                  // 일반 모드
-                  return (
-                    <li
-                      key={id}
-                      className={`flex items-center justify-between gap-1.5 px-2 py-1.5 border rounded group ${
-                        isUserAdded
-                          ? "bg-emerald-50/70 border-emerald-200"
-                          : b.is_edited
-                            ? "bg-blue-50/80 border-blue-200"
-                            : "bg-orange-50/60 border-orange-100"
-                      }`}
-                    >
-                      <span className="text-gray-700 truncate flex-1 min-w-0">
-                        {b.buld_nm || `${i + 1}동`}
-                        {!isUserAdded && (
-                          <span className="text-gray-400 ml-1">
-                            {b.gro_flo_co}F
-                          </span>
-                        )}
-                        {b.is_edited && (
-                          <span className="ml-1 text-[10px] text-blue-700 font-semibold">
-                            수정
-                          </span>
-                        )}
-                      </span>
-                      <span className="font-semibold tabular-nums shrink-0">
-                        {py.toLocaleString()}평
-                        {b.is_edited && !isUserAdded && (
-                          <span className="text-gray-400 font-normal ml-1 line-through">
-                            {origPy.toLocaleString()}평
-                          </span>
-                        )}
-                      </span>
-                      <div className="flex items-stretch shrink-0 border border-emerald-300 rounded overflow-hidden text-[10px] font-semibold leading-none">
-                        <button
-                          onClick={() => handleAutoRemoveVertex(id)}
-                          disabled={vertexCount <= 3}
-                          className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed px-1.5 py-1"
-                          title={
-                            vertexCount <= 3
-                              ? "최소 3점 — 더 줄일 수 없습니다"
-                              : "각도 가장 평평한 점 자동 삭제 (모양 거의 보존)"
-                          }
-                          aria-label="점 줄이기"
-                        >
-                          −
-                        </button>
-                        <span className="text-emerald-800 bg-emerald-100 px-1.5 py-1 tabular-nums">
-                          점 {vertexCount}
-                        </span>
-                        <button
-                          onClick={() => handleAutoAddVertex(id)}
-                          className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 px-1.5 py-1"
-                          title="가장 긴 변 가운데에 점 추가"
-                          aria-label="점 늘리기"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => setDeletePendingId(id)}
-                        className="text-gray-400 hover:text-red-600 text-sm leading-none px-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                        title="이 동 삭제"
-                        aria-label="삭제"
-                      >
-                        🗑
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          <div className="px-4 py-3 border-t border-gray-200">
-            <div className="text-[11px] text-gray-400 leading-relaxed">
-              💡 옥상 영역 미세 조정 단계. 폴리곤 모서리의 흰 점을 드래그하면
-              면적·평수가 즉시 갱신됩니다. 다음 단계에서 시설 종류 자동 추천 +
-              kW/시공비 카드가 채워집니다.
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
   );
@@ -919,36 +941,56 @@ export default function QuoteModeClient({ pnu }: Props) {
 function SectionHeader({
   step,
   title,
-  status,
+  isExpanded,
+  onClick,
 }: {
   step: number;
   title: string;
-  status: "active" | "pending";
+  isExpanded: boolean;
+  onClick: () => void;
 }) {
-  const isActive = status === "active";
   return (
-    <div
-      className={`flex items-center gap-2 px-4 py-2 border-b border-gray-200 ${
-        isActive ? "bg-blue-50" : "bg-gray-50"
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative w-full flex items-center gap-2.5 pl-4 pr-3 py-3 border-b transition-colors text-left ${
+        isExpanded
+          ? "bg-blue-600 border-blue-700 shadow-sm"
+          : "bg-white border-gray-200 hover:bg-blue-50"
       }`}
     >
+      {/* 좌측 강조 바 (활성 시) */}
+      {isExpanded && (
+        <span
+          className="absolute left-0 top-0 bottom-0 w-1 bg-blue-300"
+          aria-hidden="true"
+        />
+      )}
       <span
-        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-          isActive
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-500"
+        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+          isExpanded
+            ? "bg-white text-blue-700"
+            : "bg-gray-100 text-gray-500 border border-gray-300"
         }`}
       >
         {step}
       </span>
       <span
-        className={`text-xs font-semibold ${
-          isActive ? "text-blue-900" : "text-gray-500"
+        className={`flex-1 text-sm font-semibold ${
+          isExpanded ? "text-white" : "text-gray-800"
         }`}
       >
         {title}
       </span>
-    </div>
+      <span
+        className={`text-xs transition-transform shrink-0 ${
+          isExpanded ? "text-white rotate-0" : "text-gray-400 -rotate-90"
+        }`}
+        aria-hidden="true"
+      >
+        ▼
+      </span>
+    </button>
   );
 }
 
@@ -1157,6 +1199,203 @@ function FacilityCard({
           {formatCost(cost)}
         </span>
       </div>
+    </div>
+  );
+}
+
+interface ModuleCardProps {
+  module: PanelModule;
+  isCustom: boolean;
+  isEditing: boolean;
+  onToggleEdit: () => void;
+  onApply: (m: PanelModule) => void;
+  onReset: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * 패널 모듈 카드 — 디폴트(AIKO 670W) 표시 + 사용자 변경.
+ * 의뢰자 추가 요청 (2026-04-27): "패널 크기가 회사마다 틀리니 가로/세로/높이 변수로 수정 가능"
+ */
+function ModuleCard({
+  module,
+  isCustom,
+  isEditing,
+  onToggleEdit,
+  onApply,
+  onReset,
+  onCancel,
+}: ModuleCardProps) {
+  // 인라인 편집 로컬 입력값
+  const [draftName, setDraftName] = useState(module.name);
+  const [draftWidth, setDraftWidth] = useState(module.widthMm.toString());
+  const [draftHeight, setDraftHeight] = useState(module.heightMm.toString());
+  const [draftThickness, setDraftThickness] = useState(
+    module.thicknessMm.toString(),
+  );
+  const [draftWatt, setDraftWatt] = useState(module.watt.toString());
+
+  // 외부 module 변경(원래대로 클릭 등) 시 입력값 동기화
+  useEffect(() => {
+    setDraftName(module.name);
+    setDraftWidth(module.widthMm.toString());
+    setDraftHeight(module.heightMm.toString());
+    setDraftThickness(module.thicknessMm.toString());
+    setDraftWatt(module.watt.toString());
+  }, [module, isEditing]);
+
+  const handleApply = () => {
+    const w = Number(draftWidth);
+    const h = Number(draftHeight);
+    const t = Number(draftThickness);
+    const wp = Number(draftWatt);
+    const name = draftName.trim();
+    if (!name) return;
+    if (!Number.isFinite(w) || w <= 0) return;
+    if (!Number.isFinite(h) || h <= 0) return;
+    if (!Number.isFinite(t) || t <= 0) return;
+    if (!Number.isFinite(wp) || wp <= 0) return;
+    onApply({
+      name,
+      widthMm: w,
+      heightMm: h,
+      thicknessMm: t,
+      watt: wp,
+    });
+  };
+
+  if (!isEditing) {
+    return (
+      <div
+        className={`px-3 py-2 border rounded ${
+          isCustom
+            ? "bg-blue-50/60 border-blue-200"
+            : "bg-white border-gray-200"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="text-[11px] font-semibold text-gray-700">
+            🔧 {module.name}
+            {isCustom && (
+              <span className="ml-1 text-[10px] text-blue-700 font-bold">
+                수정됨
+              </span>
+            )}
+          </span>
+          <button
+            onClick={onToggleEdit}
+            className="text-[10px] px-1.5 py-0.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0"
+          >
+            ✏ 모듈
+          </button>
+        </div>
+        <div className="text-[10px] text-gray-500 tabular-nums leading-snug">
+          {module.widthMm.toLocaleString()} × {module.heightMm.toLocaleString()}{" "}
+          × {module.thicknessMm}mm · {module.watt}Wp
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded space-y-1.5">
+      <div className="text-[11px] font-semibold text-amber-900 mb-1">
+        🔧 모듈 사양 변경
+      </div>
+      <ModuleField label="모듈명" type="text">
+        <input
+          type="text"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white focus:border-blue-500 focus:outline-none"
+        />
+      </ModuleField>
+      <ModuleField label="가로" unit="mm">
+        <input
+          type="number"
+          step="1"
+          min="1"
+          value={draftWidth}
+          onChange={(e) => setDraftWidth(e.target.value)}
+          className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+        />
+      </ModuleField>
+      <ModuleField label="세로" unit="mm">
+        <input
+          type="number"
+          step="1"
+          min="1"
+          value={draftHeight}
+          onChange={(e) => setDraftHeight(e.target.value)}
+          className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+        />
+      </ModuleField>
+      <ModuleField label="두께" unit="mm">
+        <input
+          type="number"
+          step="1"
+          min="1"
+          value={draftThickness}
+          onChange={(e) => setDraftThickness(e.target.value)}
+          className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+        />
+      </ModuleField>
+      <ModuleField label="와트" unit="Wp">
+        <input
+          type="number"
+          step="1"
+          min="1"
+          value={draftWatt}
+          onChange={(e) => setDraftWatt(e.target.value)}
+          className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+        />
+      </ModuleField>
+      <div className="flex justify-between gap-1 pt-1">
+        {isCustom ? (
+          <button
+            onClick={onReset}
+            className="text-[10px] px-2 py-1 text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+            title="AIKO 670W 디폴트로 복원"
+          >
+            원래대로
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-1">
+          <button
+            onClick={onCancel}
+            className="text-[10px] px-2 py-1 text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleApply}
+            className="text-[10px] px-2 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded"
+          >
+            ✓ 적용
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModuleField({
+  label,
+  unit,
+  children,
+}: {
+  label: string;
+  unit?: string;
+  type?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]">
+      <span className="text-gray-700 w-12 shrink-0">{label}</span>
+      {children}
+      {unit && <span className="text-gray-500 shrink-0">{unit}</span>}
     </div>
   );
 }

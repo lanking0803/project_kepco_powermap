@@ -50,6 +50,9 @@ export interface EditableBuilding {
   area_m2: number;
   /** 3단계 격자 알고리즘 결과 — 패널 N개 4꼭지점 폴리곤 (closed ring, [lng, lat]) */
   panels?: Position[][];
+  /** 회전된 bbox 의 가로 × 세로 (m) — 라벨에 표시 */
+  widthM?: number;
+  heightM?: number;
 }
 
 interface Props {
@@ -67,6 +70,12 @@ interface Props {
   onRemoveVertex?: (id: string, ringIdx: number, vertexIdx: number) => void;
   /** 첫 표시용 fallback 중심 */
   fallbackCenter?: { lat: number; lng: number };
+  /** 선택된 동 id — 강조 표시 */
+  selectedBuildingId?: string | null;
+  /** 폴리곤/라벨 클릭 시 — 동 선택 */
+  onSelectBuilding?: (id: string) => void;
+  /** 라벨 X 버튼 클릭 시 — 삭제 요청 (부모는 빨간 모드 진입 등) */
+  onRequestDelete?: (id: string) => void;
 }
 
 const PARCEL_STROKE = "#FBBF24"; // amber-400
@@ -74,6 +83,39 @@ const BUILDING_FILL = "#FF4500"; // orangered
 const BUILDING_STROKE = "#FFFFFF"; // 흰색 외곽
 const PANEL_FILL = "#FF6B6B"; // 봉남리 PDF 빨강 채움
 const PANEL_STROKE = "#C92A2A"; // 진한 빨강 외곽
+
+/**
+ * 영역 위쪽 외부 anchor — 라벨/✥ 핸들이 영역 가운데(패널)를 가리지 않도록.
+ * bbox maxLat + offsetM(m) 의 가로 중앙 위치.
+ */
+function polygonTopAnchor(
+  polygon: Position[][],
+  offsetM: number,
+): { lat: number; lng: number } | null {
+  const ring = polygon[0];
+  if (!ring || ring.length === 0) return null;
+  let maxLat = -Infinity;
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  const last = ring.length - 1;
+  const isClosed =
+    ring[0] &&
+    ring[last] &&
+    ring[0][0] === ring[last][0] &&
+    ring[0][1] === ring[last][1];
+  const upper = isClosed ? last : ring.length;
+  for (let i = 0; i < upper; i++) {
+    const [lng, lat] = ring[i];
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+  if (!Number.isFinite(maxLat)) return null;
+  return {
+    lat: maxLat + offsetM * 0.0000090, // m → 위도 도
+    lng: (minLng + maxLng) / 2,
+  };
+}
 /**
  * 필지 단위 표시 줌 — 카카오는 숫자가 작을수록 확대.
  * level 1 ≈ 50m (옥상 굴뚝/실외기 식별), level 2 ≈ 100m.
@@ -321,17 +363,28 @@ export default function QuoteMap({
         }
       });
 
-      // 면적 라벨 (CustomOverlay, 폴리곤 중앙)
-      const center = polygonCenter(building.polygon);
+      // 면적 라벨 (CustomOverlay) — 영역 위쪽 외부 (패널 가리지 않도록).
+      // 평행이동 시 dragEffectivePos 기준이라 위치 무관.
+      const labelAnchor = polygonTopAnchor(building.polygon, 8);
+      const center = polygonCenter(building.polygon); // ✥ 핸들 평행이동 dLat/dLng 계산용
       let labelOverlay: any = null;
-      if (center) {
+      if (labelAnchor) {
         const labelEl = document.createElement("div");
         labelEl.className =
-          "px-2 py-0.5 bg-white/95 border border-orange-500 rounded text-orange-700 text-xs font-bold shadow tabular-nums select-none pointer-events-none";
-        labelEl.textContent = `${building.name} · ${toPyeong(building.area_m2).toLocaleString()}평`;
+          "px-2 py-1 bg-white/95 border border-orange-500 rounded text-orange-700 text-[11px] leading-tight font-bold shadow tabular-nums select-none pointer-events-none text-center";
+        const line1 = `${building.name} · ${toPyeong(building.area_m2).toLocaleString()}평`;
+        const hasDims =
+          typeof building.widthM === "number" &&
+          typeof building.heightM === "number" &&
+          building.widthM > 0 &&
+          building.heightM > 0;
+        const line2 = hasDims
+          ? `${Math.round(building.widthM!)} × ${Math.round(building.heightM!)}m · ${Math.round(building.area_m2).toLocaleString()}㎡`
+          : `${Math.round(building.area_m2).toLocaleString()}㎡`;
+        labelEl.innerHTML = `<div>${line1}</div><div class="text-[10px] font-normal text-gray-600">${line2}</div>`;
         labelOverlay = new window.kakao.maps.CustomOverlay({
           map,
-          position: new window.kakao.maps.LatLng(center.lat, center.lng),
+          position: new window.kakao.maps.LatLng(labelAnchor.lat, labelAnchor.lng),
           content: labelEl,
           xAnchor: 0.5,
           yAnchor: 0.5,
@@ -362,17 +415,17 @@ export default function QuoteMap({
         }
       }
 
-      // ✥ 이동 핸들 마커 — 폴리곤 중앙. 드래그로 영역 전체 평행 이동.
-      if (center) {
+      // ✥ 이동 핸들 마커 — 영역 위쪽 외부 (라벨 바로 아래). 드래그로 영역 전체 평행 이동.
+      const handleAnchor = polygonTopAnchor(building.polygon, 3);
+      if (handleAnchor) {
         const moveImage = new window.kakao.maps.MarkerImage(
           MOVE_HANDLE_URI,
           new window.kakao.maps.Size(28, 28),
           { offset: new window.kakao.maps.Point(14, 14) },
         );
-        // 라벨 바로 아래 살짝 (≈ 4m, level 1 기준 라벨 높이 + 2px 정도)
         const handlePos = new window.kakao.maps.LatLng(
-          center.lat - 0.00004,
-          center.lng,
+          handleAnchor.lat,
+          handleAnchor.lng,
         );
         const handle = new window.kakao.maps.Marker({
           map,

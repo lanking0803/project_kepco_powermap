@@ -246,3 +246,34 @@ export function calcAutoRotation(
   if (rotation === "정남") return 0;
   return calcLongestEdgeAngle(areaPolygon);
 }
+
+/**
+ * 영역의 회전된 bbox 가로/세로 (m 단위).
+ *
+ * 회전 0 일 때는 axis-aligned bbox.
+ * 회전 적용 시 폴리곤을 -회전 역회전 후의 bbox 폭/높이.
+ * 즉 "건물 긴 변 평행" 회전을 거치면 자연스러운 직사각형 가로/세로.
+ */
+export function calcAreaDimensions(
+  areaPolygon: Position[][],
+  rotation: number,
+): { widthM: number; heightM: number } {
+  const ring = areaPolygon[0];
+  if (!ring || ring.length < 3) return { widthM: 0, heightM: 0 };
+
+  const closed = ensureClosedRing(ring);
+  const feat = turfPolygon([closed]);
+  const pivot = ringCentroid(closed);
+
+  const target = rotation === 0 ? feat : transformRotate(feat, -rotation, { pivot });
+  const [minLng, minLat, maxLng, maxLat] = bbox(target);
+  const refLat = (minLat + maxLat) / 2;
+
+  // 도 → m 변환
+  const mPerDegLat = 1 / mToDegLat(1);
+  const mPerDegLng = 1 / mToDegLng(1, refLat);
+  const widthM = (maxLng - minLng) * mPerDegLng;
+  const heightM = (maxLat - minLat) * mPerDegLat;
+
+  return { widthM, heightM };
+}
