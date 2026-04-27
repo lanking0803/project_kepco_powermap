@@ -73,9 +73,12 @@ import {
 } from "@/lib/quote/finance";
 import {
   saveBlueprintData,
+  saveFinanceData,
   type BlueprintPrintData,
+  type FinancePrintData,
   type PrintBuilding,
 } from "@/lib/quote/print-data";
+import { getRepayMonths } from "@/lib/quote/finance";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 import FinanceTable from "./FinanceTable";
@@ -698,6 +701,47 @@ export default function QuoteModeClient({ pnu }: Props) {
     capa,
     pnu,
     headerAddr,
+  ]);
+
+  /** 수익 분석 PDF 저장 — 봉남리 견적서 양식 (20년 시계열 + 4박스) */
+  const handlePrintFinance = useCallback(() => {
+    if (totalKw <= 0) return;
+    const printData: FinancePrintData = {
+      pnu,
+      address: headerAddr,
+      module: activeModule,
+      totalKw,
+      totalPanels,
+      dailyHours: financeInput.dailyHours,
+      smpPrice: financeInput.smpPrice,
+      recPrice: financeInput.recPrice,
+      recWeight: financeInput.recWeight,
+      constructionCost: financeResult.constructionCost,
+      vat: financeResult.vat,
+      totalCost: financeResult.totalCost,
+      scenario: loanScenario,
+      loanPrincipal: financeInput.loanPrincipal,
+      loanRate: financeInput.loanRate,
+      graceMonths: financeInput.graceMonths,
+      repayMonths: getRepayMonths(loanScenario),
+      rows: financeResult.rows,
+      roi: financeResult.roi,
+      paybackYears: financeResult.paybackYears,
+      totalNetIncome: financeResult.totalNetIncome,
+      totalAfterLoan: financeResult.totalAfterLoan,
+      generatedAt: new Date().toISOString(),
+    };
+    saveFinanceData(printData);
+    window.open(`/quote/${pnu}/print/finance`, "_blank");
+  }, [
+    pnu,
+    headerAddr,
+    activeModule,
+    totalKw,
+    totalPanels,
+    financeInput,
+    financeResult,
+    loanScenario,
   ]);
 
   return (
@@ -1367,9 +1411,19 @@ export default function QuoteModeClient({ pnu }: Props) {
                     </span>
                     <span className="text-blue-600">⤢</span>
                   </button>
-                  <div className="text-[10px] text-gray-400 italic">
-                    20년 시계열 표 — 다음 단계에서 추가
-                  </div>
+
+                  {/* 수익 분석 PDF 저장 — 봉남리 견적서 양식 A3 1페이지 */}
+                  <button
+                    type="button"
+                    onClick={handlePrintFinance}
+                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-colors"
+                  >
+                    💰 수익 분석 PDF 저장 ↗
+                  </button>
+                  <p className="text-[10px] text-gray-500 leading-snug">
+                    A3 가로 한 장 · 봉남리 견적서 양식 · 새 탭에서 인쇄
+                    다이얼로그 자동. &quot;PDF로 저장&quot; 선택.
+                  </p>
                 </>
               )}
             </div>

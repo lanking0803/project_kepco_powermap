@@ -7,6 +7,7 @@
 
 import type { Position } from "geojson";
 import type { PanelModule } from "./panel";
+import type { LoanScenario, YearRow } from "./finance";
 
 /** 인쇄 페이지에 그릴 한 동의 데이터 — 영역 폴리곤 + 패널 격자 */
 export interface PrintBuilding {
@@ -61,6 +62,59 @@ export function loadBlueprintData(pnu: string): BlueprintPrintData | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as BlueprintPrintData;
+  } catch {
+    return null;
+  }
+}
+
+// ── 수익 분석 (5단계) PDF — 봉남리 견적서 양식 ──────────
+
+/** 수익 분석 PDF 인쇄 데이터 — 봉남리 견적서 양식의 4 박스 + 20년 시계열 */
+export interface FinancePrintData {
+  pnu: string;
+  address: string;
+  module: PanelModule;
+  /** 발전설비 총 용량 (kW) — 격자 기반 실제 kW */
+  totalKw: number;
+  totalPanels: number;
+  /** 입력 변수 — 박스 ① 태양광발전사업 세부내용 */
+  dailyHours: number;
+  smpPrice: number;
+  recPrice: number;
+  recWeight: number;
+  /** 비용 — 박스 ② 태양광 설치비용 */
+  constructionCost: number;
+  vat: number;
+  totalCost: number;
+  /** 대출 — 박스 ③ 태양광 대출비용 */
+  scenario: LoanScenario;
+  loanPrincipal: number;
+  loanRate: number;
+  graceMonths: number;
+  repayMonths: number;
+  /** 결과 — 박스 ④ 태양광 최종수익 + 좌측 20년 시계열 */
+  rows: YearRow[];
+  roi: number;
+  paybackYears: number | null;
+  totalNetIncome: number;
+  totalAfterLoan: number;
+  /** 인쇄 생성 시각 */
+  generatedAt: string;
+}
+
+const FINANCE_KEY = (pnu: string) => `quote-print-finance:${pnu}`;
+
+export function saveFinanceData(data: FinancePrintData): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(FINANCE_KEY(data.pnu), JSON.stringify(data));
+}
+
+export function loadFinanceData(pnu: string): FinancePrintData | null {
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem(FINANCE_KEY(pnu));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as FinancePrintData;
   } catch {
     return null;
   }
