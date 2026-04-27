@@ -1,38 +1,32 @@
 """
-전국 태양광 발전소 전기사업 허가정보 수집기 — 진입점.
+전국 태양광 발전소 전기사업 허가정보 수집기 — 단일 파일.
 
+매월 1일 03:00 KST GitHub Actions cron + 수동 dispatch.
 흐름:
-  1) bjd_master 캐시 메모리 로드 (cache_loader 경유 — GH Cache HIT)
-  2) data.go.kr API 페이지 1~N 다운로드 (총 ~12만 건)
-  3) 각 행:
-     - parse_lotno_addr → (sep_1~5, jibun)         (번지 없는 행 skip)
-     - bjd_lookup(sep) → bjd_code                   (룩업 실패 행 skip)
-     - to_pnu(bjd_code, jibun) → PNU 19자리         (조립 실패 행 skip)
-  4) solar_permits TRUNCATE + 청크 INSERT (~9만 건)
+  1) data.go.kr API 페이지 1~N 다운로드 (~12만 건)
+  2) 각 행: 한글주소 → PNU (pnu_builder.address_to_pnu)
+  3) Supabase: solar_permits TRUNCATE + 청크 INSERT (~9만 건)
+
+핵심 기술 (PNU 매칭) 은 pnu_builder.py 가 담당. 본 파일은 수집·변환·적재만.
 
 환경변수:
   DATA_GO_KR_KEY              필수
   SUPABASE_URL                필수
   SUPABASE_SERVICE_KEY        필수
-  BJD_MASTER_CACHE_FILE       선택 (GH Actions 에서 cache 파일 경로 주입)
+  BJD_MASTER_CACHE_FILE       선택 (GH Actions 가 cache 경로 주입)
   SOLAR_PERMITS_PAGE_SIZE     선택 (기본 1000)
-  SOLAR_PERMITS_MAX_PAGES     선택 (기본 무제한 — 시범/디버그용)
+  SOLAR_PERMITS_MAX_PAGES     선택 (기본 무제한 — 시범 / 디버그용)
 
 실행:
-  cd crawler && python solar_permits/run_collect.py
+  cd crawler && python solar_permits.py
 """
 import logging
 import os
+import re
 import sys
 import time
-from pathlib import Path
 
 import requests
-
-# crawler/ 와 crawler/solar_permits/ 둘 다 sys.path 에 추가
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))   # crawler/ — cache_loader, bjd_lookup, pnu_builder
-sys.path.insert(0, str(HERE))          # crawler/solar_permits/ — 자체 모듈
 
 # Windows cp949 stdout 회피
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -41,10 +35,8 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-from api_client import fetch_page                  # noqa: E402
-from parse_addr import parse_lotno_addr            # noqa: E402
-from bjd_lookup import lookup as bjd_lookup        # noqa: E402
-from pnu_builder import to_pnu                      # noqa: E402
+from pnu_builder import address_to_pnu     # noqa: E402
+from bjd_lookup import lookup as bjd_lookup_fn  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,12 +45,81 @@ logging.basicConfig(
 )
 log = logging.getLogger("solar_permits")
 
-CHUNK = 1000  # INSERT 청크 크기 (Supabase PostgREST 권장 한도 내)
+ENDPOINT = "https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api"
+USER_AGENT = "Mozilla/5.0 (compatible; SUNLAP/1.0; +https://sunlap.kr)"
+INSERT_CHUNK = 1000
+
+
+# ─────────────────────────────────────────────
+# 외부 API — data.go.kr 페이지 단위
+# ─────────────────────────────────────────────
+
+def fetch_page(page: int, size: int = 1000, retries: int = 3) -> tuple[int, list[dict]]:
+    """data.go.kr 페이지 단위 fetch.
+
+    Returns:
+        (total_count, items) — items 는 raw camelCase dict 리스트.
+        resultCode '03' (NO_DATA) 는 빈 페이지로 정상 처리.
+    """
+    key = os.environ.get("DATA_GO_KR_KEY", "")
+    if not key:
+        raise RuntimeError("DATA_GO_KR_KEY 환경변수가 등록되지 않았습니다.")
+
+    safe_page = max(1, int(page))
+    safe_size = min(1000, max(1, int(size)))
+
+    params = {
+        "serviceKey": key,
+        "pageNo": str(safe_page),
+        "numOfRows": str(safe_size),
+        "type": "json",
+    }
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+
+    last_err = None
+    for attempt in range(retries):
+        try:
+            r = requests.get(ENDPOINT, params=params, headers=headers, timeout=60)
+            text = r.text
+            if r.status_code != 200:
+                last_err = f"HTTP {r.status_code}: {text[:200]}"
+            elif text.lstrip().startswith("<"):
+                last_err = f"XML/HTML 응답 (키 의심): {text[:200]}"
+            else:
+                data = r.json()
+                envelope = data.get("response", data)
+                code = envelope.get("header", {}).get("resultCode")
+                if code and code not in ("00", "0000"):
+                    if code == "03":
+                        return 0, []
+                    last_err = f"API {code}: {envelope.get('header', {}).get('resultMsg', '')}"
+                else:
+                    body = envelope.get("body", {}) or {}
+                    total_count = int(body.get("totalCount", 0) or 0)
+                    raw_items = body.get("items", [])
+                    if isinstance(raw_items, list):
+                        items = raw_items
+                    elif isinstance(raw_items, dict):
+                        inner = raw_items.get("item", [])
+                        items = inner if isinstance(inner, list) else ([inner] if inner else [])
+                    else:
+                        items = []
+                    return total_count, items
+        except (requests.RequestException, ValueError) as e:
+            last_err = str(e)
+
+        if attempt < retries - 1:
+            wait = 2 ** attempt
+            log.warning(f"page={safe_page} 재시도 {attempt + 1}/{retries} (대기 {wait}s): {last_err}")
+            time.sleep(wait)
+
+    raise RuntimeError(f"data.go.kr fetch 실패 (page={safe_page}): {last_err}")
 
 
 # ─────────────────────────────────────────────
 # Supabase REST 헬퍼
 # ─────────────────────────────────────────────
+
 def _supa_headers() -> dict:
     key = os.environ["SUPABASE_SERVICE_KEY"]
     return {
@@ -73,7 +134,6 @@ def _supa_url() -> str:
 
 
 def truncate_solar_permits() -> None:
-    """솔라 테이블 전체 삭제. PostgREST DELETE + 안전 필터(id>=0)."""
     url = f"{_supa_url()}/rest/v1/solar_permits?id=gte.0"
     headers = {**_supa_headers(), "Prefer": "return=minimal"}
     r = requests.delete(url, headers=headers, timeout=120)
@@ -83,7 +143,6 @@ def truncate_solar_permits() -> None:
 
 
 def insert_chunk(rows: list[dict], retries: int = 3) -> int:
-    """청크 INSERT. 성공 시 len(rows), 실패 시 0."""
     if not rows:
         return 0
     url = f"{_supa_url()}/rest/v1/solar_permits"
@@ -104,8 +163,9 @@ def insert_chunk(rows: list[dict], retries: int = 3) -> int:
 
 
 # ─────────────────────────────────────────────
-# raw item → DB row 변환
+# 보조 변환
 # ─────────────────────────────────────────────
+
 def _clean(v) -> str | None:
     if v is None:
         return None
@@ -124,11 +184,9 @@ def _parse_num(v):
 
 
 def _parse_date(v) -> str | None:
-    """'2024-04-01' / '20240401' / '2024.04.01' → 'YYYY-MM-DD'"""
     s = _clean(v)
     if not s:
         return None
-    import re
     digits = re.sub(r"\D", "", s)
     if len(digits) == 8:
         return f"{digits[0:4]}-{digits[4:6]}-{digits[6:8]}"
@@ -138,6 +196,7 @@ def _parse_date(v) -> str | None:
 # ─────────────────────────────────────────────
 # 메인
 # ─────────────────────────────────────────────
+
 def main() -> int:
     if not os.environ.get("DATA_GO_KR_KEY"):
         log.error("DATA_GO_KR_KEY 환경변수 필수")
@@ -153,16 +212,12 @@ def main() -> int:
     started = time.time()
     log.info(f"수집 시작 (page_size={page_size}, max_pages={max_pages})")
 
-    # 통계
-    skip_no_lotno = 0      # 시설명 또는 지번주소 누락
-    skip_no_bunji = 0      # 번지 토큰 없음 (영통동 류)
-    skip_no_bjd = 0        # bjd_master 룩업 실패
-    skip_pnu_fail = 0      # PNU 조립 실패
+    skip_no_lotno = 0   # 시설명/지번 빈값
+    skip_pnu_fail = 0   # address_to_pnu 실패 (모든 사유 통합)
     rows_to_insert: list[dict] = []
     fetched_pages = 0
-    total_count = 0
 
-    # 1) 첫 페이지 → totalCount
+    # 첫 페이지 → totalCount
     total_count, first_items = fetch_page(1, page_size)
     log.info(f"외부 API totalCount = {total_count:,}")
     if total_count == 0:
@@ -174,12 +229,10 @@ def main() -> int:
         n_pages = min(n_pages, max_pages)
     log.info(f"수집 대상: {n_pages} 페이지 × {page_size} = ~{n_pages * page_size:,} 건")
 
-    # 2) 페이지 순회 + 변환 (메모리 누적)
     for page in range(1, n_pages + 1):
         items = first_items if page == 1 else fetch_page(page, page_size)[1]
         fetched_pages += 1
 
-        page_added = 0
         for raw in items:
             facility_name = _clean(raw.get("solarGenFcltNm"))
             lotno_raw = _clean(raw.get("lctnLotnoAddr"))
@@ -187,24 +240,8 @@ def main() -> int:
                 skip_no_lotno += 1
                 continue
 
-            parsed = parse_lotno_addr(lotno_raw)
-            if parsed is None:
-                skip_no_bunji += 1
-                continue
-            sep, jibun = parsed
-
-            bjd_code = bjd_lookup(*sep)
-            if not bjd_code:
-                skip_no_bjd += 1
-                continue
-
-            try:
-                pnu = to_pnu(bjd_code, jibun)
-            except ValueError:
-                skip_pnu_fail += 1
-                continue
-
-            if len(pnu) != 19:
+            pnu = address_to_pnu(lotno_raw, bjd_lookup_fn)
+            if pnu is None:
                 skip_pnu_fail += 1
                 continue
 
@@ -216,7 +253,7 @@ def main() -> int:
 
             rows_to_insert.append({
                 "pnu": pnu,
-                "bjd_code": bjd_code,
+                "bjd_code": pnu[:10],
                 "facility_name": facility_name,
                 "capacity_kw": _parse_num(raw.get("capa")),
                 "operating_status": _clean(raw.get("oprtngSttsSeNm")),
@@ -225,25 +262,23 @@ def main() -> int:
                 "lng": lng,
                 "raw_addr": lotno_raw,
             })
-            page_added += 1
 
         log.info(
             f"page {page:>3}/{n_pages}: fetched={len(items)}, "
             f"적재후보 누적={len(rows_to_insert):,}, "
-            f"skip(번지없음/룩업실패/PNU실패)={skip_no_bunji}/{skip_no_bjd}/{skip_pnu_fail}"
+            f"skip(시설명빈값/PNU실패)={skip_no_lotno}/{skip_pnu_fail}"
         )
 
-    # 3) DB 쓰기 — TRUNCATE + 청크 INSERT
     if not rows_to_insert:
         log.error("적재할 행이 0개 — 중단")
         return 1
 
-    log.info(f"수집 완료. 총 적재 후보 {len(rows_to_insert):,} 건. DB 쓰기 시작.")
+    log.info(f"수집 완료. 총 {len(rows_to_insert):,} 건. DB 쓰기 시작.")
     truncate_solar_permits()
 
     inserted = 0
-    for i in range(0, len(rows_to_insert), CHUNK):
-        chunk = rows_to_insert[i:i + CHUNK]
+    for i in range(0, len(rows_to_insert), INSERT_CHUNK):
+        chunk = rows_to_insert[i:i + INSERT_CHUNK]
         n = insert_chunk(chunk)
         inserted += n
         pct = inserted / len(rows_to_insert) * 100
@@ -252,7 +287,7 @@ def main() -> int:
     elapsed = time.time() - started
     log.info(
         f"전체 완료. 적재 {inserted:,}건 / "
-        f"skip(시설명/번지/룩업/PNU)={skip_no_lotno}/{skip_no_bunji}/{skip_no_bjd}/{skip_pnu_fail}, "
+        f"skip(시설명빈값/PNU실패)={skip_no_lotno}/{skip_pnu_fail}, "
         f"{fetched_pages}페이지, 소요 {elapsed:.1f}초"
     )
     return 0 if inserted == len(rows_to_insert) else 1
