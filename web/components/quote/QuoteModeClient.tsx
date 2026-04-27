@@ -351,7 +351,11 @@ export default function QuoteModeClient({ pnu }: Props) {
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(
     null,
   );
-  const handleSelectBuilding = useCallback((id: string) => {
+  const handleSelectBuilding = useCallback((id: string, force?: boolean) => {
+    if (force) {
+      setSelectedBuildingId(id);
+      return;
+    }
     setSelectedBuildingId((prev) => (prev === id ? null : id));
   }, []);
   const handleRequestDelete = useCallback((id: string) => {
@@ -586,13 +590,14 @@ export default function QuoteModeClient({ pnu }: Props) {
               </div>
             ) : (
               <>
-                {/* 합계 카드 — 필지 면적 / 자동 감지 건물 */}
+                {/* 요약 정보 — 읽기 전용 (상단 컬러바로 정보성 강조) */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="px-2 py-1.5 bg-amber-50 border border-amber-200 rounded">
-                    <div className="text-[10px] text-amber-800 font-semibold">
-                      필지 면적
+                  <div className="relative pl-2.5 pr-2 py-1.5 bg-amber-50/70 border border-amber-200 rounded overflow-hidden">
+                    <span className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400" />
+                    <div className="text-[10px] text-amber-800 font-semibold flex items-center gap-1">
+                      <span>📐</span>필지 면적
                     </div>
-                    <div className="text-base font-bold text-gray-900 tabular-nums">
+                    <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">
                       {parcelPyeong != null
                         ? `${parcelPyeong.toLocaleString()}평`
                         : "—"}
@@ -604,11 +609,12 @@ export default function QuoteModeClient({ pnu }: Props) {
                       {geometry?.jimok ? ` · ${geometry.jimok}` : ""}
                     </div>
                   </div>
-                  <div className="px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded">
-                    <div className="text-[10px] text-emerald-800 font-semibold">
-                      자동 감지
+                  <div className="relative pl-2.5 pr-2 py-1.5 bg-emerald-50/70 border border-emerald-200 rounded overflow-hidden">
+                    <span className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-400" />
+                    <div className="text-[10px] text-emerald-800 font-semibold flex items-center gap-1">
+                      <span>🏢</span>자동 감지
                     </div>
-                    <div className="text-base font-bold text-gray-900 tabular-nums">
+                    <div className="text-base font-bold text-gray-900 tabular-nums leading-tight">
                       {buildings.length === 0
                         ? "0평"
                         : `${buildingPyeong.toLocaleString()}평`}
@@ -654,6 +660,12 @@ export default function QuoteModeClient({ pnu }: Props) {
                         : 0;
 
                       const isSelected = selectedBuildingId === id;
+                      // 좌측 컬러바 — 상태별 (사용자추가 / 수정 / 자동)
+                      const barColor = isUserAdded
+                        ? "bg-emerald-400"
+                        : b.is_edited
+                          ? "bg-blue-400"
+                          : "bg-orange-300";
                       return (
                         <li
                           key={id}
@@ -663,20 +675,19 @@ export default function QuoteModeClient({ pnu }: Props) {
                               return;
                             handleSelectBuilding(id);
                           }}
-                          className={`flex items-center justify-between gap-1.5 px-2 py-1.5 border rounded group cursor-pointer transition-all ${
+                          className={`relative flex items-center justify-between gap-1.5 pl-3 pr-2 py-1.5 bg-white border rounded group cursor-pointer transition-all overflow-hidden ${
                             isSelected
-                              ? "ring-2 ring-yellow-400 border-yellow-500 bg-yellow-50"
-                              : isUserAdded
-                                ? "bg-emerald-50/70 border-emerald-200 hover:border-emerald-400"
-                                : b.is_edited
-                                  ? "bg-blue-50/80 border-blue-200 hover:border-blue-400"
-                                  : "bg-orange-50/60 border-orange-100 hover:border-orange-300"
+                              ? "ring-2 ring-yellow-400 border-yellow-500 bg-yellow-50 shadow-sm"
+                              : "border-gray-200 hover:border-gray-400 hover:shadow-sm"
                           }`}
                         >
-                          <span className="text-gray-700 truncate flex-1 min-w-0">
+                          <span
+                            className={`absolute left-0 top-0 bottom-0 w-1 ${barColor}`}
+                          />
+                          <span className="truncate flex-1 min-w-0 font-semibold text-gray-900">
                             {b.buld_nm || `${i + 1}동`}
                             {!isUserAdded && (
-                              <span className="text-gray-400 ml-1">
+                              <span className="text-gray-400 ml-1 font-normal">
                                 {b.gro_flo_co}F
                               </span>
                             )}
@@ -686,19 +697,19 @@ export default function QuoteModeClient({ pnu }: Props) {
                               </span>
                             )}
                           </span>
-                          <span className="font-semibold tabular-nums shrink-0 text-gray-900">
+                          <span className="font-bold tabular-nums shrink-0 text-gray-900">
                             {py.toLocaleString()}평
                             {b.is_edited && !isUserAdded && (
-                              <span className="text-gray-400 font-normal ml-1 line-through">
+                              <span className="text-gray-400 font-normal ml-1 line-through text-[10px]">
                                 {origPy.toLocaleString()}평
                               </span>
                             )}
                           </span>
-                          <div className="flex items-stretch shrink-0 border border-emerald-300 rounded overflow-hidden text-[10px] font-semibold leading-none">
+                          <div className="flex items-stretch shrink-0 border border-gray-200 rounded overflow-hidden text-[10px] font-semibold leading-none bg-white">
                             <button
                               onClick={() => handleAutoRemoveVertex(id)}
                               disabled={vertexCount <= 3}
-                              className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed px-1.5 py-1"
+                              className="text-gray-600 hover:bg-gray-100 disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed px-1.5 py-1"
                               title={
                                 vertexCount <= 3
                                   ? "최소 3점 — 더 줄일 수 없습니다"
@@ -708,12 +719,12 @@ export default function QuoteModeClient({ pnu }: Props) {
                             >
                               −
                             </button>
-                            <span className="text-emerald-800 bg-emerald-100 px-1.5 py-1 tabular-nums">
+                            <span className="text-gray-700 bg-gray-50 px-1.5 py-1 tabular-nums border-x border-gray-200">
                               점 {vertexCount}
                             </span>
                             <button
                               onClick={() => handleAutoAddVertex(id)}
-                              className="text-emerald-700 bg-emerald-50 hover:bg-emerald-200 px-1.5 py-1"
+                              className="text-gray-600 hover:bg-gray-100 px-1.5 py-1"
                               title="가장 긴 변 가운데에 점 추가"
                               aria-label="점 늘리기"
                             >
@@ -722,7 +733,7 @@ export default function QuoteModeClient({ pnu }: Props) {
                           </div>
                           <button
                             onClick={() => setDeletePendingId(id)}
-                            className="text-gray-400 hover:text-red-600 text-sm leading-none px-1"
+                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 text-sm leading-none px-1 py-0.5 rounded"
                             title="이 동 삭제"
                             aria-label="삭제"
                           >
@@ -734,11 +745,11 @@ export default function QuoteModeClient({ pnu }: Props) {
                   </ul>
                 )}
 
-                {/* + 영역 추가 — 동별 카드 리스트 아래 (더 추가하는 흐름) */}
+                {/* + 영역 추가 — 보조 액션 (편집 카드보다 약하게) */}
                 <button
                   onClick={handleAddBuilding}
                   disabled={!geometry}
-                  className="w-full text-xs font-semibold py-2 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed border border-dashed border-blue-300 rounded transition-colors"
+                  className="w-full text-[11px] font-medium py-1.5 text-gray-500 hover:text-blue-700 bg-transparent hover:bg-blue-50 disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed border border-dashed border-gray-300 hover:border-blue-300 rounded transition-colors"
                   title="부지 중앙에 15m × 15m 사각형이 등장합니다 — 꼭지점 드래그로 조정"
                 >
                   + 영역 추가

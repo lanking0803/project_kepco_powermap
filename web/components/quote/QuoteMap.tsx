@@ -72,8 +72,8 @@ interface Props {
   fallbackCenter?: { lat: number; lng: number };
   /** 선택된 동 id — 강조 표시 */
   selectedBuildingId?: string | null;
-  /** 폴리곤/라벨 클릭 시 — 동 선택 */
-  onSelectBuilding?: (id: string) => void;
+  /** 폴리곤/라벨 클릭 시 — 동 선택 (force=true 면 토글이 아닌 강제 set) */
+  onSelectBuilding?: (id: string, force?: boolean) => void;
   /** 라벨 X 버튼 클릭 시 — 삭제 요청 (부모는 빨간 모드 진입 등) */
   onRequestDelete?: (id: string) => void;
 }
@@ -333,6 +333,8 @@ export default function QuoteMap({
 
           window.kakao.maps.event.addListener(marker, "dragstart", () => {
             if (!targetPoly) return;
+            // 드래그 시작 = 동 선택 강제 (이미 선택돼 있어도 토글 X)
+            onSelectRef.current?.(capturedId, true);
             // getPath 반환 형식이 SDK 버전마다 다를 수 있어 Array.from 으로 안전 변환
             pathSnapshot = Array.from(targetPoly.getPath());
             const tick = () => {
@@ -381,6 +383,10 @@ export default function QuoteMap({
               capturedRing,
               capturedVertex,
             );
+          });
+          // click — 동 선택 (강조). 드래그 시작 시 click 은 발화되지 않음.
+          window.kakao.maps.event.addListener(marker, "click", () => {
+            onSelectRef.current?.(capturedId);
           });
           vertexMarkersRef.current.push(marker);
         }
@@ -444,7 +450,9 @@ export default function QuoteMap({
 
       // 3단계 패널 폴리곤 — 격자 알고리즘 결과 N개. 영역 위에 빨강 채움.
       // zIndex 800 = 영역 폴리곤(기본) 위, 라벨/마커(>=999) 아래.
+      // 패널 클릭도 부모 동 선택으로 위임 (패널이 영역 클릭을 가리는 문제 우회).
       if (building.panels && building.panels.length > 0) {
+        const clickedId = building.id;
         for (const panelRing of building.panels) {
           const panelPath = panelRing.map(
             ([lng, lat]) => new window.kakao.maps.LatLng(lat, lng),
@@ -459,6 +467,9 @@ export default function QuoteMap({
             fillColor: PANEL_FILL,
             fillOpacity: 0.55,
             zIndex: 800,
+          });
+          window.kakao.maps.event.addListener(panelPoly, "click", () => {
+            onSelectRef.current?.(clickedId);
           });
           panelPolyRef.current.push(panelPoly);
         }
@@ -482,7 +493,11 @@ export default function QuoteMap({
           image: moveImage,
           draggable: true,
           zIndex: 1100,
-          title: "드래그로 영역 전체 이동",
+          title: "드래그로 영역 전체 이동 · 클릭으로 선택",
+        });
+        // ✥ 핸들 클릭(드래그 X)도 동 선택으로 처리
+        window.kakao.maps.event.addListener(handle, "click", () => {
+          onSelectRef.current?.(building.id);
         });
 
         const capturedId = building.id;
@@ -503,6 +518,8 @@ export default function QuoteMap({
         let labelStartPos: { lat: number; lng: number } | null = null;
 
         window.kakao.maps.event.addListener(handle, "dragstart", () => {
+          // 드래그 시작 = 동 선택 강제 (이미 선택돼 있어도 토글 X)
+          onSelectRef.current?.(capturedId, true);
           const sp = handle.getPosition();
           startHandle = { lat: sp.getLat(), lng: sp.getLng() };
           pathSnapshots = capturedPolyRefs.map((p) =>
