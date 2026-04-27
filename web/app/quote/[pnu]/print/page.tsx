@@ -84,29 +84,24 @@ export default function PrintPage({ params }: Props) {
       {/* 인쇄 버튼 — 화면에서만 노출, 인쇄 시 자동 숨김 */}
       <PrintButton />
 
-      {/* 사용자에게 미리보기 안내 — 화면에서만 */}
-      <div className="preview-notice">
+      {/* 사용자에게 미리보기 안내 — 화면에서만 (인쇄 시 글로벌 CSS 가 숨김) */}
+      <div
+        className="preview-notice"
+        style={{
+          position: "fixed",
+          top: "8mm",
+          left: "8mm",
+          zIndex: 100,
+          padding: "8px 12px",
+          background: "rgba(255,255,255,0.95)",
+          border: "1px solid #999",
+          borderRadius: 4,
+          fontSize: "11pt",
+          color: "#555",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
         미리보기를 확인하시고 우측 상단 <b>[🖨 PDF로 인쇄]</b> 버튼을 누르세요.
-        <style jsx>{`
-          .preview-notice {
-            position: fixed;
-            top: 8mm;
-            left: 8mm;
-            z-index: 100;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #999;
-            border-radius: 4px;
-            font-size: 11pt;
-            color: #555;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-          }
-          @media print {
-            .preview-notice {
-              display: none;
-            }
-          }
-        `}</style>
       </div>
 
       {/* A3 가로 인쇄 CSS — globals.css 와 충돌 없도록 :global 처리 */}
@@ -141,29 +136,6 @@ export default function PrintPage({ params }: Props) {
             justify-content: center;
             padding: 8mm;
           }
-        }
-      `}</style>
-
-      <style jsx>{`
-        .error-screen,
-        .loading-screen {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100vh;
-          font-size: 14pt;
-          color: #666;
-          padding: 20mm;
-          text-align: center;
-        }
-        .error-screen {
-          color: #c00;
-        }
-      `}</style>
-
-      {/* A3 가로 = 420mm × 297mm (margin 8mm 빼면 404 × 281mm) */}
-      <style jsx global>{`
-        @media screen {
           body > div:first-child > :global(.print-layout) {
             width: 404mm;
             height: 281mm;
@@ -178,6 +150,23 @@ export default function PrintPage({ params }: Props) {
             width: 100%;
             height: 100%;
           }
+          .preview-notice {
+            display: none !important;
+          }
+        }
+        .error-screen,
+        .loading-screen {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          font-size: 14pt;
+          color: #666;
+          padding: 20mm;
+          text-align: center;
+        }
+        .error-screen {
+          color: #c00;
         }
       `}</style>
     </>

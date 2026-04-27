@@ -672,6 +672,7 @@ export default function QuoteModeClient({ pnu }: Props) {
           substationName: kepcoRow.subst_nm ?? "-",
           substationFreeMW:
             ((kepcoRow.subst_capa ?? 0) - (kepcoRow.subst_pwr ?? 0)) / 1000,
+          mtrName: `#${kepcoRow.mtr_no ?? "-"}`,
           mtrFreeMW:
             ((kepcoRow.mtr_capa ?? 0) - (kepcoRow.mtr_pwr ?? 0)) / 1000,
           dlName: kepcoRow.dl_nm ?? "-",
@@ -712,6 +713,8 @@ export default function QuoteModeClient({ pnu }: Props) {
       module: activeModule,
       totalKw,
       totalPanels,
+      buildingCount: buildings.length,
+      totalPyeong: Math.round(buildingArea * M2_TO_PYEONG),
       dailyHours: financeInput.dailyHours,
       smpPrice: financeInput.smpPrice,
       recPrice: financeInput.recPrice,
@@ -739,6 +742,8 @@ export default function QuoteModeClient({ pnu }: Props) {
     activeModule,
     totalKw,
     totalPanels,
+    buildings.length,
+    buildingArea,
     financeInput,
     financeResult,
     loanScenario,
@@ -1025,6 +1030,8 @@ export default function QuoteModeClient({ pnu }: Props) {
                     index={i + 1}
                     row={row}
                     isEditingSpec={editingSpecId === row.id}
+                    isSelected={selectedBuildingId === row.id}
+                    onSelect={() => handleSelectBuilding(row.id)}
                     onFacilityChange={(kind) =>
                       handleFacilityChange(row.id, kind)
                     }
@@ -1766,11 +1773,15 @@ interface FacilityCardProps {
   onSpecChange: (spec: FacilitySpec) => void;
   onResetSpec: () => void;
   onToggleEditSpec: () => void;
+  /** 지도/카드 양방향 동 선택 강조 */
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 /**
- * 좌측 "2 시설별 견적" 동별 카드.
- * 시설 종류 셀렉트박스 + 단가 인라인 편집 + kW/시공비 표시.
+ * 좌측 "2 견적 산출" 동별 카드.
+ * 시설 종류 셀렉트박스 + 단가 인라인 편집 + 패널/kW/시공비 표시.
+ * 카드 클릭 = 지도 폴리곤 노란 강조 + 좌측 카드 노란 ring.
  */
 function FacilityCard({
   index,
@@ -1781,6 +1792,8 @@ function FacilityCard({
   onSpecChange,
   onResetSpec,
   onToggleEditSpec,
+  isSelected,
+  onSelect,
 }: FacilityCardProps) {
   const {
     building: b,
@@ -1820,10 +1833,18 @@ function FacilityCard({
 
   return (
     <div
-      className={`px-2.5 py-2 border rounded ${
-        isCustomSpec || !isAutoKind
-          ? "bg-blue-50/60 border-blue-200"
-          : "bg-white border-gray-200"
+      onClick={(e) => {
+        // 안 쪽 button/select/input 등 클릭은 카드 선택 무시 (편집 차단 방지)
+        const target = e.target as HTMLElement;
+        if (target.closest("button, select, input, label")) return;
+        onSelect?.();
+      }}
+      className={`px-2.5 py-2 border rounded cursor-pointer transition-all ${
+        isSelected
+          ? "ring-2 ring-yellow-400 border-yellow-500 bg-yellow-50 shadow-sm"
+          : isCustomSpec || !isAutoKind
+            ? "bg-blue-50/60 border-blue-200 hover:border-blue-400"
+            : "bg-white border-gray-200 hover:border-gray-400 hover:shadow-sm"
       }`}
     >
       {/* 동명 + 평수 */}

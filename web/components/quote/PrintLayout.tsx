@@ -13,6 +13,18 @@ import { useState } from "react";
 import type { BlueprintPrintData } from "@/lib/quote/print-data";
 import { COMPANY, COMPANY_LOGO_PATH } from "@/lib/quote/company";
 
+const M2_TO_PYEONG = 0.3025;
+
+/** ISO → "2026-04-28" (도면 Date 칸용 — 짧고 정렬된 형식) */
+function formatPrintDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 interface Props {
   data: BlueprintPrintData;
   /** 인쇄 페이지의 카카오맵 영역 — P4 에서 PrintMap 컴포넌트로 채움 */
@@ -38,10 +50,24 @@ export default function PrintLayout({ data, mapSlot }: Props) {
 
       {/* 우측 = 정보 패널 */}
       <aside className="info-panel">
-        {/* 1. 발전설비 개요 */}
+        {/* 1. 발전설비 개요 — 사업 부지에 지목 · 평수 같이 (영업 친절도) */}
         <Section title="발전설비 개요 - 태양광 발전설비">
           <ol className="overview-list">
-            <li>1. 사업 부지 : {data.address}</li>
+            <li>
+              1. 사업 부지 : {data.address}
+              {(() => {
+                const parcelPyeong = Math.round(data.parcelM2 * M2_TO_PYEONG);
+                const extras = [
+                  data.jimok,
+                  `${parcelPyeong.toLocaleString()}평`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return extras ? (
+                  <span className="parcel-extras"> ({extras})</span>
+                ) : null;
+              })()}
+            </li>
             <li>
               2. 설치 모듈 : {data.module.name} ({data.module.widthMm.toLocaleString()}{" "}
               x {data.module.heightMm.toLocaleString()} x {data.module.thicknessMm})
@@ -102,15 +128,42 @@ export default function PrintLayout({ data, mapSlot }: Props) {
                 </tr>
               </thead>
               <tbody>
-                <CapaRow
-                  name={data.kepco.substationName}
-                  freeMW={data.kepco.substationFreeMW}
-                />
-                <CapaRow name="주변압기" freeMW={data.kepco.mtrFreeMW} />
-                <CapaRow
-                  name={data.kepco.dlName}
-                  freeMW={data.kepco.dlFreeMW}
-                />
+                {[
+                  {
+                    label: "변전소",
+                    detail: data.kepco.substationName,
+                    freeMW: data.kepco.substationFreeMW,
+                  },
+                  {
+                    label: "주변압기",
+                    detail: data.kepco.mtrName,
+                    freeMW: data.kepco.mtrFreeMW,
+                  },
+                  {
+                    label: "배전선로",
+                    detail: data.kepco.dlName,
+                    freeMW: data.kepco.dlFreeMW,
+                  },
+                ].map((row) => {
+                  const isOver = row.freeMW < 0;
+                  return (
+                    <tr key={row.label}>
+                      <td>
+                        <b>{row.label}</b> {row.detail}
+                      </td>
+                      <td
+                        className="num"
+                        style={
+                          isOver ? { color: "#c00", fontWeight: 700 } : undefined
+                        }
+                      >
+                        {isOver
+                          ? `초과 ${Math.abs(row.freeMW).toFixed(1)}`
+                          : row.freeMW.toFixed(1)}
+                      </td>
+                    </tr>
+                  );
+                })}
                 <tr className="checked-at">
                   <td colSpan={2}>{data.kepco.checkedAt}</td>
                 </tr>
@@ -137,7 +190,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
           </div>
         </div>
 
-        {/* 5. 도면 메타 — 빈 칸 (의뢰자가 출력 후 직접 기입, 봉남리 양식 그대로) */}
+        {/* 5. 도면 메타 — Date/Drawing Title 자동 채움 (나머지는 의뢰자 직접 기입) */}
         <table className="drawing-meta">
           <tbody>
             <tr>
@@ -154,7 +207,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
             </tr>
             <tr>
               <td className="label">Date 날 짜</td>
-              <td className="blank" />
+              <td className="filled">{formatPrintDate(data.generatedAt)}</td>
             </tr>
             <tr>
               <td className="label">Project Title 공 사 명</td>
@@ -162,7 +215,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
             </tr>
             <tr>
               <td className="label">Drawing Title 도 면 명</td>
-              <td className="blank" />
+              <td className="filled">전체 배치도</td>
             </tr>
             <tr>
               <td className="label">Scale 축 척</td>
@@ -250,6 +303,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
           width: 100%;
           border-collapse: collapse;
           font-size: 8pt;
+          table-layout: fixed;
         }
         .module-table th,
         .module-table td,
@@ -259,22 +313,27 @@ export default function PrintLayout({ data, mapSlot }: Props) {
           padding: 1.2mm 2mm;
           text-align: center;
         }
+        .kepco-table tbody td:first-child {
+          text-align: left;
+        }
         .module-table thead th,
         .kepco-table thead th {
           background: #f0f0f0;
           font-weight: 700;
         }
         .num {
-          text-align: right;
+          text-align: right !important;
           font-variant-numeric: tabular-nums;
         }
         .total-row td {
           font-weight: 700;
           background: #fafafa;
         }
-        .checked-at {
+        .checked-at td {
           font-size: 7pt;
           color: #555;
+          text-align: center;
+          background: #fafafa;
         }
         .company-box {
           display: flex;
@@ -317,30 +376,22 @@ export default function PrintLayout({ data, mapSlot }: Props) {
         .drawing-meta .blank {
           background: white;
         }
+        .drawing-meta .filled {
+          background: white;
+          font-variant-numeric: tabular-nums;
+          color: #111;
+          font-weight: 500;
+        }
+        .parcel-extras {
+          color: #555;
+          font-weight: normal;
+        }
       `}</style>
     </div>
   );
 }
 
 // ── 보조 컴포넌트 ──────────────────────────
-
-/** 변전소/주변압기/DL 한 행 — 음수 = 초과 (빨간 강조) */
-function CapaRow({ name, freeMW }: { name: string; freeMW: number }) {
-  const isOver = freeMW < 0;
-  return (
-    <tr>
-      <td>{name}</td>
-      <td
-        className="num"
-        style={isOver ? { color: "#c00", fontWeight: 700 } : undefined}
-      >
-        {isOver
-          ? `초과 ${Math.abs(freeMW).toFixed(1)}`
-          : freeMW.toFixed(1)}
-      </td>
-    </tr>
-  );
-}
 
 function Section({
   title,

@@ -14,6 +14,7 @@
  */
 
 import type { FinancePrintData } from "@/lib/quote/print-data";
+import { COMPANY } from "@/lib/quote/company";
 
 interface Props {
   data: FinancePrintData;
@@ -22,17 +23,34 @@ interface Props {
 const formatWon = (n: number) =>
   `₩ ${Math.round(n).toLocaleString()}`;
 
+/** ISO → "2026년 4월 28일" */
+const formatGenDate = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+};
+
 export default function FinancePrintLayout({ data }: Props) {
   const isLoan = data.scenario !== "자기자본";
   const totalAfterLoanLabel = isLoan
     ? formatWon(data.totalAfterLoan)
     : formatWon(data.totalNetIncome);
+  const scenarioLabel =
+    data.scenario === "자기자본"
+      ? "자기자본 100%"
+      : `${data.scenario} 대출`;
+  // 대출액 % = loanPrincipal / totalCost (총사업비 기준)
+  const loanPct =
+    data.totalCost > 0 && data.loanPrincipal > 0
+      ? (data.loanPrincipal / data.totalCost) * 100
+      : 0;
 
   return (
     <div className="finance-print-layout">
-      {/* 헤더 */}
+      {/* 헤더 — 봉남리 양식 + 시나리오 명시 */}
       <h1 className="title">
         RPS 태양광 경제성 분석 (현물시장) {data.module.name}
+        <span className="scenario-badge">{scenarioLabel}</span>
       </h1>
 
       <div className="body">
@@ -128,23 +146,36 @@ export default function FinancePrintLayout({ data }: Props) {
               ))}
             </tbody>
           </table>
-          {/* 면책 문구 */}
+          {/* 면책 문구 + 출력일 + 회사 정보 (영업 자료 신뢰성) */}
           <div className="disclaimer">
             <div># 이 수지분석은 2024년 현물시장 기준 수익분석 자료입니다.</div>
             <div># 선로 개통비 , 구조 보강비 별도 / 순 공사비 기준 수익분석 자료 입니다.</div>
+            <div className="meta-row">
+              <span>출력일: {formatGenDate(data.generatedAt)}</span>
+              <span className="company-info">
+                <b>{COMPANY.englishName}</b> · {COMPANY.name} ·{" "}
+                {COMPANY.phone} · {COMPANY.email}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* 우측 — 4 박스 */}
         <aside className="info-region">
-          {/* ① 태양광발전사업 세부내용 */}
+          {/* ① 태양광발전사업 세부내용 — 영업 정보 추가 (부지/동수/평수) */}
           <div className="info-box">
             <div className="box-title">
               태양광발전사업 세부내용
               <br />
               <span className="subtitle">&lt;&lt; 양면모듈 &gt;&gt;</span>
             </div>
-            <KV label="발전설비용량 (kW)" value={data.totalKw.toFixed(0)} />
+            <KV label="사업 부지" value={data.address} small />
+            <KV
+              label="설치 영역"
+              value={`${data.buildingCount}동 · ${data.totalPyeong.toLocaleString()}평`}
+            />
+            <KV label="발전설비용량 (kW)" value={data.totalKw.toFixed(2)} />
+            <KV label="총 모듈 장수" value={`${data.totalPanels.toLocaleString()}장`} />
             <KV label="발전시간 (일간 평균)" value={data.dailyHours.toFixed(1)} />
             <KV label="한전전력매전금액 (SMP)" value={data.smpPrice.toFixed(1)} />
             <KV label="공급인증서 (REC)" value={data.recPrice.toFixed(1)} />
@@ -163,23 +194,38 @@ export default function FinancePrintLayout({ data }: Props) {
             />
           </div>
 
-          {/* ③ 태양광 대출비용 */}
+          {/* ③ 태양광 대출비용 — 대출액에 총사업비 % 같이 표기 (영업 일관성) */}
           <div className="info-box red-box">
             <div className="box-title red-title">♦ 태양광 대출비용 ♦</div>
             <KV
               label="대출액"
               value={
                 data.loanPrincipal > 0
-                  ? formatWon(data.loanPrincipal)
-                  : "0원"
+                  ? `${formatWon(data.loanPrincipal)} (총사업비의 ${loanPct.toFixed(0)}%)`
+                  : "0원 (자기자본)"
               }
             />
             <KV
               label="년이율 (%)"
               value={`${(data.loanRate * 100).toFixed(2)}%`}
             />
-            <KV label="상환기간" value={`${data.repayMonths}(月)`} />
-            <KV label="거치기간" value={`${data.graceMonths}(月)`} />
+            <KV
+              label="상환기간"
+              value={data.repayMonths > 0 ? `${data.repayMonths}(月)` : "-"}
+            />
+            <KV
+              label="거치기간"
+              value={isLoan ? `${data.graceMonths}(月)` : "-"}
+            />
+            {isLoan && (
+              <div className="loan-note">
+                거치 후 원리금 균등상환 ·{" "}
+                <b>
+                  총 {Math.round((data.graceMonths + data.repayMonths) / 12)}년
+                </b>{" "}
+                걸쳐 갚음
+              </div>
+            )}
           </div>
 
           {/* ④ 태양광 최종수익 */}
@@ -221,6 +267,7 @@ export default function FinancePrintLayout({ data }: Props) {
           color: #111;
         }
         .title {
+          position: relative;
           margin: 0 0 3mm 0;
           padding: 2mm;
           border: 1.5px solid #c00;
@@ -229,6 +276,18 @@ export default function FinancePrintLayout({ data }: Props) {
           font-weight: 700;
           text-align: center;
           color: #c00;
+        }
+        .scenario-badge {
+          position: absolute;
+          right: 4mm;
+          top: 50%;
+          transform: translateY(-50%);
+          font-size: 10pt;
+          font-weight: 600;
+          padding: 1mm 3mm;
+          background: white;
+          border: 1px solid #c00;
+          border-radius: 3mm;
         }
         .body {
           flex: 1;
@@ -282,6 +341,23 @@ export default function FinancePrintLayout({ data }: Props) {
           color: #555;
           line-height: 1.3;
         }
+        .meta-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 4mm;
+          margin-top: 1.5mm;
+          padding-top: 1.5mm;
+          border-top: 1px dashed #ccc;
+          font-size: 6.5pt;
+          color: #555;
+        }
+        .company-info {
+          color: #333;
+        }
+        .company-info b {
+          color: #006400;
+        }
         .info-region {
           display: flex;
           flex-direction: column;
@@ -311,23 +387,38 @@ export default function FinancePrintLayout({ data }: Props) {
           color: #c00;
           border-bottom: 1.5px solid #c00;
         }
+        .loan-note {
+          padding: 1mm 2mm;
+          font-size: 6.5pt;
+          color: #555;
+          background: #fafafa;
+          border-top: 1px dashed #ccc;
+          line-height: 1.3;
+        }
+        .loan-note b {
+          color: #c00;
+        }
       `}</style>
     </div>
   );
 }
 
-/** 박스 안 라벨/값 한 줄 */
+/** 박스 안 라벨/값 한 줄. small 은 긴 주소 등 와이드 텍스트용 (라벨 위 / 값 아래) */
 function KV({
   label,
   value,
   emphasize,
+  small,
 }: {
   label: string;
   value: string;
   emphasize?: boolean;
+  small?: boolean;
 }) {
   return (
-    <div className={`kv ${emphasize ? "kv-emph" : ""}`}>
+    <div
+      className={`kv ${emphasize ? "kv-emph" : ""} ${small ? "kv-stack" : ""}`}
+    >
       <span className="kv-label">{label}</span>
       <span className="kv-value">{value}</span>
       <style jsx>{`
@@ -349,12 +440,23 @@ function KV({
           font-variant-numeric: tabular-nums;
           font-weight: 600;
           color: #111;
+          text-align: right;
         }
         .kv-emph .kv-label,
         .kv-emph .kv-value {
           color: #c00;
           font-weight: 700;
           font-size: 8pt;
+        }
+        .kv-stack {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.5mm;
+        }
+        .kv-stack .kv-value {
+          text-align: left;
+          font-size: 7pt;
+          font-weight: 500;
         }
       `}</style>
     </div>

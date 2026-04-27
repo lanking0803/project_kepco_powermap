@@ -26,12 +26,13 @@ export interface PrintBuilding {
 
 /** 변전소 여유선로 — 봉남리 양식의 우하단 박스 */
 export interface PrintKepcoCapa {
-  substationName: string;   // "구례 변전소"
-  substationFreeMW: number; // 47.8
-  mtrFreeMW: number;        // 14.1 (주변압기)
-  dlName: string;           // "냉천 DL"
-  dlFreeMW: number;         // 12.1
-  checkedAt: string;        // "4월 16일 인터넷 조회기준"
+  substationName: string;   // "쌍림"
+  substationFreeMW: number; // 20.68
+  mtrName: string;          // "#2"
+  mtrFreeMW: number;        // -3.37 (음수 = 초과)
+  dlName: string;           // "쌍공"
+  dlFreeMW: number;         // 9.38
+  checkedAt: string;        // "4월 25일 인터넷 조회기준"
 }
 
 /** 도면 출력 (3단계) 인쇄 데이터 */
@@ -77,6 +78,9 @@ export interface FinancePrintData {
   /** 발전설비 총 용량 (kW) — 격자 기반 실제 kW */
   totalKw: number;
   totalPanels: number;
+  /** 영업 정보 — 박스 ① 에 표기 */
+  buildingCount: number;
+  totalPyeong: number;
   /** 입력 변수 — 박스 ① 태양광발전사업 세부내용 */
   dailyHours: number;
   smpPrice: number;
