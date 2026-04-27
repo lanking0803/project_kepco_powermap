@@ -350,7 +350,7 @@ function QuoteEntryButton({ pnu }: { pnu: string }) {
                  bg-blue-600 hover:bg-blue-700 active:bg-blue-800
                  text-white rounded-lg shadow-sm transition-colors"
     >
-      📐 면적 산출 / 견적 시작 ↗
+      📐 견적 시작 ↗
     </Link>
   );
 }

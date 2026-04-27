@@ -76,6 +76,15 @@ interface Props {
   onSelectBuilding?: (id: string, force?: boolean) => void;
   /** 라벨 X 버튼 클릭 시 — 삭제 요청 (부모는 빨간 모드 진입 등) */
   onRequestDelete?: (id: string) => void;
+  /**
+   * 인쇄 모드 — 도면 출력(/quote/[pnu]/print)에서 사용.
+   *  - 꼭지점 흰 점 마커 / ✥ 이동 핸들 / 라벨 X 버튼 모두 숨김
+   *  - 폴리곤·라벨 click 이벤트 미부착
+   *  - tilesloaded + 1.5초 후 onReady() 호출 (자동 print 트리거)
+   */
+  printMode?: boolean;
+  /** printMode 에서 지도 + 타일 + 패널 모두 그려진 후 호출 */
+  onReady?: () => void;
 }
 
 const PARCEL_STROKE = "#FBBF24"; // amber-400
@@ -161,6 +170,8 @@ export default function QuoteMap({
   selectedBuildingId,
   onSelectBuilding,
   onRequestDelete,
+  printMode = false,
+  onReady,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -222,8 +233,19 @@ export default function QuoteMap({
     mapInstanceRef.current = map;
     const ro = new ResizeObserver(() => map.relayout());
     ro.observe(mapRef.current);
+    // 인쇄 모드 — 타일 로드 + 1.5초 마진 후 onReady (자동 print 트리거)
+    if (printMode && onReady) {
+      const listener = window.kakao.maps.event.addListener(
+        map,
+        "tilesloaded",
+        () => {
+          window.kakao.maps.event.removeListener(listener);
+          setTimeout(() => onReady(), 1500);
+        },
+      );
+    }
     return () => ro.disconnect();
-  }, [loaded, fallbackCenter]);
+  }, [loaded, fallbackCenter, printMode, onReady]);
 
   // 필지 폴리곤
   useEffect(() => {
@@ -293,10 +315,13 @@ export default function QuoteMap({
           fillOpacity: 0.3,
         });
         // 폴리곤 click → 동 선택 (강조). 외곽 ring(0번) 에만 부착해도 충분.
-        const clickedId = building.id;
-        window.kakao.maps.event.addListener(poly, "click", () => {
-          onSelectRef.current?.(clickedId);
-        });
+        // 인쇄 모드 = 정적 출력이라 click 이벤트 미부착.
+        if (!printMode) {
+          const clickedId = building.id;
+          window.kakao.maps.event.addListener(poly, "click", () => {
+            onSelectRef.current?.(clickedId);
+          });
+        }
         buildingPolyRef.current.push(poly);
         ringPolys.push(poly);
       }
@@ -306,7 +331,9 @@ export default function QuoteMap({
       }
 
       // 꼭지점 마커 — closed ring 의 마지막 좌표는 첫 좌표와 동일하므로 N-1 개만
-      building.polygon.forEach((ring, ringIdx) => {
+      // 인쇄 모드 = 도면 출력에 마커 안 보이도록 생성 자체 skip.
+      if (!printMode) {
+        building.polygon.forEach((ring, ringIdx) => {
         const lastIdx = ring.length - 1;
         const targetPoly = ringPolys[ringIdx];
         for (let vIdx = 0; vIdx < lastIdx; vIdx += 1) {
@@ -391,6 +418,8 @@ export default function QuoteMap({
           vertexMarkersRef.current.push(marker);
         }
       });
+      }
+      // ↑ printMode 가드 닫기 (꼭지점 마커 블록 끝)
 
       // 면적 라벨 (CustomOverlay) — 영역 위쪽 외부 (패널 가리지 않도록).
       // 평행이동 시 dragEffectivePos 기준이라 위치 무관.
@@ -399,9 +428,10 @@ export default function QuoteMap({
       let labelOverlay: any = null;
       if (labelAnchor) {
         const labelEl = document.createElement("div");
-        // 클릭 가능 — 라벨 클릭 = 동 선택, 우측 × 클릭 = 삭제 요청 (부모 빨간 모드)
-        labelEl.className =
-          "px-1.5 py-1 bg-white/95 border border-orange-500 rounded text-orange-700 text-[11px] leading-tight font-bold shadow tabular-nums select-none cursor-pointer hover:bg-white";
+        // 인쇄 모드 = X 버튼 + click 이벤트 미부착 (정적 라벨)
+        labelEl.className = printMode
+          ? "px-1.5 py-1 bg-white/95 border border-orange-500 rounded text-orange-700 text-[11px] leading-tight font-bold shadow tabular-nums select-none"
+          : "px-1.5 py-1 bg-white/95 border border-orange-500 rounded text-orange-700 text-[11px] leading-tight font-bold shadow tabular-nums select-none cursor-pointer hover:bg-white";
         const line1 = `${building.name} · ${toPyeong(building.area_m2).toLocaleString()}평`;
         const hasDims =
           typeof building.widthM === "number" &&
@@ -411,32 +441,37 @@ export default function QuoteMap({
         const line2 = hasDims
           ? `${Math.round(building.widthM!)} × ${Math.round(building.heightM!)}m · ${Math.round(building.area_m2).toLocaleString()}㎡`
           : `${Math.round(building.area_m2).toLocaleString()}㎡`;
+        const xButton = printMode
+          ? ""
+          : `<button
+              type="button"
+              data-action="delete"
+              class="text-red-600 hover:bg-red-100 rounded leading-none w-4 h-4 flex items-center justify-center text-sm shrink-0 -mt-0.5"
+              aria-label="이 동 삭제"
+              title="이 동 삭제"
+            >×</button>`;
         labelEl.innerHTML = `
           <div class="flex items-start gap-1.5">
             <div class="flex-1 text-center">
               <div>${line1}</div>
               <div class="text-[10px] font-normal text-gray-600">${line2}</div>
             </div>
-            <button
-              type="button"
-              data-action="delete"
-              class="text-red-600 hover:bg-red-100 rounded leading-none w-4 h-4 flex items-center justify-center text-sm shrink-0 -mt-0.5"
-              aria-label="이 동 삭제"
-              title="이 동 삭제"
-            >×</button>
+            ${xButton}
           </div>
         `;
-        // 라벨/X 버튼 click 이벤트
-        const clickedId = building.id;
-        labelEl.addEventListener("click", (e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('[data-action="delete"]')) {
-            e.stopPropagation();
-            onRequestDeleteRef.current?.(clickedId);
-          } else {
-            onSelectRef.current?.(clickedId);
-          }
-        });
+        // 라벨/X 버튼 click 이벤트 — 인쇄 모드에선 미부착
+        if (!printMode) {
+          const clickedId = building.id;
+          labelEl.addEventListener("click", (e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-action="delete"]')) {
+              e.stopPropagation();
+              onRequestDeleteRef.current?.(clickedId);
+            } else {
+              onSelectRef.current?.(clickedId);
+            }
+          });
+        }
         labelOverlay = new window.kakao.maps.CustomOverlay({
           map,
           position: new window.kakao.maps.LatLng(labelAnchor.lat, labelAnchor.lng),
@@ -451,6 +486,7 @@ export default function QuoteMap({
       // 3단계 패널 폴리곤 — 격자 알고리즘 결과 N개. 영역 위에 빨강 채움.
       // zIndex 800 = 영역 폴리곤(기본) 위, 라벨/마커(>=999) 아래.
       // 패널 클릭도 부모 동 선택으로 위임 (패널이 영역 클릭을 가리는 문제 우회).
+      // 인쇄 모드 = 봉남리 양식과 동일하게 fill 진하게 (0.35 → 0.7).
       if (building.panels && building.panels.length > 0) {
         const clickedId = building.id;
         for (const panelRing of building.panels) {
@@ -462,21 +498,24 @@ export default function QuoteMap({
             path: panelPath,
             strokeWeight: 0.5,
             strokeColor: PANEL_STROKE,
-            strokeOpacity: 0.7,
+            strokeOpacity: printMode ? 0.9 : 0.7,
             strokeStyle: "solid",
             fillColor: PANEL_FILL,
-            fillOpacity: 0.35,
+            fillOpacity: printMode ? 0.7 : 0.35,
             zIndex: 800,
           });
-          window.kakao.maps.event.addListener(panelPoly, "click", () => {
-            onSelectRef.current?.(clickedId);
-          });
+          if (!printMode) {
+            window.kakao.maps.event.addListener(panelPoly, "click", () => {
+              onSelectRef.current?.(clickedId);
+            });
+          }
           panelPolyRef.current.push(panelPoly);
         }
       }
 
       // ✥ 이동 핸들 마커 — 영역 위쪽 외부 (라벨 바로 아래). 드래그로 영역 전체 평행 이동.
-      const handleAnchor = polygonTopAnchor(building.polygon, 3);
+      // 인쇄 모드 = 핸들 미생성 (정적 도면).
+      const handleAnchor = printMode ? null : polygonTopAnchor(building.polygon, 3);
       if (handleAnchor) {
         const moveImage = new window.kakao.maps.MarkerImage(
           MOVE_HANDLE_URI,

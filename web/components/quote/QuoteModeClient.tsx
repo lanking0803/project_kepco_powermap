@@ -48,7 +48,6 @@ import {
   FACILITY_LABEL,
   FACILITY_SPEC,
   calcCost,
-  calcKw,
   formatCost,
   formatKw,
   recommendFacility,
@@ -72,6 +71,11 @@ import {
   type FinanceInput,
   type LoanScenario,
 } from "@/lib/quote/finance";
+import {
+  saveBlueprintData,
+  type BlueprintPrintData,
+  type PrintBuilding,
+} from "@/lib/quote/print-data";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 import FinanceTable from "./FinanceTable";
@@ -100,6 +104,14 @@ function toEdited(b: BuildingPolygon): EditedBuilding {
     is_edited: false,
     source: "vworld",
   };
+}
+
+/** KEPCO updated_at(ISO) → 봉남리 양식 "X월 Y일 인터넷 조회기준" */
+function formatKepcoCheckedAt(iso: string | null | undefined): string {
+  if (!iso) return "조회 일자 미상";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "조회 일자 미상";
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 인터넷 조회기준`;
 }
 
 /** QuoteMap 에 넘길 안정적 식별자 — VWorld pk 우선, 사용자 추가는 local_id */
@@ -486,7 +498,11 @@ export default function QuoteModeClient({ pnu }: Props) {
     };
   }, [deletePendingId, buildings]);
 
-  /** 동별 시설 종류 + 단가 + kW + 시공비 한 번에 계산 (자동 추천 포함) */
+  /**
+   * 동별 시설 종류 + 단가 + 패널 갯수 + 실제 kW + 시공비.
+   * 봉남리 양식 일관 — 시공비 = 격자 기반 실제 kW × 단가.
+   * 평수 기반 추정값(calcKw) 은 더 이상 사용 안 함.
+   */
   const facilityRows = useMemo(() => {
     const jimok = geometry?.jimok ?? "";
     return buildings.map((b) => {
@@ -495,7 +511,9 @@ export default function QuoteModeClient({ pnu }: Props) {
       const kind = facilityOverrides[id] ?? auto;
       const spec = specOverrides[id] ?? FACILITY_SPEC[kind];
       const py = b.edited_area_m2 * M2_TO_PYEONG;
-      const kw = calcKw(py, spec);
+      const layout = panelLayouts.find((l) => l.id === id);
+      const panelCount = layout?.count ?? 0;
+      const kw = layout?.kwActual ?? 0;
       const cost = calcCost(kw, spec);
       return {
         id,
@@ -504,13 +522,21 @@ export default function QuoteModeClient({ pnu }: Props) {
         kind,
         spec,
         py,
+        panelCount,
         kw,
         cost,
         isAutoKind: !facilityOverrides[id],
         isCustomSpec: !!specOverrides[id],
       };
     });
-  }, [buildings, geometry, bldgRegister, facilityOverrides, specOverrides]);
+  }, [
+    buildings,
+    geometry,
+    bldgRegister,
+    facilityOverrides,
+    specOverrides,
+    panelLayouts,
+  ]);
 
   const totalKw = facilityRows.reduce((s, r) => s + r.kw, 0);
   const totalCost = facilityRows.reduce((s, r) => s + r.cost, 0);
@@ -576,6 +602,7 @@ export default function QuoteModeClient({ pnu }: Props) {
     loanRatioPct !== 100 ||
     Object.keys(varOverrides).length > 0;
 
+
   // ESC 키 → 시계열 표 모달 닫기
   useEffect(() => {
     if (!showFinanceTable) return;
@@ -605,6 +632,73 @@ export default function QuoteModeClient({ pnu }: Props) {
         .filter(Boolean)
         .join(" ")
     : "필지 정보 불러오는 중…";
+
+  /** 도면 PDF 저장 — sessionStorage 직렬화 + 인쇄 라우트 새 탭 오픈 */
+  const handlePrintBlueprint = useCallback(() => {
+    if (!geometry || buildings.length === 0) return;
+    const printBuildings: PrintBuilding[] = buildings.map((b, i) => {
+      const id = makeBuildingId(b);
+      const facility =
+        facilityOverrides[id] ??
+        recommendFacility(b.source, geometry.jimok ?? "", bldgRegister);
+      const placement = FACILITY_PLACEMENT[facility];
+      const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
+      const layout = fillPanelGrid(
+        b.edited_polygon,
+        activeModule,
+        placement,
+        rotation,
+      );
+      const dims = calcAreaDimensions(b.edited_polygon, rotation);
+      return {
+        id,
+        name: b.buld_nm || `${i + 1}동`,
+        polygon: b.edited_polygon,
+        panels: layout.panels,
+        panelCount: layout.panels.length,
+        kwActual: calcInstalledKw(layout.panels.length, activeModule),
+        rotation,
+        widthM: dims.widthM,
+        heightM: dims.heightM,
+        area_m2: b.edited_area_m2,
+      };
+    });
+    const kepcoRow = capa[0];
+    const kepco = kepcoRow
+      ? {
+          substationName: kepcoRow.subst_nm ?? "-",
+          substationFreeMW:
+            ((kepcoRow.subst_capa ?? 0) - (kepcoRow.subst_pwr ?? 0)) / 1000,
+          mtrFreeMW:
+            ((kepcoRow.mtr_capa ?? 0) - (kepcoRow.mtr_pwr ?? 0)) / 1000,
+          dlName: kepcoRow.dl_nm ?? "-",
+          dlFreeMW: ((kepcoRow.dl_capa ?? 0) - (kepcoRow.dl_pwr ?? 0)) / 1000,
+          checkedAt: formatKepcoCheckedAt(kepcoRow.updated_at),
+        }
+      : null;
+    const printData: BlueprintPrintData = {
+      pnu,
+      address: headerAddr,
+      jimok: geometry.jimok ?? "",
+      parcelM2: geometry.area_m2,
+      module: activeModule,
+      buildings: printBuildings,
+      kepco,
+      solarAltitudeDeg: 23,
+      generatedAt: new Date().toISOString(),
+    };
+    saveBlueprintData(printData);
+    window.open(`/quote/${pnu}/print`, "_blank");
+  }, [
+    geometry,
+    buildings,
+    facilityOverrides,
+    bldgRegister,
+    activeModule,
+    capa,
+    pnu,
+    headerAddr,
+  ]);
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-100">
@@ -649,7 +743,7 @@ export default function QuoteModeClient({ pnu }: Props) {
           {/* 0번 부지 정보 — ParcelInfoPanel 임베드 (inQuoteMode) */}
           <SectionHeader
             step={0}
-            title="부지 정보"
+            title="부지 확인"
             isExpanded={activeStep === 0}
             onClick={() => toggleStep(0)}
           />
@@ -670,7 +764,7 @@ export default function QuoteModeClient({ pnu }: Props) {
           )}
           <SectionHeader
             step={1}
-            title="영역 정의"
+            title="영역 그리기"
             isExpanded={activeStep === 1}
             onClick={() => toggleStep(1)}
           />
@@ -852,7 +946,7 @@ export default function QuoteModeClient({ pnu }: Props) {
           )}
           <SectionHeader
             step={2}
-            title="시설별 견적"
+            title="견적 산출"
             isExpanded={activeStep === 2}
             onClick={() => toggleStep(2)}
           />
@@ -860,7 +954,7 @@ export default function QuoteModeClient({ pnu }: Props) {
           <div className="px-4 py-3 space-y-2">
             {buildings.length === 0 ? (
               <div className="text-xs text-gray-400">
-                먼저 1단계에서 영역을 정의해주세요.
+                먼저 1단계에서 영역을 그려주세요.
               </div>
             ) : (
               <>
@@ -900,113 +994,78 @@ export default function QuoteModeClient({ pnu }: Props) {
                     }
                   />
                 ))}
-                <div className="mt-3 px-3 py-2.5 bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] text-emerald-800 font-semibold">
-                      💰 합계
-                    </span>
-                    <span className="text-[10px] text-gray-500">
-                      {buildings.length}동
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-base font-bold text-emerald-900 tabular-nums">
-                      {formatKw(totalKw)}
-                    </span>
-                    <span className="text-base font-bold text-emerald-900 tabular-nums">
-                      {formatCost(totalCost)}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          )}
-          <SectionHeader
-            step={3}
-            title="패널 시각화"
-            isExpanded={activeStep === 3}
-            onClick={() => toggleStep(3)}
-          />
-          {activeStep === 3 && (
-          <div className="px-4 py-3 space-y-2">
-            {buildings.length === 0 ? (
-              <div className="text-xs text-gray-400">
-                먼저 1단계에서 영역을 정의해주세요.
-              </div>
-            ) : (
-              <>
+                {/* 합계 — 패널 N장 + 실제 kW + 시공비 (격자 기반, 봉남리 양식 일관) */}
                 {totalPanels === 0 ? (
-                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
+                  <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug">
                     영역이 모듈 1장보다 작거나 가장자리 이격 적용 후 공간이
                     남지 않습니다. 영역을 더 크게 잡아주세요.
                   </div>
                 ) : (
-                  <>
-                    {panelLayouts.map((l) => (
-                  <div
-                    key={l.id}
-                    className="px-2.5 py-2 bg-white border border-rose-200 rounded"
-                  >
+                  <div className="mt-3 px-3 py-2.5 bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-200 rounded">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-700">
-                        <b>{l.name}</b>
+                      <span className="text-[11px] text-emerald-800 font-semibold">
+                        💰 합계
                       </span>
-                      <span className="text-[11px] text-gray-500 tabular-nums">
-                        🔲 {l.count.toLocaleString()}장
+                      <span className="text-[10px] text-gray-500 tabular-nums">
+                        {buildings.length}동 · 🔲{" "}
+                        {totalPanels.toLocaleString()}장
                       </span>
                     </div>
-                    <div className="text-sm font-bold text-rose-700 tabular-nums text-right">
-                      {l.kwActual.toFixed(2)} kW
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-base font-bold text-emerald-900 tabular-nums">
+                        {formatKw(totalKwActual)}
+                      </span>
+                      <span className="text-base font-bold text-emerald-900 tabular-nums">
+                        {formatCost(totalCost)}
+                      </span>
                     </div>
                   </div>
-                ))}
-                <div className="mt-3 px-3 py-2.5 bg-gradient-to-br from-rose-50 to-amber-50 border border-rose-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] text-rose-800 font-semibold">
-                      🔲 합계
-                    </span>
-                    <span className="text-[10px] text-gray-500">
-                      {activeModule.name}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-base font-bold text-rose-900 tabular-nums">
-                      {totalPanels.toLocaleString()} 장
-                    </span>
-                    <span className="text-base font-bold text-rose-900 tabular-nums">
-                      {totalKwActual.toFixed(2)} kW
-                    </span>
-                  </div>
-                </div>
-                  </>
                 )}
               </>
             )}
           </div>
           )}
           <SectionHeader
+            step={3}
+            title="도면 출력"
+            isExpanded={activeStep === 3}
+            onClick={() => toggleStep(3)}
+          />
+          {activeStep === 3 && (
+            <div className="px-4 py-3 space-y-2">
+              {buildings.length === 0 || totalPanels === 0 ? (
+                <div className="text-xs text-gray-400 leading-snug">
+                  먼저 영역과 시설 종류를 정해주세요.
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrintBlueprint}
+                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-colors"
+                  >
+                    📄 도면 PDF 저장 ↗
+                  </button>
+                  <p className="text-[10px] text-gray-500 leading-snug">
+                    A3 가로 한 장 · 봉남리 양식 그대로. 새 탭에서 인쇄
+                    다이얼로그가 자동으로 떠요. &quot;PDF로 저장&quot; 선택하시면
+                    됩니다.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+          <SectionHeader
             step={4}
-            title="배치도 PDF"
+            title="수익 분석"
             isExpanded={activeStep === 4}
             onClick={() => toggleStep(4)}
           />
           {activeStep === 4 && (
-            <div className="px-4 py-3 text-xs text-gray-400">
-              4단계 작업 예정
-            </div>
-          )}
-          <SectionHeader
-            step={5}
-            title="수지분석"
-            isExpanded={activeStep === 5}
-            onClick={() => toggleStep(5)}
-          />
-          {activeStep === 5 && (
             <div className="px-4 py-3 space-y-3">
               {totalKw <= 0 ? (
                 <div className="text-xs text-gray-400 leading-snug">
-                  먼저 1·2단계에서 영역과 시설 종류를 정해주세요.
+                  먼저 영역과 시설 종류부터 정해주세요.
                 </div>
               ) : (
                 <>
@@ -1180,9 +1239,19 @@ export default function QuoteModeClient({ pnu }: Props) {
                                 }))
                               }
                             />
-                            <div className="text-[10px] text-gray-500 leading-snug self-end pb-1">
-                              상환 = {loanScenario === "10년" ? "120" : "240"}
-                              개월
+                            <div className="text-[10px] text-gray-500 leading-snug self-end pb-1 col-span-2">
+                              거치 후 원리금 균등상환 ·{" "}
+                              <b className="text-gray-700">
+                                총{" "}
+                                {Math.round(
+                                  ((varOverrides.graceMonths ??
+                                    DEFAULT_FINANCE_INPUT.graceMonths) +
+                                    (loanScenario === "10년" ? 120 : 240)) /
+                                    12,
+                                )}
+                                년
+                              </b>{" "}
+                              걸쳐 갚음 (봉남리 양식)
                             </div>
                           </VarGroup>
                         )}
@@ -1398,7 +1467,7 @@ export default function QuoteModeClient({ pnu }: Props) {
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
               <div className="flex items-baseline gap-3">
                 <h2 className="text-base font-bold text-gray-900">
-                  📊 20년 수지분석 시계열
+                  📊 20년 수익 분석 시계열
                 </h2>
                 <span className="text-xs text-gray-500">
                   {loanScenario === "자기자본"
@@ -1625,6 +1694,9 @@ interface FacilityRow {
   kind: FacilityKind;
   spec: FacilitySpec;
   py: number;
+  /** 격자 알고리즘 결과 패널 갯수 */
+  panelCount: number;
+  /** 실제 kW = panelCount × 모듈 와트 (격자 기반) */
   kw: number;
   cost: number;
   isAutoKind: boolean;
@@ -1656,8 +1728,18 @@ function FacilityCard({
   onResetSpec,
   onToggleEditSpec,
 }: FacilityCardProps) {
-  const { building: b, auto, kind, spec, py, kw, cost, isAutoKind, isCustomSpec } =
-    row;
+  const {
+    building: b,
+    auto,
+    kind,
+    spec,
+    py,
+    panelCount,
+    kw,
+    cost,
+    isAutoKind,
+    isCustomSpec,
+  } = row;
   const py_round = Math.round(py);
   const isUserAdded = b.source === "user_added";
 
@@ -1809,14 +1891,20 @@ function FacilityCard({
         </div>
       )}
 
-      {/* kW + 시공비 (큰 숫자 강조) */}
-      <div className="flex items-baseline justify-between gap-2 mt-1.5 pt-1.5 border-t border-gray-100">
-        <span className="text-sm font-bold text-emerald-700 tabular-nums">
-          {formatKw(kw)}
-        </span>
-        <span className="text-sm font-bold text-gray-900 tabular-nums">
-          {formatCost(cost)}
-        </span>
+      {/* 패널 N장 + 실제 kW + 시공비 (격자 기반, 봉남리 양식 일관) */}
+      <div className="mt-1.5 pt-1.5 border-t border-gray-100">
+        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 tabular-nums">
+          <span>🔲 {panelCount.toLocaleString()}장</span>
+          <span className="text-gray-400 text-[10px]">실측 격자</span>
+        </div>
+        <div className="flex items-baseline justify-between gap-2 mt-0.5">
+          <span className="text-sm font-bold text-emerald-700 tabular-nums">
+            {formatKw(kw)}
+          </span>
+          <span className="text-sm font-bold text-gray-900 tabular-nums">
+            {formatCost(cost)}
+          </span>
+        </div>
       </div>
     </div>
   );
