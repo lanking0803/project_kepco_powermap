@@ -23,7 +23,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { fetchVworldParcelByPnu } from "@/lib/api/vworld";
 import {
   fetchBuildingPolygonsByPnu,
@@ -348,6 +347,17 @@ export default function QuoteModeClient({ pnu }: Props) {
     setActiveStep((prev) => (prev === step ? null : step));
   }, []);
 
+  // ── 동 선택 강조 — 라벨/폴리곤 클릭 시 set, 좌측 카드도 동시 강조
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(
+    null,
+  );
+  const handleSelectBuilding = useCallback((id: string) => {
+    setSelectedBuildingId((prev) => (prev === id ? null : id));
+  }, []);
+  const handleRequestDelete = useCallback((id: string) => {
+    setDeletePendingId(id);
+  }, []);
+
   const handleFacilityChange = useCallback(
     (id: string, kind: FacilityKind) => {
       setFacilityOverrides((prev) => ({ ...prev, [id]: kind }));
@@ -433,6 +443,29 @@ export default function QuoteModeClient({ pnu }: Props) {
   const totalPanels = panelLayouts.reduce((s, l) => s + l.count, 0);
   const totalKwActual = panelLayouts.reduce((s, l) => s + l.kwActual, 0);
 
+  // ESC 키 → 삭제 확인 모달 닫기
+  useEffect(() => {
+    if (!deletePendingId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeletePendingId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [deletePendingId]);
+
+  /** 삭제 확인 모달용 — 현재 삭제 대기 동 정보 */
+  const pendingDeleteBuilding = useMemo(() => {
+    if (!deletePendingId) return null;
+    const b = buildings.find((x) => makeBuildingId(x) === deletePendingId);
+    if (!b) return null;
+    const idx = buildings.indexOf(b);
+    return {
+      id: deletePendingId,
+      name: b.buld_nm || `${idx + 1}동`,
+      pyeong: Math.round(b.edited_area_m2 * M2_TO_PYEONG),
+    };
+  }, [deletePendingId, buildings]);
+
   /** 동별 시설 종류 + 단가 + kW + 시공비 한 번에 계산 (자동 추천 포함) */
   const facilityRows = useMemo(() => {
     const jimok = geometry?.jimok ?? "";
@@ -479,15 +512,8 @@ export default function QuoteModeClient({ pnu }: Props) {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-100">
-      {/* 상단바 */}
+      {/* 상단바 — 견적 모드는 새 탭으로 진입하므로 [지도로] 버튼 없음 (탭 닫기로 종료) */}
       <header className="flex items-center justify-between gap-3 h-12 px-3 md:px-4 bg-white border-b border-gray-200 shrink-0">
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded"
-        >
-          <span className="text-base">←</span>
-          <span className="hidden md:inline">지도로</span>
-        </Link>
         <div className="flex-1 min-w-0 text-center">
           <div className="text-sm md:text-base font-bold text-gray-900 truncate">
             {headerAddr}
@@ -622,55 +648,29 @@ export default function QuoteModeClient({ pnu }: Props) {
                       const py = Math.round(b.edited_area_m2 * M2_TO_PYEONG);
                       const origPy = Math.round(b.area_m2 * M2_TO_PYEONG);
                       const isUserAdded = b.source === "user_added";
-                      const isPendingDelete = deletePendingId === id;
-
-                      if (isPendingDelete) {
-                        return (
-                          <li
-                            key={id}
-                            className="flex flex-col gap-1.5 px-2 py-1.5 bg-red-50 border border-red-300 rounded"
-                          >
-                            <div className="text-[11px] text-red-800 leading-snug">
-                              <b>{b.buld_nm || `${i + 1}동`}</b>{" "}
-                              <span className="text-red-600">
-                                {py.toLocaleString()}평
-                              </span>{" "}
-                              을(를) 삭제하시겠습니까?
-                            </div>
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => {
-                                  handleDeleteBuilding(id);
-                                  setDeletePendingId(null);
-                                }}
-                                className="flex-1 py-1 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
-                              >
-                                정말 삭제
-                              </button>
-                              <button
-                                onClick={() => setDeletePendingId(null)}
-                                className="flex-1 py-1 text-[11px] text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
-                              >
-                                취소
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      }
 
                       const vertexCount = b.edited_polygon[0]
                         ? Math.max(0, b.edited_polygon[0].length - 1)
                         : 0;
 
+                      const isSelected = selectedBuildingId === id;
                       return (
                         <li
                           key={id}
-                          className={`flex items-center justify-between gap-1.5 px-2 py-1.5 border rounded group ${
-                            isUserAdded
-                              ? "bg-emerald-50/70 border-emerald-200"
-                              : b.is_edited
-                                ? "bg-blue-50/80 border-blue-200"
-                                : "bg-orange-50/60 border-orange-100"
+                          onClick={(e) => {
+                            // 안 쪽 button(stepper / 🗑) 클릭은 bubble 무시
+                            if ((e.target as HTMLElement).closest("button"))
+                              return;
+                            handleSelectBuilding(id);
+                          }}
+                          className={`flex items-center justify-between gap-1.5 px-2 py-1.5 border rounded group cursor-pointer transition-all ${
+                            isSelected
+                              ? "ring-2 ring-yellow-400 border-yellow-500 bg-yellow-50"
+                              : isUserAdded
+                                ? "bg-emerald-50/70 border-emerald-200 hover:border-emerald-400"
+                                : b.is_edited
+                                  ? "bg-blue-50/80 border-blue-200 hover:border-blue-400"
+                                  : "bg-orange-50/60 border-orange-100 hover:border-orange-300"
                           }`}
                         >
                           <span className="text-gray-700 truncate flex-1 min-w-0">
@@ -921,6 +921,9 @@ export default function QuoteModeClient({ pnu }: Props) {
               onBuildingChange={handleBuildingChange}
               onRemoveVertex={handleRemoveVertex}
               fallbackCenter={geometry?.center}
+              selectedBuildingId={selectedBuildingId}
+              onSelectBuilding={handleSelectBuilding}
+              onRequestDelete={handleRequestDelete}
             />
           )}
           {(loadingParcel || loadingBuildings) && (
@@ -930,6 +933,53 @@ export default function QuoteModeClient({ pnu }: Props) {
           )}
         </main>
       </div>
+
+      {/* 삭제 확인 중앙 모달 — 라벨 X / 좌측 카드 🗑 둘 다 트리거 가능 */}
+      {pendingDeleteBuilding && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setDeletePendingId(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-lg shadow-2xl border border-gray-200 px-5 py-4 w-[320px] max-w-[calc(100%-32px)]"
+          >
+            <div className="text-base font-bold text-gray-900 mb-1.5">
+              영역 삭제
+            </div>
+            <div className="text-sm text-gray-700 leading-relaxed mb-4">
+              <b className="text-red-600">{pendingDeleteBuilding.name}</b>{" "}
+              <span className="text-gray-500 tabular-nums">
+                ({pendingDeleteBuilding.pyeong.toLocaleString()}평)
+              </span>{" "}
+              을(를) 정말 삭제하시겠습니까?
+              <br />
+              <span className="text-xs text-gray-500">
+                삭제하면 되돌릴 수 없습니다.
+              </span>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeletePendingId(null)}
+                className="px-3 py-1.5 text-sm text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteBuilding(pendingDeleteBuilding.id);
+                  setDeletePendingId(null);
+                }}
+                className="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
+              >
+                정말 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

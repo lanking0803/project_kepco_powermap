@@ -158,6 +158,9 @@ export default function QuoteMap({
   onBuildingChange,
   onRemoveVertex,
   fallbackCenter,
+  selectedBuildingId,
+  onSelectBuilding,
+  onRequestDelete,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -165,6 +168,8 @@ export default function QuoteMap({
 
   const parcelOverlaysRef = useRef<any[]>([]);
   const buildingPolyRef = useRef<any[]>([]);
+  /** id → 폴리곤 객체 매핑 — selected 변경 시 setOptions 만 호출 (재생성 X) */
+  const buildingPolyMapRef = useRef<Map<string, any>>(new Map());
   const vertexMarkersRef = useRef<any[]>([]);
   const labelOverlaysRef = useRef<any[]>([]);
   const moveHandleMarkersRef = useRef<any[]>([]);
@@ -175,6 +180,8 @@ export default function QuoteMap({
   const buildingsRef = useRef(buildings);
   const onChangeRef = useRef(onBuildingChange);
   const onRemoveVertexRef = useRef(onRemoveVertex);
+  const onSelectRef = useRef(onSelectBuilding);
+  const onRequestDeleteRef = useRef(onRequestDelete);
   useEffect(() => {
     buildingsRef.current = buildings;
   });
@@ -183,6 +190,12 @@ export default function QuoteMap({
   });
   useEffect(() => {
     onRemoveVertexRef.current = onRemoveVertex;
+  });
+  useEffect(() => {
+    onSelectRef.current = onSelectBuilding;
+  });
+  useEffect(() => {
+    onRequestDeleteRef.current = onRequestDelete;
   });
 
   // SDK 로드
@@ -246,6 +259,7 @@ export default function QuoteMap({
     // 기존 오버레이 제거
     buildingPolyRef.current.forEach((p) => p.setMap(null));
     buildingPolyRef.current = [];
+    buildingPolyMapRef.current.clear();
     vertexMarkersRef.current.forEach((m) => m.setMap(null));
     vertexMarkersRef.current = [];
     labelOverlaysRef.current.forEach((o) => o.setMap(null));
@@ -278,8 +292,17 @@ export default function QuoteMap({
           fillColor: BUILDING_FILL,
           fillOpacity: 0.55,
         });
+        // 폴리곤 click → 동 선택 (강조). 외곽 ring(0번) 에만 부착해도 충분.
+        const clickedId = building.id;
+        window.kakao.maps.event.addListener(poly, "click", () => {
+          onSelectRef.current?.(clickedId);
+        });
         buildingPolyRef.current.push(poly);
         ringPolys.push(poly);
+      }
+      // id → 외곽 폴리곤 매핑 (selected 변경 시 setOptions 호출용)
+      if (ringPolys[0]) {
+        buildingPolyMapRef.current.set(building.id, ringPolys[0]);
       }
 
       // 꼭지점 마커 — closed ring 의 마지막 좌표는 첫 좌표와 동일하므로 N-1 개만
@@ -370,8 +393,9 @@ export default function QuoteMap({
       let labelOverlay: any = null;
       if (labelAnchor) {
         const labelEl = document.createElement("div");
+        // 클릭 가능 — 라벨 클릭 = 동 선택, 우측 × 클릭 = 삭제 요청 (부모 빨간 모드)
         labelEl.className =
-          "px-2 py-1 bg-white/95 border border-orange-500 rounded text-orange-700 text-[11px] leading-tight font-bold shadow tabular-nums select-none pointer-events-none text-center";
+          "px-1.5 py-1 bg-white/95 border border-orange-500 rounded text-orange-700 text-[11px] leading-tight font-bold shadow tabular-nums select-none cursor-pointer hover:bg-white";
         const line1 = `${building.name} · ${toPyeong(building.area_m2).toLocaleString()}평`;
         const hasDims =
           typeof building.widthM === "number" &&
@@ -381,7 +405,32 @@ export default function QuoteMap({
         const line2 = hasDims
           ? `${Math.round(building.widthM!)} × ${Math.round(building.heightM!)}m · ${Math.round(building.area_m2).toLocaleString()}㎡`
           : `${Math.round(building.area_m2).toLocaleString()}㎡`;
-        labelEl.innerHTML = `<div>${line1}</div><div class="text-[10px] font-normal text-gray-600">${line2}</div>`;
+        labelEl.innerHTML = `
+          <div class="flex items-start gap-1.5">
+            <div class="flex-1 text-center">
+              <div>${line1}</div>
+              <div class="text-[10px] font-normal text-gray-600">${line2}</div>
+            </div>
+            <button
+              type="button"
+              data-action="delete"
+              class="text-red-600 hover:bg-red-100 rounded leading-none w-4 h-4 flex items-center justify-center text-sm shrink-0 -mt-0.5"
+              aria-label="이 동 삭제"
+              title="이 동 삭제"
+            >×</button>
+          </div>
+        `;
+        // 라벨/X 버튼 click 이벤트
+        const clickedId = building.id;
+        labelEl.addEventListener("click", (e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-action="delete"]')) {
+            e.stopPropagation();
+            onRequestDeleteRef.current?.(clickedId);
+          } else {
+            onSelectRef.current?.(clickedId);
+          }
+        });
         labelOverlay = new window.kakao.maps.CustomOverlay({
           map,
           position: new window.kakao.maps.LatLng(labelAnchor.lat, labelAnchor.lng),
@@ -585,6 +634,18 @@ export default function QuoteMap({
     map.setCenter(center);
     fitDoneRef.current = true;
   }, [loaded, parcelPolygon, buildings]);
+
+  // 선택된 동 강조 — selectedBuildingId 변경 시 setOptions 만 호출 (재생성 X)
+  useEffect(() => {
+    for (const [id, poly] of buildingPolyMapRef.current.entries()) {
+      const isSelected = id === selectedBuildingId;
+      poly.setOptions({
+        strokeWeight: isSelected ? 6 : 3,
+        strokeColor: isSelected ? "#FACC15" : BUILDING_STROKE, // yellow-400
+        fillOpacity: isSelected ? 0.7 : 0.55,
+      });
+    }
+  }, [selectedBuildingId, buildings]);
 
   // 클린업
   useEffect(() => {
