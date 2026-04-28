@@ -13,7 +13,8 @@
 - 좌표 저장 정책 (2026-04-22~): `kepco_addr.lat/lng` = 리 단위 단일 저장소. 지번 좌표는 VWorld on-demand + Vercel KV (TTL 3일). `geocode_cache` 폐기
 - [SUNLAP 결제 일정](project_payment_schedule.md) 💰 — 선금 200만 수령(2026-04-21). 잔금 1,210만은 완료 후. 서버비 월 5만 매월 21일
 - [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 협상 맥락 + 진행 상태. 가격표 docs/견적_1차2차.md
-- 🛠 [견적 모드 구조 + 다음 작업](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계, 1단계 영역 편집 완료(2026-04-26), 다음=시설별 견적
+- 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
+- 🚀 [2차 착수 인덱스](project_phase2_kickoff.md) ⭐ — 700만 5개 항목 작업 분할 + 1순위=공매 통합(350만)
 - 🏛 [공매 통합 의도](project_auction_intent.md) ⭐ — 의뢰자 의도: "저가 매입 기회 발굴". 공매(캠코)만 진행, 경매는 의뢰자 포기(2026-04-26)
 - [3차 개발 — 태양광설치여부+이격거리](project_phase3_proposal.md) ⭐ — 전국태양광허가 API + 법제처 조례 API + 도로현황 SHP 연계 가능 검증 완료. 400~550만/10~12주. 의뢰자 확답 대기 (2026-04-17)
 - ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
