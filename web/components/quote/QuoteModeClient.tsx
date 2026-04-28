@@ -59,6 +59,7 @@ import {
   FACILITY_PLACEMENT,
   calcInstalledKw,
   type PanelModule,
+  type PlacementSpec,
 } from "@/lib/quote/panel";
 import {
   fillPanelGrid,
@@ -352,7 +353,13 @@ export default function QuoteModeClient({ pnu }: Props) {
   const [specOverrides, setSpecOverrides] = useState<
     Record<string, FacilitySpec>
   >({});
-  /** 단가 인라인 편집 펼친 동의 id (한 번에 한 동만 편집) */
+  /** 동별 이격거리(행간/가장자리) 사용자 변경.
+   *  미설정이면 FACILITY_PLACEMENT[kind] 디폴트 사용.
+   *  시설 종류가 바뀌면 자동 클리어 (새 시설의 디폴트 이격거리로 복귀). */
+  const [placementOverrides, setPlacementOverrides] = useState<
+    Record<string, PlacementSpec>
+  >({});
+  /** 단가/이격거리 인라인 편집 펼친 동의 id (한 번에 한 동만 편집) */
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
 
   // ── 3단계 — 패널 모듈 사용자 변경 (의뢰자 추가 요청 2026-04-27)
@@ -387,8 +394,14 @@ export default function QuoteModeClient({ pnu }: Props) {
   const handleFacilityChange = useCallback(
     (id: string, kind: FacilityKind) => {
       setFacilityOverrides((prev) => ({ ...prev, [id]: kind }));
-      // 시설 종류 변경 → 단가 override 클리어 (새 시설 디폴트 적용)
+      // 시설 종류 변경 → 단가/이격거리 override 클리어 (새 시설 디폴트 적용)
       setSpecOverrides((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setPlacementOverrides((prev) => {
         if (!(id in prev)) return prev;
         const next = { ...prev };
         delete next[id];
@@ -400,6 +413,22 @@ export default function QuoteModeClient({ pnu }: Props) {
 
   const handleSpecChange = useCallback((id: string, spec: FacilitySpec) => {
     setSpecOverrides((prev) => ({ ...prev, [id]: spec }));
+  }, []);
+
+  const handlePlacementChange = useCallback(
+    (id: string, placement: PlacementSpec) => {
+      setPlacementOverrides((prev) => ({ ...prev, [id]: placement }));
+    },
+    [],
+  );
+
+  const handleResetPlacement = useCallback((id: string) => {
+    setPlacementOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }, []);
 
   const handleResetSpec = useCallback((id: string) => {
@@ -436,7 +465,8 @@ export default function QuoteModeClient({ pnu }: Props) {
             geometry?.jimok ?? "",
             bldgRegister,
           );
-        const placement = FACILITY_PLACEMENT[facility];
+        const placement =
+          placementOverrides[id] ?? FACILITY_PLACEMENT[facility];
         // Step 3-2: 시설별 자동 회전 (정남 / 건물 가장 긴 변 평행)
         const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
         const layout = showPanels
@@ -457,6 +487,7 @@ export default function QuoteModeClient({ pnu }: Props) {
     [
       buildings,
       facilityOverrides,
+      placementOverrides,
       geometry,
       bldgRegister,
       activeModule,
@@ -513,6 +544,7 @@ export default function QuoteModeClient({ pnu }: Props) {
       const auto = recommendFacility(b.source, jimok, bldgRegister);
       const kind = facilityOverrides[id] ?? auto;
       const spec = specOverrides[id] ?? FACILITY_SPEC[kind];
+      const placement = placementOverrides[id] ?? FACILITY_PLACEMENT[kind];
       const py = b.edited_area_m2 * M2_TO_PYEONG;
       const layout = panelLayouts.find((l) => l.id === id);
       const panelCount = layout?.count ?? 0;
@@ -524,12 +556,14 @@ export default function QuoteModeClient({ pnu }: Props) {
         auto,
         kind,
         spec,
+        placement,
         py,
         panelCount,
         kw,
         cost,
         isAutoKind: !facilityOverrides[id],
         isCustomSpec: !!specOverrides[id],
+        isCustomPlacement: !!placementOverrides[id],
       };
     });
   }, [
@@ -538,6 +572,7 @@ export default function QuoteModeClient({ pnu }: Props) {
     bldgRegister,
     facilityOverrides,
     specOverrides,
+    placementOverrides,
     panelLayouts,
   ]);
 
@@ -1038,6 +1073,10 @@ export default function QuoteModeClient({ pnu }: Props) {
                     onResetFacility={() => handleResetFacility(row.id)}
                     onSpecChange={(spec) => handleSpecChange(row.id, spec)}
                     onResetSpec={() => handleResetSpec(row.id)}
+                    onPlacementChange={(placement) =>
+                      handlePlacementChange(row.id, placement)
+                    }
+                    onResetPlacement={() => handleResetPlacement(row.id)}
                     onToggleEditSpec={() =>
                       setEditingSpecId((prev) =>
                         prev === row.id ? null : row.id,
@@ -1297,7 +1336,7 @@ export default function QuoteModeClient({ pnu }: Props) {
                                 {Math.round(
                                   ((varOverrides.graceMonths ??
                                     DEFAULT_FINANCE_INPUT.graceMonths) +
-                                    (loanScenario === "10년" ? 120 : 240)) /
+                                    getRepayMonths(loanScenario)) /
                                     12,
                                 )}
                                 년
@@ -1321,9 +1360,9 @@ export default function QuoteModeClient({ pnu }: Props) {
                     )}
                   </div>
 
-                  {/* 시나리오 토글 — 자기자본 / 10년 / 20년 (의뢰자 양식 그대로) */}
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(["자기자본", "10년", "20년"] as LoanScenario[]).map(
+                  {/* 시나리오 토글 — 자기자본 / 10년 / 15년 / 20년 (봉남리 양식 + 15년 추가) */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(["자기자본", "10년", "15년", "20년"] as LoanScenario[]).map(
                       (s) => {
                         const active = loanScenario === s;
                         const label =
@@ -1754,6 +1793,8 @@ interface FacilityRow {
   auto: FacilityKind;
   kind: FacilityKind;
   spec: FacilitySpec;
+  /** 시설별 이격거리 (override 적용 후 최종값) */
+  placement: PlacementSpec;
   py: number;
   /** 격자 알고리즘 결과 패널 갯수 */
   panelCount: number;
@@ -1762,6 +1803,7 @@ interface FacilityRow {
   cost: number;
   isAutoKind: boolean;
   isCustomSpec: boolean;
+  isCustomPlacement: boolean;
 }
 
 interface FacilityCardProps {
@@ -1772,6 +1814,8 @@ interface FacilityCardProps {
   onResetFacility: () => void;
   onSpecChange: (spec: FacilitySpec) => void;
   onResetSpec: () => void;
+  onPlacementChange: (placement: PlacementSpec) => void;
+  onResetPlacement: () => void;
   onToggleEditSpec: () => void;
   /** 지도/카드 양방향 동 선택 강조 */
   isSelected?: boolean;
@@ -1791,6 +1835,8 @@ function FacilityCard({
   onResetFacility,
   onSpecChange,
   onResetSpec,
+  onPlacementChange,
+  onResetPlacement,
   onToggleEditSpec,
   isSelected,
   onSelect,
@@ -1800,34 +1846,57 @@ function FacilityCard({
     auto,
     kind,
     spec,
+    placement,
     py,
     panelCount,
     kw,
     cost,
     isAutoKind,
     isCustomSpec,
+    isCustomPlacement,
   } = row;
   const py_round = Math.round(py);
   const isUserAdded = b.source === "user_added";
+  const isCustomized = isCustomSpec || isCustomPlacement;
 
-  // 단가 인라인 편집 로컬 입력값 (확정 전까지 휘발)
-  const [draftPyeong, setDraftPyeong] = useState(spec.pyeongPerKw.toString());
+  // 인라인 편집 로컬 입력값 (확정 전까지 휘발)
+  // 평/kW 는 격자 기반 도입 후 dead 변수 → UI 에서 제거. 단가 + 이격거리만 편집.
   const [draftCostMan, setDraftCostMan] = useState(
     (spec.costPerKw / 10000).toString(),
   );
+  const [draftRowGap, setDraftRowGap] = useState(placement.rowGapM.toString());
+  const [draftEdgeInset, setDraftEdgeInset] = useState(
+    placement.edgeInsetM.toString(),
+  );
 
-  // 외부 spec 변경(시설 종류 변경/원래대로 등) 시 입력칸도 동기화
+  // 외부 변경 (시설 종류 변경/원래대로 등) 시 입력칸도 동기화
   useEffect(() => {
-    setDraftPyeong(spec.pyeongPerKw.toString());
     setDraftCostMan((spec.costPerKw / 10000).toString());
-  }, [spec, isEditingSpec]);
+    setDraftRowGap(placement.rowGapM.toString());
+    setDraftEdgeInset(placement.edgeInsetM.toString());
+  }, [spec, placement, isEditingSpec]);
 
   const handleApply = () => {
-    const p = Number(draftPyeong);
     const c = Number(draftCostMan);
-    if (!Number.isFinite(p) || p <= 0) return;
+    const r = Number(draftRowGap);
+    const e = Number(draftEdgeInset);
     if (!Number.isFinite(c) || c <= 0) return;
-    onSpecChange({ pyeongPerKw: p, costPerKw: c * 10000 });
+    if (!Number.isFinite(r) || r < 0) return;
+    if (!Number.isFinite(e) || e < 0) return;
+    // 단가는 pyeongPerKw 디폴트 유지 (UI에선 안 쓰지만 타입 보존)
+    onSpecChange({ pyeongPerKw: spec.pyeongPerKw, costPerKw: c * 10000 });
+    onPlacementChange({
+      rowGapM: r,
+      colGapM: placement.colGapM,
+      edgeInsetM: e,
+      rotation: placement.rotation,
+    });
+    onToggleEditSpec();
+  };
+
+  const handleResetAll = () => {
+    onResetSpec();
+    onResetPlacement();
     onToggleEditSpec();
   };
 
@@ -1842,7 +1911,7 @@ function FacilityCard({
       className={`px-2.5 py-2 border rounded cursor-pointer transition-all ${
         isSelected
           ? "ring-2 ring-yellow-400 border-yellow-500 bg-yellow-50 shadow-sm"
-          : isCustomSpec || !isAutoKind
+          : isCustomized || !isAutoKind
             ? "bg-blue-50/60 border-blue-200 hover:border-blue-400"
             : "bg-white border-gray-200 hover:border-gray-400 hover:shadow-sm"
       }`}
@@ -1884,20 +1953,20 @@ function FacilityCard({
           const cost = (s.costPerKw / 10000).toLocaleString();
           return (
             <option key={k} value={k}>
-              {FACILITY_LABEL[k]} — {s.pyeongPerKw}평/kW · {cost}만/kW
+              {FACILITY_LABEL[k]} — {cost}만/kW
               {k === auto ? " (자동)" : ""}
             </option>
           );
         })}
       </select>
 
-      {/* 단가 표시 또는 편집 */}
+      {/* 배치/단가 표시 또는 편집 */}
       {!isEditingSpec ? (
         <div className="flex items-center justify-between gap-2 mt-1.5 text-[10px] text-gray-500">
           <span className="truncate">
-            {spec.pyeongPerKw}평/kW ·{" "}
+            행간 {placement.rowGapM}m · 가장자리 {placement.edgeInsetM}m ·{" "}
             {(spec.costPerKw / 10000).toLocaleString()}만/kW
-            {isCustomSpec && (
+            {isCustomized && (
               <span className="ml-1 text-blue-700 font-semibold">수정됨</span>
             )}
           </span>
@@ -1905,22 +1974,34 @@ function FacilityCard({
             onClick={onToggleEditSpec}
             className="text-[10px] px-1.5 py-0.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0"
           >
-            ✏ 단가
+            ✏ 편집
           </button>
         </div>
       ) : (
         <div className="mt-1.5 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded space-y-1.5">
           <div className="flex items-center gap-1.5 text-[11px]">
-            <span className="text-gray-700 w-20 shrink-0">1kW당 평수</span>
+            <span className="text-gray-700 w-20 shrink-0">행간 (그림자)</span>
             <input
               type="number"
               step="0.1"
-              min="0.1"
-              value={draftPyeong}
-              onChange={(e) => setDraftPyeong(e.target.value)}
+              min="0"
+              value={draftRowGap}
+              onChange={(e) => setDraftRowGap(e.target.value)}
               className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
             />
-            <span className="text-gray-500 shrink-0">평</span>
+            <span className="text-gray-500 shrink-0">m</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-gray-700 w-20 shrink-0">가장자리</span>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={draftEdgeInset}
+              onChange={(e) => setDraftEdgeInset(e.target.value)}
+              className="flex-1 min-w-0 px-1.5 py-0.5 border border-gray-300 rounded text-gray-900 bg-white tabular-nums focus:border-blue-500 focus:outline-none"
+            />
+            <span className="text-gray-500 shrink-0">m</span>
           </div>
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="text-gray-700 w-20 shrink-0">kW당 시공비</span>
@@ -1935,12 +2016,9 @@ function FacilityCard({
             <span className="text-gray-500 shrink-0">만원</span>
           </div>
           <div className="flex justify-between gap-1">
-            {isCustomSpec ? (
+            {isCustomized ? (
               <button
-                onClick={() => {
-                  onResetSpec();
-                  onToggleEditSpec();
-                }}
+                onClick={handleResetAll}
                 className="text-[10px] px-2 py-1 text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 rounded"
               >
                 원래대로

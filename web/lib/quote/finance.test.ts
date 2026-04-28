@@ -67,6 +67,9 @@ describe("getRepayMonths", () => {
   it("10년 = 120", () => {
     expect(getRepayMonths("10년")).toBe(120);
   });
+  it("15년 = 180", () => {
+    expect(getRepayMonths("15년")).toBe(180);
+  });
   it("20년 = 240", () => {
     expect(getRepayMonths("20년")).toBe(240);
   });

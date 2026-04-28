@@ -9,6 +9,7 @@
  * 시나리오 (의뢰자 명시):
  *   - 자기자본 100% — 대출 0
  *   - 10년 대출 — 거치 N개월 + 상환 120개월
+ *   - 15년 대출 — 거치 N개월 + 상환 180개월
  *   - 20년 대출 — 거치 N개월 + 상환 240개월
  *
  * 변수 디폴트 (모두 사용자 변경 가능, 봉남리 PDF 일치):
@@ -18,7 +19,7 @@
  *   - 부가세 10% (공사비 별도 가산)
  */
 
-export type LoanScenario = "자기자본" | "10년" | "20년";
+export type LoanScenario = "자기자본" | "10년" | "15년" | "20년";
 
 export interface FinanceInput {
   /** 시설용량 kW */
@@ -139,10 +140,12 @@ export function calcMonthlyPayment(
  * 시나리오 → 상환 개월수.
  *   자기자본 → 0
  *   10년     → 120
+ *   15년     → 180
  *   20년     → 240
  */
 export function getRepayMonths(scenario: LoanScenario): number {
   if (scenario === "10년") return 120;
+  if (scenario === "15년") return 180;
   if (scenario === "20년") return 240;
   return 0;
 }
