@@ -154,7 +154,8 @@ export default function FinancePrintLayout({ data }: Props) {
               <span>출력일: {formatGenDate(data.generatedAt)}</span>
               <span className="company-info">
                 <b>{COMPANY.englishName}</b> · {COMPANY.name} ·{" "}
-                {COMPANY.phone} · {COMPANY.email}
+                {COMPANY.phone} · {COMPANY.mobile} · {COMPANY.email} ·{" "}
+                {COMPANY.website}
               </span>
             </div>
           </div>
@@ -340,6 +341,10 @@ export default function FinancePrintLayout({ data }: Props) {
           font-size: 7pt;
           color: #555;
           line-height: 1.3;
+          background: #fff;
+          padding: 1mm 2mm;
+          border: 1px solid #ddd;
+          border-radius: 1mm;
         }
         .meta-row {
           display: flex;
@@ -371,7 +376,7 @@ export default function FinancePrintLayout({ data }: Props) {
           border: 1.5px solid #c00;
         }
         .box-title {
-          background: #f0f0f0;
+          background: #fff;
           padding: 1.5mm 2mm;
           font-size: 8.5pt;
           font-weight: 700;
@@ -391,7 +396,7 @@ export default function FinancePrintLayout({ data }: Props) {
           padding: 1mm 2mm;
           font-size: 6.5pt;
           color: #555;
-          background: #fafafa;
+          background: #fff;
           border-top: 1px dashed #ccc;
           line-height: 1.3;
         }

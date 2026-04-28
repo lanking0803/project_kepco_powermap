@@ -6,18 +6,22 @@
  */
 
 export const COMPANY = {
-  name: "(주)솔라엘디",
-  englishName: "Solar LD inc",
-  address: "대구광역시 동구 안심뉴타운로 32",
-  phone: "053) 856-9698",
-  fax: "0504) 370-2940",
-  email: "slddettkh@naver.com",
+  name: "(주)한국에텍",
+  englishName: "HKETECH",
+  address: "광주광역시 광산구 비아도 24번길 56-4",
+  phone: "062) 973-8846",
+  fax: "061) 331-8807",
+  mobile: "010-2627-8845",
+  email: "cyo8845@hanmail.net",
+  website: "www.hkelech.co.kr",
 } as const;
 
 /**
  * 회사 로고 이미지 경로 (public/ 기준).
  *
- * 의뢰자 로고 제작 중 — 파일이 도착하면 같은 경로에 덮어쓰면 자동 반영.
+ * 임시: SUNLAP 마커 카드(흰 카드 + 파란 막대 3개 + 삼각 꼬리) SVG.
+ *   — 메인 지도 마커(KakaoMap.makeMarkerHtml)와 동일 디자인을 추출한 것.
+ * 의뢰자 정식 로고 PNG 도착 시 같은 폴더에 .png 두고 이 경로를 .png 로 교체.
  * 로드 실패 시 PrintLayout 의 onError 폴백으로 placeholder 박스가 뜸.
  */
-export const COMPANY_LOGO_PATH = "/print/company-logo.png";
+export const COMPANY_LOGO_PATH = "/print/company-logo.svg";

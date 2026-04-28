@@ -183,9 +183,13 @@ export default function PrintLayout({ data, mapSlot }: Props) {
               <br />
               전 화 : {COMPANY.phone}
               <br />
+              모바일 : {COMPANY.mobile}
+              <br />
               팩 스 : {COMPANY.fax}
               <br />
               이메일 : {COMPANY.email}
+              <br />
+              홈페이지 : {COMPANY.website}
             </div>
           </div>
         </div>
@@ -273,7 +277,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
           font-size: 8pt;
         }
         .section-title {
-          background: #fafafa;
+          background: #fff;
           border: 1px solid #333;
           padding: 1.5mm 2mm;
           font-weight: 700;
@@ -318,7 +322,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
         }
         .module-table thead th,
         .kepco-table thead th {
-          background: #f0f0f0;
+          background: #fff;
           font-weight: 700;
         }
         .num {
@@ -327,19 +331,20 @@ export default function PrintLayout({ data, mapSlot }: Props) {
         }
         .total-row td {
           font-weight: 700;
-          background: #fafafa;
+          background: #fff;
         }
         .checked-at td {
           font-size: 7pt;
           color: #555;
           text-align: center;
-          background: #fafafa;
+          background: #fff;
         }
         .company-box {
           display: flex;
           gap: 2mm;
           padding: 2mm;
           border: 1px solid #333;
+          background: #fff;
         }
         .company-info {
           flex: 1;
@@ -369,7 +374,7 @@ export default function PrintLayout({ data, mapSlot }: Props) {
           height: 5mm;
         }
         .drawing-meta .label {
-          background: #f5f5f5;
+          background: #fff;
           width: 35%;
           font-size: 7pt;
         }
@@ -409,7 +414,7 @@ function Section({
           break-inside: avoid;
         }
         .section-title {
-          background: #fafafa;
+          background: #fff;
           border: 1px solid #333;
           padding: 1.5mm 2mm;
           font-weight: 700;
@@ -470,7 +475,7 @@ function CompanyLogo() {
           justify-content: center;
           font-size: 7pt;
           color: #999;
-          background: #fafafa;
+          background: #fff;
         }
       `}</style>
     </div>
