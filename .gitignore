@@ -42,6 +42,8 @@ crawler/run_*_local.py
 # 테스트/검증 스크립트 (로컬 전용, 시크릿 하드코딩 가능성 있음)
 scripts/test_*
 crawler/test_*.py
+# 단, 공매 API 검증 스크립트는 재현성 위해 보존 (시크릿은 SECRETS.local.md 분리)
+!crawler/test_onbid*.py
 
 # Cache 파일 (Actions 또는 로컬 fallback 으로 생성)
 .cache/
