@@ -37,4 +37,32 @@ GET https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2/getRlstDtlInf2
 - 명세 docx → 텍스트 보존: docs/api_specs/온비드_공매/_extract.txt / _extract_상세.txt
 - 호출 테스트 스크립트: crawler/test_onbid.py + web/scripts/test-onbid-*.ts (env 사용)
 - 영업 활용: 시세 대비 할인율 노출 + 사진/감정평가서 PDF (의뢰자 의도 — 토지 저가 매입 기회 발굴)`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2",
+    description:
+      "공매 부동산 물건 목록 — ⚠ pvctTrgtYn=N/Y 단독 호출 시 NODATA 가능 (다른 세션에서 정확 파라미터 검증 중)",
+    fixedQuery: {
+      serviceKey: "{DATA_GO_KR_KEY}",
+      resultType: "json",
+      prptDivCd: "10",
+      pvctTrgtYn: "N",
+    },
+    inputs: [
+      {
+        name: "pageNo",
+        type: "string",
+        required: true,
+        sample: "1",
+        description: "페이지 번호",
+      },
+      {
+        name: "numOfRows",
+        type: "string",
+        required: true,
+        sample: "10",
+        description: "페이지당 행 수 (최대 1000)",
+      },
+    ],
+  },
 };

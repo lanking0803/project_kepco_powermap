@@ -3,7 +3,7 @@ import type { ExternalServiceMeta } from "../types";
 export const meta: ExternalServiceMeta = {
   id: "vworld",
   name: "VWorld (국토교통부 공간정보 오픈플랫폼)",
-  category: "geocoding",
+  category: "vworld",
   consoleUrl: "https://www.vworld.kr/dev/v4api.do",
   envKeys: ["VWORLD_KEY"],
   expiry: "2026-10-08",
@@ -27,4 +27,30 @@ GET .../wfs?TYPENAME=lt_c_ademd (읍면동)`,
 - Referer 헤더 검증: 등록한 URL 외 호출 차단 → 브라우저 직접 호출 시 CORS 막힘 → 반드시 API Route 경유
 - "기타지역" 같은 비표준 주소는 카카오와 동일하게 실패 가능
 - 만료 시 모든 필지/폴리곤/지오코딩 fallback 마비 — 갱신 까먹지 말 것`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://api.vworld.kr/req/wfs",
+    description: "PNU 단건 필지 폴리곤 (LX 편집지적도). fes:Filter PropertyIsEqualTo 1:1 매칭",
+    fixedQuery: {
+      key: "{VWORLD_KEY}",
+      domain: "sunlap.kr",
+      service: "WFS",
+      version: "2.0.0",
+      request: "GetFeature",
+      typename: "lt_c_landinfobasemap",
+      output: "application/json",
+      srsName: "EPSG:4326",
+    },
+    headers: { Referer: "https://sunlap.kr" },
+    inputs: [
+      {
+        name: "FILTER",
+        type: "string",
+        required: true,
+        sample:
+          '<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0"><fes:PropertyIsEqualTo><fes:ValueReference>pnu</fes:ValueReference><fes:Literal>4476042028100290004</fes:Literal></fes:PropertyIsEqualTo></fes:Filter>',
+        description: "WFS fes:Filter XML — pnu 필드 정확 매칭",
+      },
+    ],
+  },
 };

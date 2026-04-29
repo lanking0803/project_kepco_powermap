@@ -84,4 +84,33 @@ Headers:
 - numOfRows 최대 1,000
 - 일부 필드 sentinel 값: instlYr=1900 (실제 미상), lctnRoadNmAddr="" (도로명 없는 경우)
 - 데이터 갱신 주기: API 측에서 수시 — crtrYmd 필드로 데이터 기준일 확인 가능`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api",
+    description: "전국 태양광 허가 시설 — 페이지네이션만 지원 (검색 필터 X)",
+    fixedQuery: {
+      serviceKey: "{DATA_GO_KR_KEY}",
+      type: "json",
+    },
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      Accept: "application/json",
+    },
+    inputs: [
+      {
+        name: "pageNo",
+        type: "string",
+        required: true,
+        sample: "1",
+        description: "페이지 번호 (1~122, 전국 ~12만건)",
+      },
+      {
+        name: "numOfRows",
+        type: "string",
+        required: true,
+        sample: "10",
+        description: "페이지당 행 수 (최대 1000)",
+      },
+    ],
+  },
 };

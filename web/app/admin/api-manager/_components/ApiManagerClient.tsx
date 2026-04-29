@@ -21,6 +21,7 @@ import type { KeyStatusPublic } from "../_lib/server-keys";
 import CategoryNav from "./CategoryNav";
 import ServicePanel from "./ServicePanel";
 import EndpointPanel from "./EndpointPanel";
+import HealthDashboard from "./HealthDashboard";
 
 type Tab = "external" | "internal";
 
@@ -106,8 +107,11 @@ export default function ApiManagerClient({
           {tab === "internal" && selectedEndpoint && (
             <EndpointPanel endpoint={selectedEndpoint} selectedMethod={method} />
           )}
-          {!selectedService && !selectedEndpoint && (
-            <EmptyState tab={tab} />
+          {tab === "external" && !selectedService && (
+            <HealthDashboard services={services} />
+          )}
+          {tab === "internal" && !selectedEndpoint && (
+            <EmptyState tab="internal" />
           )}
         </div>
       </div>

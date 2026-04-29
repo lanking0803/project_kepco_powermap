@@ -30,4 +30,31 @@ Headers:
 - 응답 jibun 끝자리 마스킹 ("3*", "10*") — 정확 매칭 불가, 통계 용도
 - resultCode "03" = NO_DATA (정상, 거래 0건)
 - 키 노출 시: data.go.kr 마이페이지에서 인증키 재발급 → DATA_GO_KR_KEY 갱신`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade",
+    description: "토지 매매 실거래가 — 시군구 + 거래월 단위 조회",
+    fixedQuery: {
+      serviceKey: "{DATA_GO_KR_KEY}",
+      numOfRows: "10",
+      pageNo: "1",
+    },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SUNLAP/1.0)" },
+    inputs: [
+      {
+        name: "LAWD_CD",
+        type: "string",
+        required: true,
+        sample: "44760",
+        description: "시군구 5자리 (부여군=44760)",
+      },
+      {
+        name: "DEAL_YMD",
+        type: "string",
+        required: true,
+        sample: "202604",
+        description: "거래월 YYYYMM",
+      },
+    ],
+  },
 };

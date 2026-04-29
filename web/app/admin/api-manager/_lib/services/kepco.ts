@@ -3,7 +3,7 @@ import type { ExternalServiceMeta } from "../types";
 export const meta: ExternalServiceMeta = {
   id: "kepco",
   name: "한국전력공사 — 배전선로 여유용량 (비공식 API)",
-  category: "scraping",
+  category: "kepco",
   consoleUrl: "https://online.kepco.co.kr",
   envKeys: [],
   expiry: null,

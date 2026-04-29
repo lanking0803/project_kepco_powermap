@@ -26,4 +26,31 @@ Headers:
   - buildingType="일반" → jibun 마스킹
 - **공장/창고 매매는 nrg 에 미포함** — 토지매매(rtms-land) 의 "공장용지" 지목 참조
 - 옥상 태양광 사업자 관점: 평당가는 buildingAr 기준 (대지 X, 건물면적)`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://apis.data.go.kr/1613000/RTMSDataSvcNrgTrade/getRTMSDataSvcNrgTrade",
+    description: "상업업무용 부동산 매매 실거래가 — 시군구 + 거래월",
+    fixedQuery: {
+      serviceKey: "{DATA_GO_KR_KEY}",
+      numOfRows: "10",
+      pageNo: "1",
+    },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SUNLAP/1.0)" },
+    inputs: [
+      {
+        name: "LAWD_CD",
+        type: "string",
+        required: true,
+        sample: "11680",
+        description: "시군구 5자리 (서울 강남구=11680)",
+      },
+      {
+        name: "DEAL_YMD",
+        type: "string",
+        required: true,
+        sample: "202604",
+        description: "거래월 YYYYMM",
+      },
+    ],
+  },
 };

@@ -3,7 +3,7 @@ import type { ExternalServiceMeta } from "../types";
 export const meta: ExternalServiceMeta = {
   id: "github-actions",
   name: "GitHub Actions (KEPCO 크롤링 실행 플랫폼)",
-  category: "infra",
+  category: "github",
   consoleUrl: "https://github.com/hicor150010/project_kepco_powermap/actions",
   envKeys: ["GH_PAT", "GITHUB_REPO"],
   expiry: null,

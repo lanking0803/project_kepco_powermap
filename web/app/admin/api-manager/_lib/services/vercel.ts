@@ -3,7 +3,7 @@ import type { ExternalServiceMeta } from "../types";
 export const meta: ExternalServiceMeta = {
   id: "vercel",
   name: "Vercel (호스팅 + Edge Functions + KV)",
-  category: "infra",
+  category: "vercel",
   consoleUrl: "https://vercel.com/dashboard",
   envKeys: [],
   expiry: null,

@@ -3,7 +3,7 @@
 /**
  * 좌측 카테고리 트리 네비.
  *
- * 외부 탭: meta.category 별 그룹 (geocoding / data.go.kr / infra / scraping)
+ * 외부 탭: meta.category 별 그룹 — 운영 주체 1:1 (kakao / vworld / data.go.kr / law.go.kr / supabase / github / vercel / kepco)
  * 내부 탭: path 첫 세그먼트 별 그룹 (capa / parcel / admin / ...)
  *
  * URL 라우팅: 클릭 시 router.replace(?tab=X&id=Y) — 새로고침/뒤로가기 지원
@@ -17,6 +17,30 @@ import type {
 } from "../_lib/types";
 
 type Tab = "external" | "internal";
+
+/** 카테고리 표시명 — 운영 주체 도메인을 그대로. 미정의 카테고리는 raw key 그대로 출력 */
+const CATEGORY_LABEL: Record<string, string> = {
+  kakao: "Kakao Developers",
+  vworld: "VWorld",
+  "data.go.kr": "공공데이터포털 (data.go.kr)",
+  "law.go.kr": "법제처 (open.law.go.kr)",
+  supabase: "Supabase",
+  github: "GitHub",
+  vercel: "Vercel",
+  kepco: "한국전력공사 (KEPCO)",
+};
+
+/** 좌측 트리 노출 순서 — 호출 빈도/영업가치 기준. 미정의는 가나다순 뒤로 */
+const CATEGORY_ORDER: string[] = [
+  "vworld",
+  "kakao",
+  "data.go.kr",
+  "law.go.kr",
+  "kepco",
+  "supabase",
+  "github",
+  "vercel",
+];
 
 interface Props {
   tab: Tab;
@@ -54,7 +78,15 @@ export default function CategoryNav({ tab, selectedId, services, endpoints }: Pr
         if (!m.has(k)) m.set(k, []);
         m.get(k)!.push(s);
       }
-      return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+      // CATEGORY_ORDER 우선, 미정의는 가나다순 뒤로
+      return [...m.entries()].sort(([a], [b]) => {
+        const ai = CATEGORY_ORDER.indexOf(a);
+        const bi = CATEGORY_ORDER.indexOf(b);
+        if (ai === -1 && bi === -1) return a.localeCompare(b);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
     } else {
       const m = new Map<string, CollectedEndpoint[]>();
       for (const e of filteredItems as CollectedEndpoint[]) {
@@ -93,10 +125,18 @@ export default function CategoryNav({ tab, selectedId, services, endpoints }: Pr
             검색 결과 없음
           </div>
         )}
-        {grouped.map(([groupKey, items]) => (
-          <div key={groupKey} className="border-b border-gray-100 last:border-b-0">
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">
-              {groupKey} ({items.length})
+        {grouped.map(([groupKey, items]) => {
+          const label =
+            tab === "external"
+              ? CATEGORY_LABEL[groupKey] ?? groupKey
+              : groupKey;
+          return (
+          <div key={groupKey} className="border-b border-gray-200 last:border-b-0">
+            <div className="px-3 py-2 text-xs font-bold text-gray-800 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between">
+              <span className="truncate">{label}</span>
+              <span className="ml-2 text-[10px] font-semibold text-blue-700 bg-white border border-blue-200 rounded-full px-1.5 py-0.5 tabular-nums">
+                {items.length}
+              </span>
             </div>
             {tab === "external"
               ? (items as CollectedExternalService[]).map((s) => (
@@ -136,7 +176,8 @@ export default function CategoryNav({ tab, selectedId, services, endpoints }: Pr
                   );
                 })}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

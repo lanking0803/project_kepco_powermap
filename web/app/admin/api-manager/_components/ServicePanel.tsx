@@ -16,17 +16,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { CollectedExternalService } from "../_lib/types";
 import type { KeyStatusPublic } from "../_lib/server-keys";
 import ExpiryBadge from "./ExpiryBadge";
+import ExternalLiveTester from "./ExternalLiveTester";
 
 interface Props {
   service: CollectedExternalService;
   envKeys: KeyStatusPublic[];
 }
 
+/** CategoryNav 와 동일 키 — 운영 주체별 라벨 */
 const CATEGORY_LABEL: Record<string, string> = {
-  geocoding: "지오코딩",
-  "data.go.kr": "data.go.kr 산하",
-  infra: "인프라",
-  scraping: "스크래핑 (비공식)",
+  kakao: "Kakao Developers",
+  vworld: "VWorld",
+  "data.go.kr": "공공데이터포털",
+  "law.go.kr": "법제처",
+  supabase: "Supabase",
+  github: "GitHub",
+  vercel: "Vercel",
+  kepco: "KEPCO (비공식)",
 };
 
 export default function ServicePanel({ service, envKeys }: Props) {
@@ -138,6 +144,16 @@ export default function ServicePanel({ service, envKeys }: Props) {
             {service.usageExample}
           </pre>
         </Section>
+      )}
+
+      {/* 라이브 호출 — sampleRequest 정의된 서비스만.
+          key 로 service 바뀔 때 컴포넌트 재마운트 → useState 초기값(sample) 재적용 */}
+      {service.sampleRequest && (
+        <ExternalLiveTester
+          key={service.id}
+          serviceId={service.id}
+          sample={service.sampleRequest}
+        />
       )}
 
       {/* 특이사항 */}

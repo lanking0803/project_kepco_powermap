@@ -3,7 +3,7 @@ import type { ExternalServiceMeta } from "../types";
 export const meta: ExternalServiceMeta = {
   id: "supabase",
   name: "Supabase (Postgres + Auth + Storage)",
-  category: "infra",
+  category: "supabase",
   consoleUrl: "https://supabase.com/dashboard/project/wtbwgjejfrrwgbzgcdjd",
   envKeys: [
     "NEXT_PUBLIC_SUPABASE_URL",

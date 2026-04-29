@@ -44,12 +44,47 @@ export interface EndpointMeta {
   dangerNote?: string;
 }
 
+/**
+ * 외부 서비스 라이브 호출용 샘플 요청 메타.
+ *
+ * 관리자 페이지에서 [▶ 호출] 버튼으로 실제 외부 API 호출.
+ * 인증 등 환경변수 키는 client 에 노출하지 않도록 placeholder 로만 표기.
+ * 서버 프록시 (`/api/admin/external-test`) 가 실제 키 채워서 외부로 호출.
+ *
+ * placeholder 형식: `{ENV_KEY_NAME}` — 서버가 process.env[ENV_KEY_NAME] 으로 치환.
+ */
+export interface ExternalSampleRequest {
+  /** 호출 대상 URL — placeholder 허용 (예: "https://www.law.go.kr/DRF/lawSearch.do") */
+  url: string;
+  method: HttpMethod;
+  /** GET/DELETE 시 querystring 으로, POST/PATCH/PUT 시 body 로 사용 */
+  inputs?: MetaInput[];
+  /** 항상 포함되는 querystring (사용자 편집 X). placeholder 허용 — 예: { OC: "{LAW_OC}" } */
+  fixedQuery?: Record<string, string>;
+  /** 항상 포함되는 헤더. placeholder 허용 */
+  headers?: Record<string, string>;
+  /** 응답 스키마 / 호출 의도 메모 (1~2줄) */
+  description?: string;
+}
+
 /** 외부 서비스 메타 — _lib/services/<id>.ts 가 export */
 export interface ExternalServiceMeta {
   /** 식별자 — endpoint meta 의 externalDeps 에서 참조 */
   id: string;
   name: string;
-  category: "geocoding" | "data.go.kr" | "infra" | "scraping";
+  /**
+   * 운영 주체별 카테고리 — 콘솔/관리 페이지가 다른 곳을 묶지 않도록 1:1 분리.
+   * 그룹핑 표시명/순서는 _components/CategoryNav.tsx 의 CATEGORY_LABEL/CATEGORY_ORDER 에서 정의.
+   */
+  category:
+    | "kakao"
+    | "vworld"
+    | "data.go.kr"
+    | "law.go.kr"
+    | "supabase"
+    | "github"
+    | "vercel"
+    | "kepco";
   consoleUrl: string;
   /** process.env 의 키 이름들 (서버 컴포넌트가 읽어 표시) */
   envKeys?: string[];
@@ -60,6 +95,11 @@ export interface ExternalServiceMeta {
   issueGuide: string;
   usageExample?: string;
   notes?: string;
+  /**
+   * 라이브 호출용 샘플 요청 — 관리자 페이지에서 [▶ 호출] 가능.
+   * 한 서비스당 1개 (가장 자주 쓰는 호출). 미정의 시 호출 테스트 UI 비활성.
+   */
+  sampleRequest?: ExternalSampleRequest;
 }
 
 /** scanner 가 수집한 endpoint × method 단위 메타 */

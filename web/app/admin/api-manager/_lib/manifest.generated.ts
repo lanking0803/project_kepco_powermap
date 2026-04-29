@@ -188,6 +188,75 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/admin/external-test",
+      "id": "admin-external-test",
+      "filePath": "app/api/admin/external-test/route.ts",
+      "methods": [
+        {
+          "method": "POST",
+          "meta": {
+            "source": "외부 서비스 라이브 호출 프록시 — manifest sampleRequest 기반",
+            "cache": "no-store",
+            "auth": {
+              "__nonLiteral": true,
+              "kind": "AsExpression"
+            },
+            "inputs": [
+              {
+                "name": "serviceId",
+                "type": {
+                  "__nonLiteral": true,
+                  "kind": "AsExpression"
+                },
+                "required": true,
+                "sample": "law-go-kr",
+                "description": "외부 서비스 id (manifest.services[].id)"
+              },
+              {
+                "name": "values",
+                "type": {
+                  "__nonLiteral": true,
+                  "kind": "AsExpression"
+                },
+                "required": false,
+                "sample": "{}",
+                "description": "사용자 입력값 JSON (string 매핑) — sampleRequest.inputs 별 값"
+              }
+            ],
+            "outputSchema": "{ ok, status, statusText, elapsedMs, requestUrl, requestMethod, headers, bodyText, bodyJson | null, error | null }",
+            "externalDeps": [],
+            "notes": "관리자 외 차단. placeholder ({ENV_KEY}) 는 서버에서만 process.env 값으로 치환 — 클라이언트로 키 노출 X. 호출 가능한 서비스는 _lib/services/<id>.ts 에 sampleRequest 정의된 것만."
+          },
+          "metaLine": 26,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/admin/health-check-all",
+      "id": "admin-health-check-all",
+      "filePath": "app/api/admin/health-check-all/route.ts",
+      "methods": [
+        {
+          "method": "POST",
+          "meta": {
+            "source": "manifest sampleRequest 일괄 호출",
+            "cache": "no-store",
+            "auth": {
+              "__nonLiteral": true,
+              "kind": "AsExpression"
+            },
+            "inputs": [],
+            "outputSchema": "{ ok, results: ServiceHealthResult[] }",
+            "externalDeps": [],
+            "notes": "외부 서비스 탭 진입 시 자동 호출 + [전체 새로고침] 버튼으로 수동 호출. sampleRequest 미정의 서비스는 unsupported."
+          },
+          "metaLine": 40,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/admin/users",
       "id": "admin-users",
       "filePath": "app/api/admin/users/route.ts",
@@ -615,6 +684,159 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/onbid/by-pnu",
+      "id": "onbid-by-pnu",
+      "filePath": "app/api/onbid/by-pnu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "캠코 OnbidRlstListSrvc2/getRlstCltrList2 + OnbidRlstDtlSrvc2/getRlstDtlInf2 + bjd_master JOIN",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4683034023000070000",
+                "description": "PNU 19자리 (지번 코드)"
+              }
+            ],
+            "outputSchema": "{ ok: true, pnu, items: OnbidDetail[], fetchedAt } — 매물 없으면 items 빈 배열",
+            "externalDeps": [
+              "data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)",
+              "supabase (bjd_master)"
+            ],
+            "notes": {
+              "__nonLiteral": true,
+              "kind": "BinaryExpression"
+            }
+          },
+          "metaLine": 38,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/onbid/search",
+      "id": "onbid-search",
+      "filePath": "app/api/onbid/search/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "캠코 OnbidRlstListSrvc2/getRlstCltrList2 + bjd_master JOIN",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "sido",
+                "type": "string",
+                "required": false,
+                "sample": "전라남도",
+                "description": "시도"
+              },
+              {
+                "name": "sigungu",
+                "type": "string",
+                "required": false,
+                "sample": "나주시",
+                "description": "시군구"
+              },
+              {
+                "name": "emdong",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "읍면동"
+              },
+              {
+                "name": "categories",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "OurCategory 다중 선택 (콤마 구분, 예: 토지,창고)"
+              },
+              {
+                "name": "landMin",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "landMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "apslMin",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "apslMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "bidStart",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "YYYY-MM-DD"
+              },
+              {
+                "name": "bidEnd",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "YYYY-MM-DD"
+              },
+              {
+                "name": "usbdMin",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "usbdMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "pageNo",
+                "type": "number",
+                "required": false,
+                "sample": "1"
+              },
+              {
+                "name": "numOfRows",
+                "type": "number",
+                "required": false,
+                "sample": "20"
+              }
+            ],
+            "outputSchema": "{ ok: true, items: OnbidListItem[], totalCount: number, fetchedAt: string }",
+            "externalDeps": [
+              "data.go.kr (캠코 OnbidRlstListSrvc2)",
+              "supabase (bjd_master)"
+            ],
+            "notes": {
+              "__nonLiteral": true,
+              "kind": "BinaryExpression"
+            }
+          },
+          "metaLine": 34,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/parcel/by-latlng",
       "id": "parcel-by-latlng",
       "filePath": "app/api/parcel/by-latlng/route.ts",
@@ -764,6 +986,38 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/regulations/by-pnu",
+      "id": "regulations-by-pnu",
+      "filePath": "app/api/regulations/by-pnu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "법제처 OPEN API (자치법규 검색, 광역+기초 2회 호출)",
+            "cache": "private, s-maxage=86400, max-age=3600",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4476042028100290004",
+                "description": "PNU 19자리 숫자. 부여군 장암면 지토리 29-4 (광역도+군 케이스)."
+              }
+            ],
+            "outputSchema": "{ ok, pnu, region: { ctp_nm, sig_nm, sig_kind } | null, wide: LawOrdinance[], local: LawOrdinance[] }",
+            "externalDeps": [
+              "vworld",
+              "law-go-kr"
+            ],
+            "notes": "1차 ➕ 조례 옵션 (30만) 구현. 서니로직 UI 모방. 견적 모드 사이드바 노출.\n\n**행정구역 분기**:\n- 광역도 + 군 (예: 부여군) → 광역 \"도시계획\" + 기초 \"군계획\"\n- 광역도 + 시 (예: 수원시) → 광역 \"도시계획\" + 기초 \"도시계획\"\n- 광역시 + 자치구 (예: 강남구) → 광역 \"도시계획\" + 기초 \"도시계획\"\n- 단층 (세종/제주) → 광역만 검색, 기초 X\n\n**검색 한계**:\n- 법제처는 자치법규명(제목) 매칭만 가능 — 본문/지자체 필터 무시됨\n- 일부 시·군은 \"도시계획 조례\" 명칭이 없어 결과 0건 가능 (정상)\n\n**캐시**: query 단위 모듈 scope Map 24h. 서로 다른 PNU 라도 같은 시·군이면 캐시 히트."
+          },
+          "metaLine": 28,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/search",
       "id": "search",
       "filePath": "app/api/search/route.ts",
@@ -852,11 +1106,11 @@ export const MANIFEST: GeneratedManifest = {
                 "description": "매물 PNU 19자리 숫자 (시도2+시군구3+읍면동3+산구분1+본번4+부번4)"
               }
             ],
-            "outputSchema": "{ ok, pnu, bjd_code, same_pnu: SolarPermitRow[], same_dong: { count, total_kw } }",
+            "outputSchema": "{ ok, pnu, bjd_code, same_pnu, same_dong: { count, total_kw }, same_dong_markers: { lat, lng, pnu, jibun, name, kw }[] }",
             "externalDeps": [],
-            "notes": "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). 매월 갱신되는 정적 스냅샷이라 캐시 길게(10분)."
+            "notes": "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). same_dong_markers 는 외부 API 좌표 결측 (~53%) 제외한 행만 — count 보다 작은 게 정상."
           },
-          "metaLine": 45,
+          "metaLine": 65,
           "metaExportName": "meta"
         }
       ]
@@ -922,6 +1176,54 @@ export const MANIFEST: GeneratedManifest = {
       "issueGuide": "1. https://www.data.go.kr → \"건축HUB 건축물대장 정보 서비스\" 활용신청\n2. 자동승인 → 즉시 사용 (개발계정)\n3. 운영계정 전환 (2026-04-25 완료):\n   - 활용신청 상세 → \"운영계정 활용신청\"\n   - 활용사례 정보 입력 → 자동승인 → 한도 상향\n4. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)\n5. 만료 만료예정일 2028-04-25 — 만료 전 콘솔에서 연장",
       "usageExample": "# 표제부 (메인 건물)\nGET https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &sigunguCd=11680    # 시군구 5자리\n  &bjdongCd=10300     # 법정동 5자리\n  &platGbCd=0         # 0=일반/1=산\n  &bun=0073&ji=0001   # 본번/부번 4자리",
       "notes": "- ⚠️ **트러블슈팅**: 401 Unauthorized 의 진짜 원인은 키 문제가 아니라 **존재하지 않는 시군구/법정동 조합**\n  → 의심되는 주소 시도 전 검증된 주소(서울 강남 삼성동 159)로 200 OK 먼저 확인\n- **결정적 한계**: 비닐하우스/간이 슬레이트 축사는 가설건축물 → 미등록 (대부분 안 잡힘)\n- 등록 잘 됨: 유리온실(100평↑), 콘크리트/철골 축사, 공장/창고/일반건물\n- 표제부(getBrTitleInfo) + 총괄표제부(getBrRecapTitleInfo) 가 메인 — 7개 오퍼레이션 중 표제부만 우선 도입\n- 응답 = 78 필드, 영업가치 22개만 발췌 정규화 (lib/building-hub/title.ts)\n- 한 지번에 여러 동(부속건축물 등) 가능 → rows 배열",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo",
+        "description": "건축물대장 표제부 — 검증된 주소: 서울 강남 역삼동 736 (200 OK + 데이터 1건+)",
+        "fixedQuery": {
+          "serviceKey": "{DATA_GO_KR_KEY}",
+          "_type": "json",
+          "numOfRows": "10",
+          "pageNo": "1"
+        },
+        "inputs": [
+          {
+            "name": "sigunguCd",
+            "type": "string",
+            "required": true,
+            "sample": "11680",
+            "description": "시군구 5자리 (서울 강남구=11680)"
+          },
+          {
+            "name": "bjdongCd",
+            "type": "string",
+            "required": true,
+            "sample": "10100",
+            "description": "법정동 5자리 (역삼동=10100)"
+          },
+          {
+            "name": "platGbCd",
+            "type": "string",
+            "required": true,
+            "sample": "0",
+            "description": "0=일반 / 1=산"
+          },
+          {
+            "name": "bun",
+            "type": "string",
+            "required": true,
+            "sample": "0736",
+            "description": "본번 4자리 (zero-pad)"
+          },
+          {
+            "name": "ji",
+            "type": "string",
+            "required": true,
+            "sample": "0000",
+            "description": "부번 4자리 (zero-pad, 부번없음=0000)"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/bldg-register.ts",
       "metaLine": 3,
       "consumedBy": [
@@ -931,7 +1233,7 @@ export const MANIFEST: GeneratedManifest = {
     {
       "id": "github-actions",
       "name": "GitHub Actions (KEPCO 크롤링 실행 플랫폼)",
-      "category": "infra",
+      "category": "github",
       "consoleUrl": "https://github.com/hicor150010/project_kepco_powermap/actions",
       "envKeys": [
         "GH_PAT",
@@ -952,7 +1254,7 @@ export const MANIFEST: GeneratedManifest = {
     {
       "id": "kakao",
       "name": "Kakao Developers",
-      "category": "geocoding",
+      "category": "kakao",
       "consoleUrl": "https://developers.kakao.com/console/app/1424714",
       "envKeys": [
         "NEXT_PUBLIC_KAKAO_JS_KEY",
@@ -963,6 +1265,23 @@ export const MANIFEST: GeneratedManifest = {
       "issueGuide": "1. https://developers.kakao.com 접속 → Google 로그인\n2. 앱 ID 1424714 (이름: kepco_web) 선택 또는 새 앱 생성\n3. 좌측 [플랫폼] → Web 플랫폼 등록 → 도메인 추가\n   - http://localhost:3000 (개발)\n   - https://sunlap.kr (운영)\n4. 좌측 [앱 키] → JavaScript 키, REST API 키 복사\n5. .env.local 에 등록\n   - NEXT_PUBLIC_KAKAO_JS_KEY=...\n   - KAKAO_REST_KEY=...",
       "usageExample": "# 주소 → 좌표 (지오코딩)\nGET https://dapi.kakao.com/v2/local/search/address?query=서울 강남대로 1\nHeaders:\n  Authorization: KakaoAK ${KAKAO_REST_KEY}",
       "notes": "- JavaScript 키는 브라우저 노출 OK — 콘솔 도메인 화이트리스트로 보호됨\n- REST 키는 절대 클라이언트 노출 X → 반드시 API Route 경유\n- 일 한도 초과 시 자동 차단 (과금 X), 자정 지나면 복구\n- 한국 주소 정확도 가장 높음 — 1순위 지오코더",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://dapi.kakao.com/v2/local/search/address.json",
+        "description": "주소 → 좌표 (지오코딩) — 가장 흔한 호출",
+        "headers": {
+          "Authorization": "KakaoAK {KAKAO_REST_KEY}"
+        },
+        "inputs": [
+          {
+            "name": "query",
+            "type": "string",
+            "required": true,
+            "sample": "충청남도 부여군 장암면 지토리 29-4",
+            "description": "검색 주소 (지번/도로명 모두 가능)"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/kakao.ts",
       "metaLine": 3,
       "consumedBy": []
@@ -970,7 +1289,7 @@ export const MANIFEST: GeneratedManifest = {
     {
       "id": "kepco",
       "name": "한국전력공사 — 배전선로 여유용량 (비공식 API)",
-      "category": "scraping",
+      "category": "kepco",
       "consoleUrl": "https://online.kepco.co.kr",
       "envKeys": [],
       "expiry": null,
@@ -986,6 +1305,45 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "id": "law-go-kr",
+      "name": "법제처 — 국가법령정보 OPEN API (자치법규)",
+      "category": "law.go.kr",
+      "consoleUrl": "https://open.law.go.kr/",
+      "envKeys": [
+        "LAW_OC"
+      ],
+      "expiry": null,
+      "dailyLimit": "일 1만건 (자치법규 카테고리)",
+      "issueGuide": "1. https://open.law.go.kr 회원가입\n2. 마이페이지 → \"OPEN API 신청\" → 호출 IP 또는 도메인 등록 (필수)\n3. OC 키 = 가입 이메일 prefix 가 그대로 사용됨 (예: hicor@naver.com → OC=hicor)\n4. 운영 배포 시 Vercel outbound IP 또는 sunlap.kr 도메인 추가 등록 필요",
+      "usageExample": "# 자치법규 검색 (제목 매칭)\nGET https://www.law.go.kr/DRF/lawSearch.do\n  ?OC=${LAW_OC}\n  &target=ordin\n  &type=XML\n  &query=충청남도 도시계획\n  &display=20\n\n# 자치법규 본문 조회\nGET https://www.law.go.kr/DRF/lawService.do\n  ?OC=${LAW_OC}\n  &target=ordin\n  &MST=${자치법규일련번호}\n  &type=HTML",
+      "notes": "- ⚠️ **검색은 제목(자치법규명) 매칭만 지원** — section=bdyText 파라미터 무시됨, 항상 ordinNm 으로 회신\n- ⚠️ **org 파라미터(지자체기관명) 무시됨** — query 에 지자체명을 직접 포함시켜야 함\n- ⚠️ **IP 등록 필수** — 미등록 IP 호출 시 \"사용자 정보 검증에 실패\" 응답\n- 일반시는 `도시계획 조례`, 군은 `군계획 조례` 식으로 명칭 다름\n- 상세링크는 응답의 `자치법규상세링크` 필드 (자체 OC 포함된 URL) 또는 MST 로 lawService.do 직접 조립\n- 검증된 검색 패턴: `{광역명} 도시계획` + `{기초명} 도시계획` (군이면 `군계획`)\n- HTTP 사용 (HTTPS 도 응답하나 가이드 PDF 는 HTTP 기준)",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "http://www.law.go.kr/DRF/lawSearch.do",
+        "description": "자치법규 검색 (제목 매칭) — 광역+기초 도시계획 조례 찾기",
+        "fixedQuery": {
+          "OC": "{LAW_OC}",
+          "target": "ordin",
+          "type": "XML",
+          "display": "20"
+        },
+        "inputs": [
+          {
+            "name": "query",
+            "type": "string",
+            "required": true,
+            "sample": "충청남도 도시계획",
+            "description": "검색어 — '광역명 도시계획' 또는 '기초명 도시계획/군계획' 패턴"
+          }
+        ]
+      },
+      "filePath": "app/admin/api-manager/_lib/services/law-go-kr.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "regulations-by-pnu"
+      ]
+    },
+    {
       "id": "onbid",
       "name": "캠코 온비드 — 부동산 공매 정보 서비스",
       "category": "data.go.kr",
@@ -997,7 +1355,34 @@ export const MANIFEST: GeneratedManifest = {
       "dailyLimit": "100,000건/일 (운영계정, 2026-04-25 전환)",
       "issueGuide": "1. https://www.data.go.kr → \"한국자산관리공사_차세대 온비드 부동산 물건상세 조회서비스\" 활용신청\n2. 추가로 \"OnbidRlstListSrvc2\" (목록 조회) 도 함께 신청\n3. 자동승인 → 즉시 사용\n4. 운영계정 전환:\n   - 활용사례 입력 (활용사례명, 분류체계, 서비스URL, 서비스설명, 서비스 화면 캡처 1장)\n   - 자동승인 → 100,000건/일로 즉시 상향\n5. 인증키는 DATA_GO_KR_KEY 공유",
       "usageExample": "# 부동산 물건 목록\nGET https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &resultType=json\n  &prptDivCd=10           # 10=부동산\n  &pvctTrgtYn=N           # 공고일 기준 N=현재진행\n  &pageNo=1&numOfRows=100\n\n# 부동산 물건 상세\nGET https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2/getRlstDtlInf2\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &cltrNo=...             # 물건관리번호\n  &plnmNo=...             # 공고관리번호",
-      "notes": "- 응답에 **지번PNU코드 (ltnoPnu) 19자리** 직접 제공 → VWorld 폴리곤 그대로 결합 가능 (★ 매우 유용)\n- 압류재산만 현재 30,178건 진행 중 (정기 공매 + 일별 갱신)\n- 명세 docx → 텍스트 보존: docs/api_specs/온비드_공매/_extract.txt / _extract_상세.txt\n- 호출 테스트 스크립트: crawler/test_onbid.py (gitignored, 키는 env 사용)\n- 영업 활용: 시세 대비 할인율 노출 (의뢰자 의도 — 토지 저가 매입 기회 발굴)",
+      "notes": "- 응답에 **지번PNU코드 (ltnoPnu) 19자리** 제공 — ⚠️ 단, 산구분(11번째 자리) 표기가 비표준\n  - 캠코: 일반=0, 산=1 (실측 500건 샘플 기준 일반 88.6% / 산 11.2%)\n  - 행안부 표준 / VWorld: 일반=1, 산=2\n  - VWorld 직접 매칭률 0% → 우리는 lib/onbid/pnu-fix.ts 의 pnuFromOnbidItem 으로 표준 PNU 재구성 후 사용 (실측 100% 매칭)\n- 압류재산만 현재 30,178건 진행 중 (정기 공매 + 일별 갱신)\n- 명세 docx → 텍스트 보존: docs/api_specs/온비드_공매/_extract.txt / _extract_상세.txt\n- 호출 테스트 스크립트: crawler/test_onbid.py + web/scripts/test-onbid-*.ts (env 사용)\n- 영업 활용: 시세 대비 할인율 노출 + 사진/감정평가서 PDF (의뢰자 의도 — 토지 저가 매입 기회 발굴)",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2",
+        "description": "공매 부동산 물건 목록 — ⚠ pvctTrgtYn=N/Y 단독 호출 시 NODATA 가능 (다른 세션에서 정확 파라미터 검증 중)",
+        "fixedQuery": {
+          "serviceKey": "{DATA_GO_KR_KEY}",
+          "resultType": "json",
+          "prptDivCd": "10",
+          "pvctTrgtYn": "N"
+        },
+        "inputs": [
+          {
+            "name": "pageNo",
+            "type": "string",
+            "required": true,
+            "sample": "1",
+            "description": "페이지 번호"
+          },
+          {
+            "name": "numOfRows",
+            "type": "string",
+            "required": true,
+            "sample": "10",
+            "description": "페이지당 행 수 (최대 1000)"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/onbid.ts",
       "metaLine": 3,
       "consumedBy": []
@@ -1015,6 +1400,35 @@ export const MANIFEST: GeneratedManifest = {
       "issueGuide": "1. https://www.data.go.kr 로그인 → 마이페이지\n2. 데이터 활용 → Open API → 활용신청 현황\n3. \"국토교통부_토지 매매 실거래가 자료\" 검색 → 활용신청\n4. 자동승인 → 즉시 사용 가능 (개발계정 1,000건/일)\n5. 운영계정 전환:\n   - 활용신청 상세 → \"운영계정 활용신청\" 클릭\n   - 활용사례 정보 입력 (서비스URL, 설명, 화면 캡처)\n   - 자동승인 → 100만건/일로 즉시 상향\n6. 인증키는 다른 data.go.kr 서비스와 공유 (하나의 DATA_GO_KR_KEY)",
       "usageExample": "GET https://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &LAWD_CD=46730     # 시군구 5자리\n  &DEAL_YMD=202604   # 거래월 YYYYMM\n  &numOfRows=100&pageNo=1\nHeaders:\n  User-Agent: Mozilla/5.0 (compatible; SUNLAP/1.0)",
       "notes": "- ⚠️ **User-Agent 헤더 필수** — 없으면 WAF 가 400 Request Blocked\n- 응답 = XML 고정 (`_type=json` 무시됨) → fast-xml-parser\n- 시군구 + 거래월 단위로만 조회 가능 → N개월 = N회 fan-out (Promise.all)\n- 응답 jibun 끝자리 마스킹 (\"3*\", \"10*\") — 정확 매칭 불가, 통계 용도\n- resultCode \"03\" = NO_DATA (정상, 거래 0건)\n- 키 노출 시: data.go.kr 마이페이지에서 인증키 재발급 → DATA_GO_KR_KEY 갱신",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade",
+        "description": "토지 매매 실거래가 — 시군구 + 거래월 단위 조회",
+        "fixedQuery": {
+          "serviceKey": "{DATA_GO_KR_KEY}",
+          "numOfRows": "10",
+          "pageNo": "1"
+        },
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (compatible; SUNLAP/1.0)"
+        },
+        "inputs": [
+          {
+            "name": "LAWD_CD",
+            "type": "string",
+            "required": true,
+            "sample": "44760",
+            "description": "시군구 5자리 (부여군=44760)"
+          },
+          {
+            "name": "DEAL_YMD",
+            "type": "string",
+            "required": true,
+            "sample": "202604",
+            "description": "거래월 YYYYMM"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/rtms-land.ts",
       "metaLine": 3,
       "consumedBy": [
@@ -1034,6 +1448,35 @@ export const MANIFEST: GeneratedManifest = {
       "issueGuide": "1. https://www.data.go.kr 로그인 → 마이페이지\n2. \"국토교통부_상업업무용 부동산 매매 실거래가 자료\" 검색 → 활용신청\n3. 자동승인 → 즉시 사용 가능\n4. 운영계정 전환 절차는 RTMS 토지와 동일 (자동승인 100만/일)\n5. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)",
       "usageExample": "GET https://apis.data.go.kr/1613000/RTMSDataSvcNrgTrade/getRTMSDataSvcNrgTrade\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &LAWD_CD=11680\n  &DEAL_YMD=202604\nHeaders:\n  User-Agent: Mozilla/5.0 (compatible; SUNLAP/1.0)",
       "notes": "- 토지 RTMS 와 동일한 호출 패턴 (User-Agent + XML + 시군구·월 fan-out)\n- 응답 필드: 토지보다 풍부 — buildingType (일반/집합), buildingUse, buildingAr, floor, plottageAr 등\n- **마스킹 정책 (실측)**:\n  - buildingType=\"집합\" → jibun 정확 노출\n  - buildingType=\"일반\" → jibun 마스킹\n- **공장/창고 매매는 nrg 에 미포함** — 토지매매(rtms-land) 의 \"공장용지\" 지목 참조\n- 옥상 태양광 사업자 관점: 평당가는 buildingAr 기준 (대지 X, 건물면적)",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://apis.data.go.kr/1613000/RTMSDataSvcNrgTrade/getRTMSDataSvcNrgTrade",
+        "description": "상업업무용 부동산 매매 실거래가 — 시군구 + 거래월",
+        "fixedQuery": {
+          "serviceKey": "{DATA_GO_KR_KEY}",
+          "numOfRows": "10",
+          "pageNo": "1"
+        },
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (compatible; SUNLAP/1.0)"
+        },
+        "inputs": [
+          {
+            "name": "LAWD_CD",
+            "type": "string",
+            "required": true,
+            "sample": "11680",
+            "description": "시군구 5자리 (서울 강남구=11680)"
+          },
+          {
+            "name": "DEAL_YMD",
+            "type": "string",
+            "required": true,
+            "sample": "202604",
+            "description": "거래월 YYYYMM"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/rtms-nrg.ts",
       "metaLine": 3,
       "consumedBy": [
@@ -1053,6 +1496,35 @@ export const MANIFEST: GeneratedManifest = {
       "issueGuide": "1. https://www.data.go.kr → \"전국태양광발전소전기사업허가정보표준데이터\" 활용신청\n2. 자동승인 → 즉시 사용 (개발계정 1,000건/일)\n3. 운영계정 전환 (2026-04-25 완료):\n   - 활용신청 상세 → \"운영계정 활용신청\" → 자동승인\n4. 인증키는 DATA_GO_KR_KEY 공유 (별도 발급 X)\n5. 만료예정일 2028-04-25 — 만료 전 콘솔 연장",
       "usageExample": "# 페이지네이션만 작동 (검색 필터 미지원, 아래 ⚠ 참고)\nGET https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api\n  ?serviceKey=${DATA_GO_KR_KEY}\n  &type=json\n  &pageNo=1&numOfRows=100\nHeaders:\n  User-Agent: Mozilla/5.0\n  Accept: application/json\n\n# 응답 17 필드 (camelCase, 명세 PDF 의 대문자 표기와 다름) — 정규화: lib/solar-permit/by-page.ts\n# 주요: solarGenFcltNm / lctnLotnoAddr / latitude / longitude\n#       capa / oprtngSttsSeNm / instlDtlPstnSeNm / prmsnYmd / instlYr ...",
       "notes": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ 검증 결과 (2026-04-26 직접 호출 검증)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1. 검색 필터 전부 미지원 (명세 PDF 표기와 다름)\n   - LCTN_LOTNO_ADDR / LCTN_ROAD_NM_ADDR / SOLAR_GEN_FCLT_NM\n     → 응답에 있는 정확한 값을 그대로 입력해도 NODATA\n   - LATITUDE / LONGITUDE → byte 단위 정확 일치 시에만 매칭 (실용성 0)\n   - 한글 파라미터명 → INVALID_REQUEST_PARAMETER_ERROR\n\n2. 작동하는 입력 = pageNo + numOfRows + type 만\n   - 전국 12만 행 (totalCount=121,015)\n   - 122 페이지 × 1000건 = 전수 다운로드 가능\n\n3. 응답 필드 = camelCase\n   - 명세 PDF: LCTN_LOTNO_ADDR (대문자)\n   - 실제 응답: lctnLotnoAddr (camelCase)\n   - 정규화는 wrapper (lib/solar-permit/by-page.ts) 가 처리\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🎯 영업 활용 패턴 (Phase 3 정식 작업)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n이 API 는 검색 미지원이라 사용자 클릭 시점 호출 불가.\n실제 영업 기능은 \"수집형 패턴\" 으로 구현해야 함:\n\n[수집] GitHub Actions 월 1회 cron\n   → 122 페이지 전수 다운로드 (~7분, 운영계정 100K/일 충분)\n   → Supabase solar_permits 테이블 적재\n   → PostGIS GIST 인덱스 (geom GEOGRAPHY)\n\n[검색] 사용자 PNU 클릭\n   → 우리 DB ST_DWithin(geom, point, 50m) 쿼리\n   → 결과: 50m 반경 시설 목록 (외부 API 호출 0, 1ms 이하)\n\n⚠ 견적: Phase 3 정식 작업 = ① 태양광 설치여부 표시 (150만 / 3~4주, 견적_3차_데이터연계.md)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📋 본 atomic endpoint (/api/solar-permits/by-page) 의 역할\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n페이지 1건씩 받아오는 최소 wrapper. 용도:\n  (1) API 살아있나 라이브 검증 (관리자 페이지)\n  (2) Phase 3 정식 시 수집기의 기반 코드 (그대로 재사용)\n\n⛔ 사용자 영업 화면용 X. 영업 endpoint 는 Phase 3 시점에 별도 신설:\n  - /api/solar-permits/by-pnu      (같은 PNU 매칭)\n  - /api/solar-permits/near-point  (좌표 50m 반경)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 데이터 한계\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n- 3 kW 이하 자가발전 누락 (허가 대상 아님 — 축사/온실은 30kW↑ 라 영향 적음)\n- 응답 = JSON (type=json) 또는 XML (기본). 우리는 type=json 명시\n- numOfRows 최대 1,000\n- 일부 필드 sentinel 값: instlYr=1900 (실제 미상), lctnRoadNmAddr=\"\" (도로명 없는 경우)\n- 데이터 갱신 주기: API 측에서 수시 — crtrYmd 필드로 데이터 기준일 확인 가능",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api",
+        "description": "전국 태양광 허가 시설 — 페이지네이션만 지원 (검색 필터 X)",
+        "fixedQuery": {
+          "serviceKey": "{DATA_GO_KR_KEY}",
+          "type": "json"
+        },
+        "headers": {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/json"
+        },
+        "inputs": [
+          {
+            "name": "pageNo",
+            "type": "string",
+            "required": true,
+            "sample": "1",
+            "description": "페이지 번호 (1~122, 전국 ~12만건)"
+          },
+          {
+            "name": "numOfRows",
+            "type": "string",
+            "required": true,
+            "sample": "10",
+            "description": "페이지당 행 수 (최대 1000)"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/solar-permit.ts",
       "metaLine": 3,
       "consumedBy": [
@@ -1062,7 +1534,7 @@ export const MANIFEST: GeneratedManifest = {
     {
       "id": "supabase",
       "name": "Supabase (Postgres + Auth + Storage)",
-      "category": "infra",
+      "category": "supabase",
       "consoleUrl": "https://supabase.com/dashboard/project/wtbwgjejfrrwgbzgcdjd",
       "envKeys": [
         "NEXT_PUBLIC_SUPABASE_URL",
@@ -1092,7 +1564,7 @@ export const MANIFEST: GeneratedManifest = {
     {
       "id": "vercel",
       "name": "Vercel (호스팅 + Edge Functions + KV)",
-      "category": "infra",
+      "category": "vercel",
       "consoleUrl": "https://vercel.com/dashboard",
       "envKeys": [],
       "expiry": null,
@@ -1107,7 +1579,7 @@ export const MANIFEST: GeneratedManifest = {
     {
       "id": "vworld",
       "name": "VWorld (국토교통부 공간정보 오픈플랫폼)",
-      "category": "geocoding",
+      "category": "vworld",
       "consoleUrl": "https://www.vworld.kr/dev/v4api.do",
       "envKeys": [
         "VWORLD_KEY"
@@ -1117,15 +1589,52 @@ export const MANIFEST: GeneratedManifest = {
       "issueGuide": "1. https://www.vworld.kr 회원가입 (공공기관 무료)\n2. [개발자센터] → [오픈API] → 인증키 발급 신청\n3. 활용 API: 검색 API + 2D 지도 API + WFS (필지/폴리곤)\n4. 등록 서비스 URL: `*` (와일드카드 — 모든 도메인 허용)\n   ※ 운영 안정화 후 좁히기 권장\n5. 발급된 인증키를 .env.local 의 VWORLD_KEY 에 등록\n6. 만료 1개월 전 콘솔에서 연장 신청 (현재 만료: 2026-10-08)",
       "usageExample": "# 필지 폴리곤 (PNU 단건)\nGET https://api.vworld.kr/req/wfs?KEY=${VWORLD_KEY}\n  &SERVICE=WFS&REQUEST=GetFeature&TYPENAME=lp_pa_cbnd_bonbun\n  &FILTER=<Filter><PropertyIsEqualTo>...</PropertyIsEqualTo></Filter>\n\n# 행정구역 폴리곤\nGET .../wfs?TYPENAME=lt_c_adri  (리)\nGET .../wfs?TYPENAME=lt_c_ademd (읍면동)",
       "notes": "- ⚠️ **만료일 D-day 주시**: 2026-10-08 = 약 D-166 (작성 시점 기준)\n- Referer 헤더 검증: 등록한 URL 외 호출 차단 → 브라우저 직접 호출 시 CORS 막힘 → 반드시 API Route 경유\n- \"기타지역\" 같은 비표준 주소는 카카오와 동일하게 실패 가능\n- 만료 시 모든 필지/폴리곤/지오코딩 fallback 마비 — 갱신 까먹지 말 것",
+      "sampleRequest": {
+        "method": "GET",
+        "url": "https://api.vworld.kr/req/wfs",
+        "description": "PNU 단건 필지 폴리곤 (LX 편집지적도). fes:Filter PropertyIsEqualTo 1:1 매칭",
+        "fixedQuery": {
+          "key": "{VWORLD_KEY}",
+          "domain": "sunlap.kr",
+          "service": "WFS",
+          "version": "2.0.0",
+          "request": "GetFeature",
+          "typename": "lt_c_landinfobasemap",
+          "output": "application/json",
+          "srsName": "EPSG:4326"
+        },
+        "headers": {
+          "Referer": "https://sunlap.kr"
+        },
+        "inputs": [
+          {
+            "name": "FILTER",
+            "type": "string",
+            "required": true,
+            "sample": "<fes:Filter xmlns:fes=\"http://www.opengis.net/fes/2.0\"><fes:PropertyIsEqualTo><fes:ValueReference>pnu</fes:ValueReference><fes:Literal>4476042028100290004</fes:Literal></fes:PropertyIsEqualTo></fes:Filter>",
+            "description": "WFS fes:Filter XML — pnu 필드 정확 매칭"
+          }
+        ]
+      },
       "filePath": "app/admin/api-manager/_lib/services/vworld.ts",
       "metaLine": 3,
       "consumedBy": [
         "buildings-polygons-by-pnu",
         "parcel-by-latlng",
         "parcel-by-pnu",
-        "polygon-by-bjd"
+        "polygon-by-bjd",
+        "regulations-by-pnu"
       ]
     }
   ],
-  "warnings": []
+  "warnings": [
+    "/api/admin/external-test POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
+    "/api/admin/health-check-all POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
+    "/api/onbid/by-pnu GET: externalDeps \"data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)\" 가 _lib/services/ 에 정의 안 됨",
+    "/api/onbid/by-pnu GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
+    "/api/onbid/by-pnu GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
+    "/api/onbid/search GET: externalDeps \"data.go.kr (캠코 OnbidRlstListSrvc2)\" 가 _lib/services/ 에 정의 안 됨",
+    "/api/onbid/search GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
+    "/api/onbid/search GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능"
+  ]
 } as GeneratedManifest;

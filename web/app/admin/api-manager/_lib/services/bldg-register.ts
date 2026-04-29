@@ -29,4 +29,52 @@ GET https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo
 - 표제부(getBrTitleInfo) + 총괄표제부(getBrRecapTitleInfo) 가 메인 — 7개 오퍼레이션 중 표제부만 우선 도입
 - 응답 = 78 필드, 영업가치 22개만 발췌 정규화 (lib/building-hub/title.ts)
 - 한 지번에 여러 동(부속건축물 등) 가능 → rows 배열`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo",
+    description: "건축물대장 표제부 — 검증된 주소: 서울 강남 역삼동 736 (200 OK + 데이터 1건+)",
+    fixedQuery: {
+      serviceKey: "{DATA_GO_KR_KEY}",
+      _type: "json",
+      numOfRows: "10",
+      pageNo: "1",
+    },
+    inputs: [
+      {
+        name: "sigunguCd",
+        type: "string",
+        required: true,
+        sample: "11680",
+        description: "시군구 5자리 (서울 강남구=11680)",
+      },
+      {
+        name: "bjdongCd",
+        type: "string",
+        required: true,
+        sample: "10100",
+        description: "법정동 5자리 (역삼동=10100)",
+      },
+      {
+        name: "platGbCd",
+        type: "string",
+        required: true,
+        sample: "0",
+        description: "0=일반 / 1=산",
+      },
+      {
+        name: "bun",
+        type: "string",
+        required: true,
+        sample: "0736",
+        description: "본번 4자리 (zero-pad)",
+      },
+      {
+        name: "ji",
+        type: "string",
+        required: true,
+        sample: "0000",
+        description: "부번 4자리 (zero-pad, 부번없음=0000)",
+      },
+    ],
+  },
 };

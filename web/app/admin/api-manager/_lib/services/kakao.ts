@@ -3,7 +3,7 @@ import type { ExternalServiceMeta } from "../types";
 export const meta: ExternalServiceMeta = {
   id: "kakao",
   name: "Kakao Developers",
-  category: "geocoding",
+  category: "kakao",
   consoleUrl: "https://developers.kakao.com/console/app/1424714",
   envKeys: ["NEXT_PUBLIC_KAKAO_JS_KEY", "KAKAO_REST_KEY"],
   expiry: null,
@@ -25,4 +25,19 @@ Headers:
 - REST 키는 절대 클라이언트 노출 X → 반드시 API Route 경유
 - 일 한도 초과 시 자동 차단 (과금 X), 자정 지나면 복구
 - 한국 주소 정확도 가장 높음 — 1순위 지오코더`,
+  sampleRequest: {
+    method: "GET",
+    url: "https://dapi.kakao.com/v2/local/search/address.json",
+    description: "주소 → 좌표 (지오코딩) — 가장 흔한 호출",
+    headers: { Authorization: "KakaoAK {KAKAO_REST_KEY}" },
+    inputs: [
+      {
+        name: "query",
+        type: "string",
+        required: true,
+        sample: "충청남도 부여군 장암면 지토리 29-4",
+        description: "검색 주소 (지번/도로명 모두 가능)",
+      },
+    ],
+  },
 };
