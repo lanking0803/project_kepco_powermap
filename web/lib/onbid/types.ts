@@ -124,13 +124,59 @@ export interface OnbidListItem {
   isUrgent: boolean;
 }
 
-// ─── 상세 응답 (사진/면적상세/감정평가 등 부가 정보) ─────────────
+// ─── 상세 응답 (사진/감정평가/위치/입찰조건 등 부가 정보) ─────────────
+//   getRlstDtlInf2 응답 실측(scripts/test-onbid-detail.ts) 기반.
+
+export interface AppraisalRecord {
+  /** 평가일자 (YYYYMMDD) */
+  date: string;
+  /** 감정평가기관명 */
+  org: string;
+  /** 감정평가사 (보통 null) */
+  appraiser: string | null;
+  /** 감정가 (원) */
+  amount: number;
+  /** 감정평가서 PDF URL (onbid.co.kr) */
+  pdfUrl: string;
+}
 
 export interface OnbidDetail extends OnbidListItem {
-  /** 사진 URL 목록 (onbid.co.kr 공식 도메인) */
+  // ── 사진/멀티미디어 ──
+  /** 물건 사진 URL 목록 (보통 3~9장) */
   photoUrls: string[];
-  /** 공매재산명세 (Object[]) — 부가 정보 */
-  papsInf: unknown[];
+  /** 360도 사진 URL 목록 (있으면 멋진 시각 자료) */
+  photo360Urls: string[];
+  /** 영상 URL 목록 */
+  videoUrls: string[];
+  /** 위치도(지도) URL 목록 */
+  locationMapUrls: string[];
+
+  // ── 주소/물건 부가 ──
+  /** 도로명 주소 전체 */
+  cltrRadr: string | null;
+  /** 기타사항 (엘리베이터/주차 등) */
+  cltrEtcCont: string | null;
+  /** 최초 공고일 (YYYYMMDD) */
+  frstPbancYmd: string | null;
+
+  // ── 입찰 조건 / 매수 자격 / 납부 사항 ──
+  /** 입찰조건 내용 */
+  icdlCdtnCont: string | null;
+  /** 위치/접근성 묘사 (토지 입지 분석에 유용) */
+  locVntyPscdCont: string | null;
+  /** 활용/이용 내용 */
+  utlzPscdCont: string | null;
+  /** 처분 유효성 내용 */
+  dsplVldCont: string | null;
+  /** 매수 자격 내용 */
+  purrQlfcCont: string | null;
+  /** 납부 사항 내용 */
+  pytnMtrsCont: string | null;
+  /** 인도/인수 책임 */
+  evcRsbyTrgtCont: string | null;
+
+  // ── 감정평가 이력 (평가서 PDF 포함) ──
+  appraisals: AppraisalRecord[];
 }
 
 // ─── 검색 응답 ─────────────

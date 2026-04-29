@@ -128,7 +128,16 @@ export async function GET(req: NextRequest) {
 
   try {
     const raw = await fetchOnbidListPage(rawParams);
-    let items = await enrichRawItems(raw.items);
+
+    // cltrMngNo 회차 중복 제거 — 같은 매물이 회차(pbctNsq)별로 N건 응답됨.
+    // 응답 순서가 최신 회차 우선이라 첫 번째 보존.
+    const dedupMap = new Map<string, (typeof raw.items)[number]>();
+    for (const it of raw.items) {
+      if (!dedupMap.has(it.cltrMngNo)) dedupMap.set(it.cltrMngNo, it);
+    }
+    const dedupedRaw = [...dedupMap.values()];
+
+    let items = await enrichRawItems(dedupedRaw);
 
     // 카테고리 사후 필터
     if (postFilterCategories && postFilterCategories.length > 0) {
@@ -140,6 +149,8 @@ export async function GET(req: NextRequest) {
       {
         ok: true,
         items,
+        // totalCount 는 캠코 원본 (회차 포함). UI 의 "전체 X건" 안내는 이 값을 사용.
+        // dedup 후 실제 표시 매물 수는 items.length 로 계산.
         totalCount: raw.totalCount,
         fetchedAt: new Date().toISOString(),
       },

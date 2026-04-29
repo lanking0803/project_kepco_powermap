@@ -15,6 +15,8 @@
 
 const LIST_ENDPOINT =
   "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2";
+const DETAIL_ENDPOINT =
+  "https://apis.data.go.kr/B010003/OnbidRlstDtlSrvc2/getRlstDtlInf2";
 
 /** 한 번에 받을 페이지 크기 — 캠코는 numOfRows 100 까지 안전 */
 const PAGE_SIZE = 100;
@@ -175,6 +177,99 @@ export async function fetchOnbidListPage(
 
 /** 페이지 크기 상수 (외부에서 페이지네이션 결정 시 참고) */
 export const ONBID_LIST_PAGE_SIZE = PAGE_SIZE;
+
+// ─── 상세 API ─────────────────────────────────────────
+
+/** raw 상세 응답 1건 — 명세 + 실측 필드. unknown 으로 두지 않고 명시. */
+export interface OnbidRawDetailItem extends OnbidRawListItem {
+  cltrRadr?: string | null;
+  cltrEtcCont?: string | null;
+  icdlCdtnCont?: string | null;
+  locVntyPscdCont?: string | null;
+  utlzPscdCont?: string | null;
+  dsplVldCont?: string | null;
+  purrQlfcCont?: string | null;
+  pytnMtrsCont?: string | null;
+  evcRsbyTrgtCont?: string | null;
+  frstPbancYmd?: string | null;
+  potoUrlList?:
+    | { item?: { urlAdr?: string } | { urlAdr?: string }[] }
+    | { urlAdr?: string }[]
+    | string
+    | null;
+  poto360DgrUrlList?:
+    | { item?: { urlAdr?: string } | { urlAdr?: string }[] }
+    | { urlAdr?: string }[]
+    | string
+    | null;
+  vdoUrlAdrList?:
+    | { item?: { urlAdr?: string } | { urlAdr?: string }[] }
+    | { urlAdr?: string }[]
+    | string
+    | null;
+  lmapUrlAdrList?: string | null;
+  apslEvlClgList?:
+    | { item?: RawAppraisal | RawAppraisal[] }
+    | RawAppraisal[]
+    | string
+    | null;
+}
+
+interface RawAppraisal {
+  apslEvlYmd?: string;
+  apslEvlOrgNm?: string;
+  apslApprNm?: string | null;
+  apslEvlAmt?: number;
+  urlAdr?: string;
+}
+
+/**
+ * 캠코 상세 조회 — cltrMngNo 단일 호출.
+ * pbctCdtnNo 는 선택값 (실측 검증: 생략해도 정상 응답).
+ */
+export async function fetchOnbidDetail(
+  cltrMngNo: string,
+  pbctCdtnNo?: number | null,
+  options?: { signal?: AbortSignal },
+): Promise<OnbidRawDetailItem | null> {
+  const apiKey = process.env.DATA_GO_KR_KEY;
+  if (!apiKey) throw new Error("DATA_GO_KR_KEY 환경변수 미설정");
+
+  const url = new URL(DETAIL_ENDPOINT);
+  url.searchParams.set("serviceKey", apiKey);
+  url.searchParams.set("resultType", "json");
+  url.searchParams.set("pageNo", "1");
+  url.searchParams.set("numOfRows", "10");
+  url.searchParams.set("cltrMngNo", cltrMngNo);
+  if (pbctCdtnNo != null) {
+    url.searchParams.set("pbctCdtnNo", String(pbctCdtnNo));
+  }
+
+  const res = await fetch(url.toString(), { signal: options?.signal });
+  if (!res.ok) throw new Error(`캠코 상세 HTTP ${res.status}`);
+  const text = await res.text();
+  if (!text.trimStart().startsWith("{")) {
+    throw new Error(`캠코 상세 JSON 아님: ${text.slice(0, 200)}`);
+  }
+  const json = JSON.parse(text) as {
+    header?: { resultCode?: string; resultMsg?: string };
+    body?: {
+      items?:
+        | { item?: OnbidRawDetailItem | OnbidRawDetailItem[] }
+        | string;
+    };
+  };
+  if (json.header?.resultCode !== "00") {
+    throw new Error(
+      `캠코 상세 resultCode=${json.header?.resultCode} msg=${json.header?.resultMsg ?? ""}`,
+    );
+  }
+  const items = json.body?.items;
+  if (!items || typeof items === "string") return null;
+  const inner = items.item;
+  if (!inner) return null;
+  return Array.isArray(inner) ? (inner[0] ?? null) : inner;
+}
 
 function normalizeItems(
   items:

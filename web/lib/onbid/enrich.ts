@@ -14,9 +14,14 @@
  *   - bjd_code 누락이거나 좌표 없는 동은 lat/lng = null (UI 마커에서 자동 제외).
  */
 
-import type { OnbidListItem, OurCategory } from "./types";
+import type {
+  AppraisalRecord,
+  OnbidDetail,
+  OnbidListItem,
+  OurCategory,
+} from "./types";
 import { classifyOurCategory } from "./categories";
-import type { OnbidRawListItem } from "./client";
+import type { OnbidRawDetailItem, OnbidRawListItem } from "./client";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** raw 응답 + bjd_master 좌표 → OnbidListItem 1건 변환 */
@@ -115,6 +120,112 @@ export async function enrichRawItems(
     const coord = coordMap.get(bjd) ?? { lat: null, lng: null };
     return enrichRawItem(raw, coord);
   });
+}
+
+/**
+ * raw 상세 응답 + listItem(이미 enrich된 OnbidListItem) → OnbidDetail.
+ *
+ * 사진/영상/감정평가 등 부가 필드 매핑.
+ * urlList 류는 캠코가 응답 형태 일관성 안 지킴 — `{ item: [...] }` / 직접 배열 / null 모두 가능.
+ */
+export function enrichDetail(
+  base: OnbidListItem,
+  rawDetail: OnbidRawDetailItem,
+): OnbidDetail {
+  return {
+    ...base,
+    // 사진/멀티미디어
+    photoUrls: extractUrlList(rawDetail.potoUrlList),
+    photo360Urls: extractUrlList(rawDetail.poto360DgrUrlList),
+    videoUrls: extractUrlList(rawDetail.vdoUrlAdrList),
+    locationMapUrls: extractPipeList(rawDetail.lmapUrlAdrList),
+    // 주소/물건 부가
+    cltrRadr: trimOrNull(rawDetail.cltrRadr),
+    cltrEtcCont: trimOrNull(rawDetail.cltrEtcCont),
+    frstPbancYmd: trimOrNull(rawDetail.frstPbancYmd),
+    // 입찰 조건 / 매수 자격 / 납부 사항
+    icdlCdtnCont: trimOrNull(rawDetail.icdlCdtnCont),
+    locVntyPscdCont: trimOrNull(rawDetail.locVntyPscdCont),
+    utlzPscdCont: trimOrNull(rawDetail.utlzPscdCont),
+    dsplVldCont: trimOrNull(rawDetail.dsplVldCont),
+    purrQlfcCont: trimOrNull(rawDetail.purrQlfcCont),
+    pytnMtrsCont: trimOrNull(rawDetail.pytnMtrsCont),
+    evcRsbyTrgtCont: trimOrNull(rawDetail.evcRsbyTrgtCont),
+    // 감정평가 이력
+    appraisals: extractAppraisals(rawDetail.apslEvlClgList),
+  };
+}
+
+/** 캠코 urlList 류 응답 → URL 문자열 배열. 다양한 형태 모두 처리. */
+function extractUrlList(
+  list:
+    | { item?: { urlAdr?: string } | { urlAdr?: string }[] }
+    | { urlAdr?: string }[]
+    | string
+    | null
+    | undefined,
+): string[] {
+  if (!list || typeof list === "string") return [];
+  // 직접 배열
+  if (Array.isArray(list)) {
+    return list.map((x) => (x?.urlAdr ?? "").trim()).filter(Boolean);
+  }
+  // { item: [...] } 또는 { item: 객체 1개 }
+  const inner = list.item;
+  if (!inner) return [];
+  if (Array.isArray(inner)) {
+    return inner.map((x) => (x?.urlAdr ?? "").trim()).filter(Boolean);
+  }
+  return [(inner.urlAdr ?? "").trim()].filter(Boolean);
+}
+
+/** "url1|url2|url3" 같은 파이프 구분 문자열 → 배열 */
+function extractPipeList(s: string | null | undefined): string[] {
+  if (!s) return [];
+  return s
+    .split("|")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function extractAppraisals(
+  list:
+    | { item?: unknown }
+    | unknown[]
+    | string
+    | null
+    | undefined,
+): AppraisalRecord[] {
+  if (!list || typeof list === "string") return [];
+  let arr: unknown[] = [];
+  if (Array.isArray(list)) arr = list;
+  else if ("item" in list && list.item) {
+    arr = Array.isArray(list.item) ? list.item : [list.item];
+  }
+  return arr
+    .map((raw) => {
+      const r = raw as {
+        apslEvlYmd?: string;
+        apslEvlOrgNm?: string;
+        apslApprNm?: string | null;
+        apslEvlAmt?: number;
+        urlAdr?: string;
+      };
+      return {
+        date: (r.apslEvlYmd ?? "").trim(),
+        org: (r.apslEvlOrgNm ?? "").trim(),
+        appraiser: r.apslApprNm ?? null,
+        amount: Number(r.apslEvlAmt) || 0,
+        pdfUrl: (r.urlAdr ?? "").trim(),
+      };
+    })
+    .filter((a) => a.date || a.org || a.amount > 0);
+}
+
+function trimOrNull(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = s.trim();
+  return t || null;
 }
 
 /** "284,000" / "비공개" → 284000 / 0 */

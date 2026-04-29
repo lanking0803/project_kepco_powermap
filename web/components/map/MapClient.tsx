@@ -30,6 +30,7 @@ import {
   groupOnbidItemsByVillage,
   type OnbidVillageGroup,
 } from "@/lib/onbid/group";
+import { pnuFromOnbidItem } from "@/lib/onbid/pnu-fix";
 import OnbidVillageCard from "./onbid/OnbidVillageCard";
 import OnbidVillageModal from "./onbid/OnbidVillageModal";
 import LocationSummaryCard from "./LocationSummaryCard";
@@ -647,11 +648,15 @@ export default function MapClient({ isAdmin, email }: Props) {
 
   // 공매 매물 카드 클릭 (Modal) — 매물의 PNU 로 VWorld + KEPCO 병렬 조회.
   // 결과는 ParcelInfoPanel 로 흘러가 [공매] 탭이 디폴트 활성됨 (defaultOnbidTab).
+  //
+  // ⚠️ 캠코 ltnoPnu 의 산구분(11번째)이 비표준(0=일반/1=산) 이라 직접 쓰면 VWorld 매칭률 0%.
+  //    pnuFromOnbidItem 으로 행안부 표준(1=일반/2=산) PNU 재구성 후 사용.
+  //    상세: lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증).
   const openParcelPanelOnOnbidItemClick = useCallback(
     async (onbid: OnbidListItem) => {
-      const pnu = onbid.ltnoPnu;
+      const pnu = pnuFromOnbidItem(onbid);
       if (!pnu || !/^\d{19}$/.test(pnu)) {
-        setSimpleToast("이 매물의 PNU 가 유효하지 않습니다.");
+        setSimpleToast("이 매물의 PNU 를 만들 수 없습니다.");
         return;
       }
       // 모달/카드 정리
