@@ -80,4 +80,4 @@
 | MV REFRESH 지연 | CONCURRENTLY + 인덱스 |
 | 무료 플랜 7일 휴면 | 주간 cron ping |
 | KEPCO 양식 변경 | 헤더 자동 탐지 + 이름 기반 매핑 |
-| VWorld 키 만료 | 2026-10-08 전 갱신 필요 |
+| VWorld 키 만료 | 2028-10-08 전 연장 (운영 승인 완료) |
