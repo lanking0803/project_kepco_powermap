@@ -18,7 +18,7 @@ declare global {
   }
 }
 
-/** 공매 매물 마커 1건 — KakaoMap 에 전달되는 최소 필드 */
+/** 공매 매물 마커 1건 — KakaoMap 에 전달되는 최소 필드. OnbidListItem 과 호환. */
 export interface OnbidMarkerData {
   cltrMngNo: string;
   lat: number | null;
@@ -26,6 +26,10 @@ export interface OnbidMarkerData {
   daysLeft: number;
   isUrgent: boolean;
   onbidCltrNm: string;
+  /** 동/리/면 명 — 가까운 줌 카드 라벨용 (캠코 lctnEmdNm) */
+  lctnEmdNm: string;
+  /** 최저입찰가 — 가까운 줌 카드 라벨용 (원) */
+  lowstBidPrc: number;
 }
 
 interface Props {
@@ -302,6 +306,46 @@ function markerSize(count: number): { w: number; h: number } {
   };
 }
 
+/**
+ * 공매 카드 마커 HTML — globals.css 의 .onbid-card-marker 와 함께 동작.
+ * 전기 카드(makeMarkerHtml) 와 동일한 형태/크기, 색상만 빨간 계열.
+ *
+ * @param cltrMngNo 물건관리번호 — 클릭 위임용 data-onbid-id
+ * @param dayLabel  D-day 텍스트 (예: "D-3" / "마감")
+ * @param count     같은 좌표 매물 수 (>1 일 때만 우측 배지)
+ * @param isUrgent  D-3 이내 임박 — 펄스 + 진한 빨강
+ * @param isEnded   마감 — 회색 처리
+ * @param labelText 카드 아래 표시할 라벨 (예: "시종면 · 8.6억"). 빈 문자열이면 라벨 숨김
+ */
+function makeOnbidCardHtml(
+  cltrMngNo: string,
+  dayLabel: string,
+  count: number,
+  isUrgent: boolean,
+  isEnded: boolean,
+  labelText: string,
+  priceLabel: string,
+): string {
+  const showBadge = count > 1;
+  const badgeText = count > 9999 ? "9999+" : String(count);
+  const badge = showBadge ? `<span class="badge">${badgeText}</span>` : "";
+
+  const safeId = cltrMngNo.replace(/"/g, "&quot;");
+  const labelHtml = labelText
+    ? `<div class="label"><span>${labelText}</span>${priceLabel ? `<span class="price">· ${priceLabel}</span>` : ""}</div>`
+    : "";
+
+  return `<div class="onbid-card-marker" data-onbid-id="${safeId}" data-urgent="${isUrgent}" data-ended="${isEnded}">
+    <div class="card">
+      <div class="day">${dayLabel}</div>
+      <div class="cat"></div>
+    </div>
+    <div class="arrow"></div>
+    ${badge}
+    ${labelHtml}
+  </div>`;
+}
+
 export default function KakaoMap({
   rows,
   colorFilter,
@@ -351,6 +395,8 @@ export default function KakaoMap({
   const zoomListenerRef = useRef<any>(null);
   // 공매 매물 마커 오버레이 — onbidItems 변경 시 재구성
   const onbidOverlaysRef = useRef<any[]>([]);
+  // 공매 rebuild 함수 (props 갱신 시 closure 갱신용 ref)
+  const onbidRebuildRef = useRef<() => void>(() => {});
   // 공매 마커 클릭 콜백 — 클로저 stale 방지
   const onOnbidClickRef = useRef(onOnbidItemClick);
   onOnbidClickRef.current = onOnbidItemClick;
@@ -449,6 +495,15 @@ export default function KakaoMap({
       const clusterer = clustererRef.current;
       if (!map || !clusterer) return;
 
+      // 정리는 항상 실행 (모드 전환 시 잔재 제거)
+      clusterer.clear();
+      overlayRef.current.forEach((o) => o.setMap(null));
+      overlayRef.current = [];
+      markersByAddrRef.current.clear();
+
+      // 공매 모드일 때는 전기 마커 숨김
+      if (onbidActive) return;
+
       const bounds = map.getBounds();
       const level = map.getLevel();
       const showCard = level <= LABEL_VISIBLE_LEVEL;
@@ -459,12 +514,6 @@ export default function KakaoMap({
         if (!colorFilter.has(colorForMarker(r))) return false;
         return bounds.contain(new window.kakao.maps.LatLng(r.lat, r.lng));
       });
-
-      // 정리
-      clusterer.clear();
-      overlayRef.current.forEach((o) => o.setMap(null));
-      overlayRef.current = [];
-      markersByAddrRef.current.clear();
 
       if (filtered.length === 0) return;
 
@@ -524,7 +573,7 @@ export default function KakaoMap({
         });
       }
     };
-  }, [rows, colorFilter, visibleAddrs, selectedAddr, onMarkerClick]);
+  }, [rows, colorFilter, visibleAddrs, selectedAddr, onMarkerClick, onbidActive]);
 
   // 클러스터러 1회 생성 + idle 리스너 (debounce 200ms)
   useEffect(() => {
@@ -555,6 +604,9 @@ export default function KakaoMap({
         setTimeout(() => map.setLevel(map.getLevel() - 1, { animate: true }), 350);
       });
     }
+
+    // 공매는 클러스터러 사용 안 함 — 검색 결과가 많지 않고 모든 매물을
+    // 빨간 원 오버레이로 직접 그리는 게 SDK 기본 파란 핀 회피에 단순.
 
     // idle: 팬/줌 종료. 200ms debounce + bounds 동일 시 skip 으로 자기 루프 차단.
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -646,7 +698,7 @@ export default function KakaoMap({
   useEffect(() => {
     if (!loaded || !mapInstanceRef.current || !clustererRef.current) return;
     rebuildRef.current();
-  }, [rows, colorFilter, visibleAddrs, selectedAddr, loaded]);
+  }, [rows, colorFilter, visibleAddrs, selectedAddr, loaded, onbidActive]);
 
   // 선택 변경 시 펄스 링 (마커 자체는 rebuild 가 강조 처리)
   useEffect(() => {
@@ -892,42 +944,124 @@ export default function KakaoMap({
   }, [loaded, villagePolygon]);
 
   // ─────────────────────────────────────────────
-  // 공매 매물 마커 — onbidItems 변경 시 재구성 (CustomOverlay)
+  // 공매 매물 마커 — 전기와 동일 패턴 (줌별 카드/클러스터 분기).
   // 좌표는 PNU 앞 10자리 → bjd_master JOIN 결과 (동/리 단위).
-  // 같은 동 매물 여러 건이면 같은 위치 — 향후 클러스터러 추가 (UI-5).
+  // 같은 동 매물 여러 건이면 같은 위치 — 그룹화하여 배지(매물 수) 표시.
   // ─────────────────────────────────────────────
+
+  // 가격 포맷 헬퍼 — 8.6억 / 9,800만 / 200만
+  const formatPrice = (won: number): string => {
+    if (won >= 100_000_000) {
+      const eok = won / 100_000_000;
+      return eok >= 10 ? `${Math.round(eok)}억` : `${eok.toFixed(1)}억`;
+    }
+    if (won >= 10_000) return `${Math.round(won / 10_000).toLocaleString()}만`;
+    return `${won.toLocaleString()}원`;
+  };
+
+  // rebuild 함수 — 최신 props 반영
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!loaded || !map) return;
+    onbidRebuildRef.current = () => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
 
-    // 기존 매물 마커 제거
-    onbidOverlaysRef.current.forEach((o) => o.setMap(null));
-    onbidOverlaysRef.current = [];
+      // 기존 마커/오버레이 정리
+      onbidOverlaysRef.current.forEach((o) => o.setMap(null));
+      onbidOverlaysRef.current = [];
 
-    if (!onbidActive || !onbidItems || onbidItems.length === 0) return;
+      // 공매 모드 OFF or 데이터 없음 → 아무것도 안 그림
+      if (!onbidActive || !onbidItems || onbidItems.length === 0) return;
 
-    onbidItems.forEach((item) => {
-      if (item.lat == null || item.lng == null) return;
-      const safeId = item.cltrMngNo.replace(/"/g, "&quot;");
-      const dayLabel =
-        item.daysLeft < 0 ? "마감" : `D-${item.daysLeft}`;
-      const cssClass = item.isUrgent
-        ? "onbid-marker urgent"
-        : item.daysLeft < 0
-          ? "onbid-marker ended"
-          : "onbid-marker";
-      const html = `<div class="${cssClass}" data-onbid-id="${safeId}" title="${item.onbidCltrNm.replace(/"/g, "&quot;")}">${dayLabel}</div>`;
-      const overlay = new window.kakao.maps.CustomOverlay({
-        position: new window.kakao.maps.LatLng(item.lat, item.lng),
-        content: html,
-        yAnchor: 1,
-        xAnchor: 0.5,
-        zIndex: 100,
-      });
-      overlay.setMap(map);
-      onbidOverlaysRef.current.push(overlay);
-    });
+      const valid = onbidItems.filter(
+        (i) => i.lat != null && i.lng != null,
+      ) as (OnbidMarkerData & { lat: number; lng: number })[];
+      if (valid.length === 0) return;
+
+      // 같은 좌표 그룹화 (lat/lng 4자리 반올림 키) — 배지 카운트용
+      const groups = new Map<
+        string,
+        { items: typeof valid; lat: number; lng: number }
+      >();
+      for (const it of valid) {
+        const key = `${it.lat.toFixed(4)},${it.lng.toFixed(4)}`;
+        const g = groups.get(key);
+        if (g) g.items.push(it);
+        else groups.set(key, { items: [it], lat: it.lat, lng: it.lng });
+      }
+
+      const level = map.getLevel();
+      const showCard = level <= LABEL_VISIBLE_LEVEL;
+
+      if (showCard) {
+        // 가까운 줌 — 카드 오버레이.
+        // 같은 좌표 그룹은 대표 1건으로 표시하되 배지에 그룹 크기 노출.
+        groups.forEach((g) => {
+          // 그룹 내 임박/마감 우선순위: urgent > active > ended
+          const urgent = g.items.find((i) => i.isUrgent && i.daysLeft >= 0);
+          const active = g.items.find((i) => i.daysLeft >= 0 && !i.isUrgent);
+          const rep = urgent ?? active ?? g.items[0];
+          const dayLabel = rep.daysLeft < 0 ? "마감" : `D-${rep.daysLeft}`;
+          const labelText = rep.lctnEmdNm || "";
+          const priceLabel = rep.lowstBidPrc > 0 ? formatPrice(rep.lowstBidPrc) : "";
+          const html = makeOnbidCardHtml(
+            rep.cltrMngNo,
+            dayLabel,
+            g.items.length,
+            !!urgent,
+            rep.daysLeft < 0,
+            labelText,
+            priceLabel,
+          );
+          const overlay = new window.kakao.maps.CustomOverlay({
+            position: new window.kakao.maps.LatLng(g.lat, g.lng),
+            content: html,
+            yAnchor: 1,
+            xAnchor: 0.5,
+            zIndex: 100,
+          });
+          overlay.setMap(map);
+          onbidOverlaysRef.current.push(overlay);
+        });
+      } else {
+        // 먼 줌 — 빨간 원 CustomOverlay (SDK 기본 파란 핀 회피).
+        // 매물 수가 검색 결과 수백 건 수준이라 클러스터러 없이 직접 그려도 성능 OK.
+        groups.forEach((g) => {
+          const position = new window.kakao.maps.LatLng(g.lat, g.lng);
+          const rep = g.items[0];
+          const safeId = rep.cltrMngNo.replace(/"/g, "&quot;");
+          const count = g.items.length;
+          const isUrgent = g.items.some((i) => i.isUrgent && i.daysLeft >= 0);
+          const dotHtml = `<div class="onbid-dot${isUrgent ? " urgent" : ""}" data-onbid-id="${safeId}">${count > 1 ? count : ""}</div>`;
+          const dotOverlay = new window.kakao.maps.CustomOverlay({
+            position,
+            content: dotHtml,
+            yAnchor: 0.5,
+            xAnchor: 0.5,
+            zIndex: 50,
+          });
+          dotOverlay.setMap(map);
+          onbidOverlaysRef.current.push(dotOverlay);
+        });
+      }
+    };
+  }, [onbidActive, onbidItems]);
+
+  // 공매 모드/데이터 변경 시 rebuild 직접 호출
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    onbidRebuildRef.current();
   }, [loaded, onbidActive, onbidItems]);
+
+  // 줌 변경 시 공매 rebuild (카드 ↔ 클러스터 전환)
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const onIdle = () => onbidRebuildRef.current();
+    window.kakao.maps.event.addListener(map, "idle", onIdle);
+    return () => {
+      window.kakao.maps.event.removeListener(map, "idle", onIdle);
+    };
+  }, [loaded]);
 
   // 공매 마커 클릭 — 컨테이너 위임 (data-onbid-id)
   useEffect(() => {

@@ -166,37 +166,150 @@ body.roadview-mode * {
 .kepco-card-marker .label .remain.ok { color: #1d4ed8; }
 .kepco-card-marker .label .remain.no { color: #9ca3af; }
 
-/* ─── 공매 매물 마커 (CustomOverlay HTML) ─── */
-.onbid-marker {
-  background: #dc2626; /* rose-600 */
-  color: #fff;
-  font-family: "Malgun Gothic", system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 9999px;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+/* ─────────────────────────────────────────────
+ * 공매 카드 마커 (HTML CustomOverlay)
+ * .kepco-card-marker 와 동일한 형태/크기, 색상만 빨간 계열로 분기.
+ * 화살표 끝 = 좌표 = 펄스 기준점이 일치해야 한다 (yAnchor 1, xAnchor 0.5).
+ * ───────────────────────────────────────────── */
+.onbid-card-marker {
+  position: relative;
+  width: 28px;
+  font-family: Arial, sans-serif;
+  pointer-events: auto;
   cursor: pointer;
+}
+.onbid-card-marker .card {
+  width: 28px;
+  height: 30px;
+  background: #fff;
+  border: 1px solid rgba(220, 38, 38, 0.7); /* rose-600 */
+  border-radius: 3px;
+  padding: 4px 3px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+/* D-day 텍스트 (예: D-3 / 마감) */
+.onbid-card-marker .day {
+  font-size: 11px;
+  font-weight: 800;
+  color: #dc2626; /* rose-600 */
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+/* 카테고리 작은 점 — 시각 구분용 (5종 색상) */
+.onbid-card-marker .cat {
+  width: 12px;
+  height: 3px;
+  border-radius: 1px;
+  background: #dc2626;
+  opacity: 0.85;
+}
+.onbid-card-marker .arrow {
+  width: 0;
+  height: 0;
+  margin: -1px auto 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #fff;
+  filter: drop-shadow(0 1px 0 rgba(220, 38, 38, 0.7));
+}
+.onbid-card-marker .badge {
+  position: absolute;
+  top: 8px;
+  left: 30px;
+  height: 14px;
+  padding: 0 5px;
+  background: #7f1d1d; /* rose-900 */
+  color: #fff;
+  border: 1.5px solid #fff;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 11px;
   white-space: nowrap;
-  transform: translateY(-4px);
-  user-select: none;
 }
-.onbid-marker:hover {
-  background: #b91c1c;
-  transform: translateY(-4px) scale(1.1);
+/* 임박 (D-3 이내) — 빨간 강조 + 펄스 */
+.onbid-card-marker[data-urgent="true"] .card {
+  border: 2px solid #b91c1c;
+  background: #fef2f2;
+  animation: onbid-card-pulse 1s ease-in-out infinite;
 }
-.onbid-marker.urgent {
-  background: #b91c1c; /* rose-700 */
-  font-size: 12px;
-  animation: onbid-urgent-pulse 0.9s ease-in-out infinite;
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25), 0 2px 6px rgba(0, 0, 0, 0.4);
+.onbid-card-marker[data-urgent="true"] .day {
+  color: #b91c1c;
 }
-.onbid-marker.ended {
-  background: #6b7280; /* gray-500 */
+.onbid-card-marker[data-urgent="true"] .arrow {
+  filter: drop-shadow(0 1px 0 #b91c1c);
+}
+/* 마감 — 회색 처리 */
+.onbid-card-marker[data-ended="true"] .card {
+  border-color: rgba(107, 114, 128, 0.6);
+  background: #f3f4f6;
+}
+.onbid-card-marker[data-ended="true"] .day {
+  color: #6b7280;
   text-decoration: line-through;
 }
-@keyframes onbid-urgent-pulse {
-  0%, 100% { transform: translateY(-4px) scale(1); }
-  50% { transform: translateY(-4px) scale(1.18); }
+.onbid-card-marker[data-ended="true"] .arrow {
+  filter: drop-shadow(0 1px 0 rgba(107, 114, 128, 0.6));
+}
+/* 카드 라벨 — 카드 아래 (리명 · 가격) */
+.onbid-card-marker .label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 4px);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2937;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.onbid-card-marker .label .price { color: #b91c1c; font-weight: 700; }
+@keyframes onbid-card-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0); }
+}
+
+/* ─── 공매 빨간 원 마커 (먼 줌, 전기 클러스터 동그라미와 동일 톤) ─── */
+.onbid-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.92); /* rose-600 */
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease;
+}
+.onbid-dot:hover {
+  transform: scale(1.15);
+  background: rgba(185, 28, 28, 0.95);
+}
+.onbid-dot.urgent {
+  background: rgba(185, 28, 28, 0.95);
+  animation: onbid-dot-pulse 1s ease-in-out infinite;
+}
+@keyframes onbid-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0), 0 1px 3px rgba(0, 0, 0, 0.3); }
 }
