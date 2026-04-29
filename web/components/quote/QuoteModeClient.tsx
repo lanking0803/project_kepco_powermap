@@ -342,6 +342,8 @@ export default function QuoteModeClient({ pnu }: Props) {
 
   /** 우측 카드의 🗑 클릭 시 빨간 모드 진입 — id 일치하면 [정말 삭제] / [취소] 표시 */
   const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
+  /** [전체 삭제] 클릭 시 확인 모달 표시 */
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
 
   // ── 2섹션 시설별 견적 — 사용자 변경 사항만 별도 state. 자동 추천은 derive.
   /** 동별 시설 종류 사용자 선택. 미설정이면 recommendFacility() 결과 사용. */
@@ -1015,15 +1017,25 @@ export default function QuoteModeClient({ pnu }: Props) {
                   </ul>
                 )}
 
-                {/* + 영역 추가 — 보조 액션 (편집 카드보다 약하게) */}
-                <button
-                  onClick={handleAddBuilding}
-                  disabled={!geometry}
-                  className="w-full text-[11px] font-medium py-1.5 text-gray-500 hover:text-blue-700 bg-transparent hover:bg-blue-50 disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed border border-dashed border-gray-300 hover:border-blue-300 rounded transition-colors"
-                  title="부지 중앙에 15m × 15m 사각형이 등장합니다 — 꼭지점 드래그로 조정"
-                >
-                  + 영역 추가
-                </button>
+                {/* + 영역 추가 / 전체 삭제 — 보조 액션 (편집 카드보다 약하게) */}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleAddBuilding}
+                    disabled={!geometry}
+                    className="flex-1 text-[11px] font-medium py-1.5 text-gray-500 hover:text-blue-700 bg-transparent hover:bg-blue-50 disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed border border-dashed border-gray-300 hover:border-blue-300 rounded transition-colors"
+                    title="부지 중앙에 15m × 15m 사각형이 등장합니다 — 꼭지점 드래그로 조정"
+                  >
+                    + 영역 추가
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(true)}
+                    disabled={editableBuildings.length === 0}
+                    className="text-[11px] font-medium py-1.5 px-2.5 text-gray-500 hover:text-red-700 bg-transparent hover:bg-red-50 disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed border border-dashed border-gray-300 hover:border-red-300 rounded transition-colors"
+                    title="현재 영역 전부 삭제"
+                  >
+                    전체 삭제
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -1541,6 +1553,50 @@ export default function QuoteModeClient({ pnu }: Props) {
                 onClick={() => {
                   handleDeleteBuilding(pendingDeleteBuilding.id);
                   setDeletePendingId(null);
+                }}
+                className="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
+              >
+                정말 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 전체 삭제 확인 모달 */}
+      {showDeleteAllConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowDeleteAllConfirm(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-lg shadow-2xl border border-gray-200 px-5 py-4 w-[320px] max-w-[calc(100%-32px)]"
+          >
+            <div className="text-base font-bold text-gray-900 mb-1.5">
+              전체 영역 삭제
+            </div>
+            <div className="text-sm text-gray-700 leading-relaxed mb-4">
+              현재 <b className="text-red-600">{editableBuildings.length}동</b>{" "}
+              전부 삭제하시겠습니까?
+              <br />
+              <span className="text-xs text-gray-500">
+                삭제하면 되돌릴 수 없습니다.
+              </span>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowDeleteAllConfirm(false)}
+                className="px-3 py-1.5 text-sm text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  setBuildings([]);
+                  setShowDeleteAllConfirm(false);
                 }}
                 className="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded"
               >

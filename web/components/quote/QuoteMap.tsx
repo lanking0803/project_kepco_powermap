@@ -141,26 +141,6 @@ const VERTEX_DOT_URI =
   "data:image/svg+xml;base64," +
   (typeof window === "undefined" ? "" : btoa(VERTEX_DOT_SVG));
 
-/**
- * ✥ 이동 핸들 SVG — Material Icons "open_with" / 파워포인트 이동 커서 표준 디자인.
- * 28x28, 흰 배경 둥근 사각형 + 4방향 채워진 화살촉 + 중앙 점.
- */
-const MOVE_HANDLE_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">` +
-  // 흰 배경 둥근 사각형 + 주황 외곽
-  `<rect x="2" y="2" width="24" height="24" rx="6" fill="white" stroke="${BUILDING_FILL}" stroke-width="2"/>` +
-  // 4방향 채워진 삼각형 화살촉
-  `<polygon points="14,4 10,9 18,9" fill="${BUILDING_FILL}"/>` + // 위
-  `<polygon points="14,24 10,19 18,19" fill="${BUILDING_FILL}"/>` + // 아래
-  `<polygon points="4,14 9,10 9,18" fill="${BUILDING_FILL}"/>` + // 좌
-  `<polygon points="24,14 19,10 19,18" fill="${BUILDING_FILL}"/>` + // 우
-  // 가운데 점
-  `<circle cx="14" cy="14" r="2.2" fill="${BUILDING_FILL}"/>` +
-  `</svg>`;
-const MOVE_HANDLE_URI =
-  "data:image/svg+xml;base64," +
-  (typeof window === "undefined" ? "" : btoa(MOVE_HANDLE_SVG));
-
 export default function QuoteMap({
   parcelPolygon,
   buildings,
@@ -183,7 +163,6 @@ export default function QuoteMap({
   const buildingPolyMapRef = useRef<Map<string, any>>(new Map());
   const vertexMarkersRef = useRef<any[]>([]);
   const labelOverlaysRef = useRef<any[]>([]);
-  const moveHandleMarkersRef = useRef<any[]>([]);
   const panelPolyRef = useRef<any[]>([]);
 
   // dragend / dblclick 콜백 안에서 최신 buildings/onChange 참조 — closure 꼬임 방지.
@@ -286,8 +265,6 @@ export default function QuoteMap({
     vertexMarkersRef.current = [];
     labelOverlaysRef.current.forEach((o) => o.setMap(null));
     labelOverlaysRef.current = [];
-    moveHandleMarkersRef.current.forEach((m) => m.setMap(null));
-    moveHandleMarkersRef.current = [];
     panelPolyRef.current.forEach((p) => p.setMap(null));
     panelPolyRef.current = [];
 
@@ -296,6 +273,16 @@ export default function QuoteMap({
       new window.kakao.maps.Size(14, 14),
       { offset: new window.kakao.maps.Point(7, 7) },
     );
+
+    // 영역 평행이동 — 지도 mousedown 1개로 모든 building 처리 (Polygon 자체는 mousedown 미지원).
+    // mousedown 좌표가 폴리곤 ring 안이면 그 building 드래그 시작.
+    interface DragHandler {
+      id: string;
+      polygon: Position[][];
+      ringPolys: any[];
+      labelRefBox: { current: any };
+    }
+    const dragHandlers: DragHandler[] = [];
 
     for (const building of buildings) {
       // 폴리곤 본체 — ring 마다 별도 Polygon 객체. ringPolys 로 ring 인덱스별 ref 보관.
@@ -324,6 +311,21 @@ export default function QuoteMap({
         }
         buildingPolyRef.current.push(poly);
         ringPolys.push(poly);
+      }
+      // 라벨 ref 보관용 — 라벨 생성 후 setter 로 주입. 드래그 시 라벨도 같이 평행이동.
+      const labelRefBox = { current: null as any };
+      (ringPolys[0] as any).__setLabelRef = (lo: any) => {
+        labelRefBox.current = lo;
+      };
+      // building → 영역 평행이동 핸들러 등록 (지도 mousedown 분배)
+      // 인쇄 모드 = 정적 출력이라 미부착.
+      if (!printMode && ringPolys[0]) {
+        dragHandlers.push({
+          id: building.id,
+          polygon: building.polygon,
+          ringPolys,
+          labelRefBox,
+        });
       }
       // id → 외곽 폴리곤 매핑 (selected 변경 시 setOptions 호출용)
       if (ringPolys[0]) {
@@ -481,6 +483,9 @@ export default function QuoteMap({
           zIndex: 999,
         });
         labelOverlaysRef.current.push(labelOverlay);
+        // 폴리곤 mousedown 드래그 클로저에 라벨 ref 주입 (드래그 시 라벨도 같이 이동)
+        const setter = (ringPolys[0] as any)?.__setLabelRef;
+        if (typeof setter === "function") setter(labelOverlay);
       }
 
       // 3단계 패널 폴리곤 — 격자 알고리즘 결과 N개. 영역 위에 빨강 채움.
@@ -513,149 +518,171 @@ export default function QuoteMap({
         }
       }
 
-      // ✥ 이동 핸들 마커 — 영역 위쪽 외부 (라벨 바로 아래). 드래그로 영역 전체 평행 이동.
-      // 인쇄 모드 = 핸들 미생성 (정적 도면).
-      const handleAnchor = printMode ? null : polygonTopAnchor(building.polygon, 3);
-      if (handleAnchor) {
-        const moveImage = new window.kakao.maps.MarkerImage(
-          MOVE_HANDLE_URI,
-          new window.kakao.maps.Size(28, 28),
-          { offset: new window.kakao.maps.Point(14, 14) },
-        );
-        const handlePos = new window.kakao.maps.LatLng(
-          handleAnchor.lat,
-          handleAnchor.lng,
-        );
-        const handle = new window.kakao.maps.Marker({
-          map,
-          position: handlePos,
-          image: moveImage,
-          draggable: true,
-          zIndex: 1100,
-          title: "드래그로 영역 전체 이동 · 클릭으로 선택",
-        });
-        // ✥ 핸들 클릭(드래그 X)도 동 선택으로 처리
-        window.kakao.maps.event.addListener(handle, "click", () => {
-          onSelectRef.current?.(building.id);
-        });
-
-        const capturedId = building.id;
-        const capturedPolyRefs = ringPolys;
-        const capturedVertexCounts = building.polygon.map(
-          (ring) => ring.length - 1,
-        );
-        const totalVerticesBeforeRing = (rIdx: number): number => {
-          let sum = 0;
-          for (let k = 0; k < rIdx; k += 1) sum += capturedVertexCounts[k];
-          return sum;
-        };
-
-        let mvRafId: number | null = null;
-        let startHandle: { lat: number; lng: number } | null = null;
-        let pathSnapshots: any[][] = [];
-        let vertexSnapshots: any[][] = [];
-        let labelStartPos: { lat: number; lng: number } | null = null;
-
-        window.kakao.maps.event.addListener(handle, "dragstart", () => {
-          // 드래그 시작 = 동 선택 강제 (이미 선택돼 있어도 토글 X)
-          onSelectRef.current?.(capturedId, true);
-          const sp = handle.getPosition();
-          startHandle = { lat: sp.getLat(), lng: sp.getLng() };
-          pathSnapshots = capturedPolyRefs.map((p) =>
-            Array.from(p.getPath() as any[]),
-          );
-          // 이 building 의 vertex 마커들만 추출 (생성 순서대로 ring0 vertices, ring1 vertices, ...)
-          // → vertexMarkersRef 전체에서 이 building 에 해당하는 N개를 슬라이스해야 정확하지만
-          //   단순화: 모든 vertex 마커 위치 snapshot 후 핸들 이동 시 같은 dLat/dLng 만큼 이동
-          //   (다른 building 의 마커가 같이 이동하는 부작용은 dragend 후 effect 재실행으로 정리)
-          vertexSnapshots = vertexMarkersRef.current.map((m) => {
-            const p = m.getPosition();
-            return [p.getLat(), p.getLng()];
-          });
-          if (labelOverlay) {
-            const lp = labelOverlay.getPosition();
-            labelStartPos = { lat: lp.getLat(), lng: lp.getLng() };
-          }
-
-          const tick = () => {
-            if (!startHandle) return;
-            const cur = handle.getPosition();
-            const dLat = cur.getLat() - startHandle.lat;
-            const dLng = cur.getLng() - startHandle.lng;
-            // 폴리곤 path 평행 이동
-            capturedPolyRefs.forEach((poly, ri) => {
-              const snap = pathSnapshots[ri];
-              if (!snap) return;
-              const newPath = snap.map((p: any) => {
-                return new window.kakao.maps.LatLng(
-                  p.getLat() + dLat,
-                  p.getLng() + dLng,
-                );
-              });
-              poly.setPath(newPath);
-            });
-            // 이 building 의 vertex 마커만 골라서 이동.
-            // 위치: vertexMarkersRef 의 시작 인덱스를 추적 — 단순화 위해 좌표 매칭으로 식별
-            // (vertex 마커의 시작 좌표가 이 building 의 polygon ring 좌표와 일치)
-            vertexMarkersRef.current.forEach((m, mi) => {
-              const snap = vertexSnapshots[mi];
-              if (!snap) return;
-              const [snapLat, snapLng] = snap;
-              // 이 마커가 우리 building 의 ring 좌표와 일치하는지 확인
-              const belongs = capturedPolyRefs.some((_, rIdx) => {
-                const ring = building.polygon[rIdx];
-                if (!ring) return false;
-                return ring.some(
-                  ([lng, lat]) =>
-                    Math.abs(lat - snapLat) < 1e-9 &&
-                    Math.abs(lng - snapLng) < 1e-9,
-                );
-              });
-              if (!belongs) return;
-              m.setPosition(
-                new window.kakao.maps.LatLng(snapLat + dLat, snapLng + dLng),
-              );
-            });
-            // 라벨도 따라 이동
-            if (labelOverlay && labelStartPos) {
-              labelOverlay.setPosition(
-                new window.kakao.maps.LatLng(
-                  labelStartPos.lat + dLat,
-                  labelStartPos.lng + dLng,
-                ),
-              );
-            }
-            mvRafId = requestAnimationFrame(tick);
-          };
-          mvRafId = requestAnimationFrame(tick);
-        });
-
-        window.kakao.maps.event.addListener(handle, "dragend", () => {
-          if (mvRafId !== null) {
-            cancelAnimationFrame(mvRafId);
-            mvRafId = null;
-          }
-          if (!startHandle) return;
-          const cur = handle.getPosition();
-          const dLat = cur.getLat() - startHandle.lat;
-          const dLng = cur.getLng() - startHandle.lng;
-          startHandle = null;
-          const target = buildingsRef.current.find(
-            (b) => b.id === capturedId,
-          );
-          if (!target) return;
-          const newPolygon = translatePolygon(target.polygon, dLng, dLat);
-          // 면적은 평행이동이라 동일 — 그대로 area_m2 재계산은 하되 라벨 안 바뀜
-          onChangeRef.current?.(capturedId, newPolygon, calcAreaM2(newPolygon));
-        });
-
-        // totalVerticesBeforeRing 미사용 경고 방지 (향후 정확 인덱스 매칭에 사용 예정)
-        void totalVerticesBeforeRing;
-
-        moveHandleMarkersRef.current.push(handle);
-      }
     }
-  }, [loaded, buildings]);
+
+    // ── 영역 평행이동 — 지도 mousedown 으로 시작점이 어떤 폴리곤 안인지 검사
+    if (printMode || dragHandlers.length === 0) {
+      return;
+    }
+
+    let active: {
+      handler: DragHandler;
+      startLat: number;
+      startLng: number;
+      pathSnapshots: any[][];
+      vertexSnapshots: Array<[number, number] | null>;
+      labelStart: { lat: number; lng: number } | null;
+      lastLat: number;
+      lastLng: number;
+    } | null = null;
+
+    const projection = map.getProjection();
+
+    const pixelToLatLng = (clientX: number, clientY: number) => {
+      const rect = mapRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      const point = new window.kakao.maps.Point(
+        clientX - rect.left,
+        clientY - rect.top,
+      );
+      return projection.coordsFromContainerPoint(point);
+    };
+
+    const pointInRing = (lat: number, lng: number, ring: Position[]): boolean => {
+      let inside = false;
+      const n = ring.length;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        const intersect =
+          yi > lat !== yj > lat &&
+          lng < ((xj - xi) * (lat - yi)) / (yj - yi + 1e-30) + xi;
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
+
+    const onDocMouseMove = (e: MouseEvent) => {
+      if (!active) return;
+      const ll = pixelToLatLng(e.clientX, e.clientY);
+      if (!ll) return;
+      const lat = ll.getLat();
+      const lng = ll.getLng();
+      active.lastLat = lat;
+      active.lastLng = lng;
+      const dLat = lat - active.startLat;
+      const dLng = lng - active.startLng;
+      active.handler.ringPolys.forEach((p, ri) => {
+        const snap = active!.pathSnapshots[ri];
+        if (!snap) return;
+        p.setPath(
+          snap.map(
+            (pt: any) =>
+              new window.kakao.maps.LatLng(
+                pt.getLat() + dLat,
+                pt.getLng() + dLng,
+              ),
+          ),
+        );
+      });
+      vertexMarkersRef.current.forEach((m, mi) => {
+        const snap = active!.vertexSnapshots[mi];
+        if (!snap) return;
+        m.setPosition(
+          new window.kakao.maps.LatLng(snap[0] + dLat, snap[1] + dLng),
+        );
+      });
+      const lo = active.handler.labelRefBox.current;
+      if (lo && active.labelStart) {
+        lo.setPosition(
+          new window.kakao.maps.LatLng(
+            active.labelStart.lat + dLat,
+            active.labelStart.lng + dLng,
+          ),
+        );
+      }
+    };
+
+    const onDocMouseUp = () => {
+      if (!active) return;
+      const a = active;
+      active = null;
+      document.removeEventListener("mousemove", onDocMouseMove);
+      document.removeEventListener("mouseup", onDocMouseUp);
+      map.setDraggable(true);
+      const dLat = a.lastLat - a.startLat;
+      const dLng = a.lastLng - a.startLng;
+      // 거의 안 움직였으면 클릭으로 간주 — state 갱신 skip (polygon click 이 별도 발화)
+      if (Math.abs(dLat) < 1e-7 && Math.abs(dLng) < 1e-7) return;
+      const target = buildingsRef.current.find((b) => b.id === a.handler.id);
+      if (!target) return;
+      const newPolygon = translatePolygon(target.polygon, dLng, dLat);
+      onChangeRef.current?.(a.handler.id, newPolygon, calcAreaM2(newPolygon));
+    };
+
+    const onMapMouseDownEl = (e: MouseEvent) => {
+      // 좌클릭만 처리
+      if (e.button !== 0) return;
+      const ll = pixelToLatLng(e.clientX, e.clientY);
+      if (!ll) return;
+      const lat = ll.getLat();
+      const lng = ll.getLng();
+      // 가장 위에 그린(나중에 추가된) 동을 우선 — 마지막부터 검사
+      for (let i = dragHandlers.length - 1; i >= 0; i--) {
+        const h = dragHandlers[i];
+        const ring = h.polygon[0];
+        if (!ring) continue;
+        if (!pointInRing(lat, lng, ring)) continue;
+        // 이 동 내부 = 드래그 시작
+        onSelectRef.current?.(h.id, true);
+        const vertexSnaps: Array<[number, number] | null> = vertexMarkersRef.current.map(
+          (m) => {
+            const p = m.getPosition();
+            const mLat = p.getLat();
+            const mLng = p.getLng();
+            const belongs = h.polygon.some((rg) =>
+              rg.some(
+                ([rl, rt]) =>
+                  Math.abs(rt - mLat) < 1e-9 && Math.abs(rl - mLng) < 1e-9,
+              ),
+            );
+            return belongs ? [mLat, mLng] : null;
+          },
+        );
+        const lo = h.labelRefBox.current;
+        const labelStart = lo
+          ? { lat: lo.getPosition().getLat(), lng: lo.getPosition().getLng() }
+          : null;
+        active = {
+          handler: h,
+          startLat: lat,
+          startLng: lng,
+          lastLat: lat,
+          lastLng: lng,
+          pathSnapshots: h.ringPolys.map((p) =>
+            Array.from(p.getPath() as any[]),
+          ),
+          vertexSnapshots: vertexSnaps,
+          labelStart,
+        };
+        map.setDraggable(false);
+        e.preventDefault();
+        document.addEventListener("mousemove", onDocMouseMove);
+        document.addEventListener("mouseup", onDocMouseUp);
+        return;
+      }
+    };
+
+    const mapEl = mapRef.current;
+    mapEl?.addEventListener("mousedown", onMapMouseDownEl);
+
+    return () => {
+      mapEl?.removeEventListener("mousedown", onMapMouseDownEl);
+      document.removeEventListener("mousemove", onDocMouseMove);
+      document.removeEventListener("mouseup", onDocMouseUp);
+      if (active) map.setDraggable(true);
+    };
+  }, [loaded, buildings, printMode]);
 
   // 첫 진입 시 fitBounds — buildings + parcel 모두 도착 후 1회만
   const fitDoneRef = useRef(false);
@@ -710,7 +737,6 @@ export default function QuoteMap({
       buildingPolyRef.current.forEach((p) => p.setMap(null));
       vertexMarkersRef.current.forEach((m) => m.setMap(null));
       labelOverlaysRef.current.forEach((o) => o.setMap(null));
-      moveHandleMarkersRef.current.forEach((m) => m.setMap(null));
       panelPolyRef.current.forEach((p) => p.setMap(null));
     };
   }, []);
