@@ -11,6 +11,8 @@ import type { MapSummaryRow, ColumnFilters, KepcoDataRow } from "@/lib/types";
 import type { SearchRiResult } from "@/lib/search/searchKepco";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import UserGuide from "./UserGuide";
+import OnbidSearchPanel from "./OnbidSearchPanel";
+import type { OnbidListItem } from "@/lib/onbid/types";
 
 type SidebarTab = "search" | "filter" | "compare";
 
@@ -39,6 +41,12 @@ interface Props {
   onClearMapFilter?: () => void;
   /** 패널 리셋 키 — 값이 바뀌면 현재 패널 1단계로 복귀 */
   panelResetKey?: number;
+  /** 데이터 모드 — 공매 활성 시 콘텐츠/색상 모드별 분기 */
+  onbidActive?: boolean;
+  /** 공매 검색 결과 변경 콜백 (지도 마커용) */
+  onOnbidResults?: (items: OnbidListItem[]) => void;
+  /** 공매 매물 카드 클릭 콜백 */
+  onOnbidItemClick?: (item: OnbidListItem) => void;
 }
 
 // ── 검색 히스토리 ──
@@ -88,6 +96,9 @@ export default function Sidebar({
   onMapFilter,
   onClearMapFilter,
   panelResetKey = 0,
+  onbidActive = false,
+  onOnbidResults,
+  onOnbidItemClick,
 }: Props) {
   const [activeTab, setActiveTab] = useState<SidebarTab>("search");
 
@@ -210,10 +221,27 @@ export default function Sidebar({
         className="w-80 max-w-[85vw] bg-white
           flex flex-col h-full"
       >
-        {/* ── 헤더 ── */}
-        <div className="px-3 py-2 border-b border-gray-200 space-y-1.5">
-          {/* 줄 1: 서비스명 */}
-          <h1 className="text-sm font-bold text-gray-900">배전선로 여유용량 지도</h1>
+        {/* ── 헤더 ── 모드별 배경색 (전기=파랑, 공매=빨강 계열) */}
+        <div
+          className={`px-3 py-2 border-b space-y-1.5 transition-colors ${
+            onbidActive
+              ? "bg-rose-50 border-rose-200"
+              : "bg-blue-50 border-blue-200"
+          }`}
+        >
+          {/* 줄 1: 서비스명 + 모드 부제목 */}
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-sm font-bold text-gray-900">
+              배전선로 여유용량 지도
+            </h1>
+            <span
+              className={`text-[11px] font-bold ${
+                onbidActive ? "text-rose-700" : "text-blue-700"
+              }`}
+            >
+              · {onbidActive ? "🟥 공매" : "⚡ 전기"}
+            </span>
+          </div>
           {/* 줄 2: 사용 안내 + 새로고침 */}
           <div className="flex items-center gap-1.5">
             <UserGuide />
@@ -259,7 +287,17 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* ── 탭: 검색 / 필터 ── */}
+        {/* ── 공매 모드: 탭 없이 검색 폼 + 결과 ── */}
+        {onbidActive ? (
+          <div className="flex-1 min-h-0">
+            <OnbidSearchPanel
+              onResults={onOnbidResults}
+              onItemClick={onOnbidItemClick}
+            />
+          </div>
+        ) : (
+        <>
+        {/* ── 탭: 검색 / 필터 (전기 모드만) ── */}
         <div className="flex border-b border-gray-200">
           <button
             type="button"
@@ -533,8 +571,10 @@ export default function Sidebar({
 
           {activeTab === "compare" && <CompareFilterPanel />}
         </div>
+        </>
+        )}
 
-        {/* 푸터 */}
+        {/* 푸터 — 모드 무관 공통 */}
         <div className="px-3 py-2 border-t border-gray-200">
           <LogoutButton />
         </div>

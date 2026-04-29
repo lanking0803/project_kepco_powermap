@@ -31,6 +31,10 @@ interface Props {
   /** 지적편집도 오버레이 ON/OFF — 필지 경계를 배경으로 표시 */
   cadastralActive: boolean;
   onToggleCadastral: () => void;
+  /** 공매 모드 ON/OFF — 캠코 매물 검색 사이드바 + 매물 마커.
+   *  [전기] ↔ [공매] 데이터 모드는 상호 전환 (한 번에 하나). */
+  onbidActive: boolean;
+  onSetOnbid: (active: boolean) => void;
   /** 줌 레벨 (1~14, 숫자 작을수록 확대) */
   zoomLevel?: number;
   /** 줌 인/아웃 콜백 */
@@ -56,40 +60,72 @@ export default function MapToolbar({
   onToggleRoadview,
   cadastralActive,
   onToggleCadastral,
+  onbidActive,
+  onSetOnbid,
   onZoomIn,
   onZoomOut,
   onShare,
 }: Props) {
   return (
     <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
-      {/* ── 1. 지도/스카이뷰 탭 + 로드뷰 토글 ── */}
+      {/* ── 1A. 베이스 지도 형식 (지도 ↔ 스카이뷰, 상호 전환) ── */}
+      <div className="flex rounded overflow-hidden shadow border border-gray-300 text-xs font-medium leading-none">
+        <button
+          type="button"
+          onClick={() => onMapTypeChange("roadmap")}
+          className={`px-3 py-[7px] transition-colors ${
+            mapType === "roadmap"
+              ? "bg-white text-gray-900 font-bold"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-50"
+          }`}
+        >
+          지도
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onMapTypeChange(mapType === "roadmap" ? "hybrid" : "roadmap")
+          }
+          className={`px-3 py-[7px] border-l border-gray-300 transition-colors ${
+            mapType !== "roadmap"
+              ? "bg-white text-gray-900 font-bold"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-50"
+          }`}
+        >
+          스카이뷰
+        </button>
+      </div>
+
+      {/* ── 1B. 데이터 모드 (전기 ↔ 공매, 상호 전환 — 메인 데이터 레이어) ── */}
+      <div className="flex rounded overflow-hidden shadow border border-gray-300 text-xs font-bold leading-none">
+        <button
+          type="button"
+          onClick={() => onSetOnbid(false)}
+          title="전기지도 — KEPCO 여유선로 마을 마커"
+          className={`px-3 py-[7px] transition-colors ${
+            !onbidActive
+              ? "bg-blue-600 text-white"
+              : "bg-white text-gray-600 hover:bg-blue-50"
+          }`}
+        >
+          ⚡ 전기
+        </button>
+        <button
+          type="button"
+          onClick={() => onSetOnbid(true)}
+          title="공매지도 — 캠코 부동산 매물 검색"
+          className={`px-3 py-[7px] border-l border-gray-300 transition-colors ${
+            onbidActive
+              ? "bg-rose-600 text-white"
+              : "bg-white text-gray-600 hover:bg-rose-50"
+          }`}
+        >
+          🟥 공매
+        </button>
+      </div>
+
+      {/* ── 1C. 부가 오버레이 (병렬, 데이터 모드와 무관하게 ON/OFF) ── */}
       <div className="flex items-center gap-1.5">
-        <div className="flex rounded overflow-hidden shadow border border-gray-300 text-xs font-medium leading-none">
-          <button
-            type="button"
-            onClick={() => onMapTypeChange("roadmap")}
-            className={`px-3 py-[7px] transition-colors ${
-              mapType === "roadmap"
-                ? "bg-white text-gray-900 font-bold"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-50"
-            }`}
-          >
-            지도
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onMapTypeChange(mapType === "roadmap" ? "hybrid" : "roadmap")
-            }
-            className={`px-3 py-[7px] border-l border-gray-300 transition-colors ${
-              mapType !== "roadmap"
-                ? "bg-white text-gray-900 font-bold"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-50"
-            }`}
-          >
-            스카이뷰
-          </button>
-        </div>
         <button
           type="button"
           onClick={onToggleRoadview}

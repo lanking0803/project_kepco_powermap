@@ -18,6 +18,16 @@ declare global {
   }
 }
 
+/** 공매 매물 마커 1건 — KakaoMap 에 전달되는 최소 필드 */
+export interface OnbidMarkerData {
+  cltrMngNo: string;
+  lat: number | null;
+  lng: number | null;
+  daysLeft: number;
+  isUrgent: boolean;
+  onbidCltrNm: string;
+}
+
 interface Props {
   rows: MapSummaryRow[];
   /** 현재 활성화된 색상 필터 */
@@ -76,6 +86,17 @@ interface Props {
    * 마을 마커 클릭 시 해당 행정구역 영역에 옅은 음영 표시.
    */
   villagePolygon?: number[][][] | null;
+  /**
+   * 공매 모드 ON 여부. true 일 때 매물 마커 표시 + KEPCO 마커 시각적 비중 ↓.
+   */
+  onbidActive?: boolean;
+  /**
+   * 공매 매물 마커 — 검색 결과. 빈 배열이면 표시 X.
+   * 각 매물 lat/lng 가 동/리 단위 좌표 (bjd_master), 같은 동 매물은 같은 위치.
+   */
+  onbidItems?: OnbidMarkerData[];
+  /** 매물 마커 클릭 콜백 — ParcelInfoPanel 의 [공매] 탭 호출용 (UI-6) */
+  onOnbidItemClick?: (cltrMngNo: string) => void;
 }
 
 /**
@@ -300,6 +321,9 @@ export default function KakaoMap({
   onParcelClick,
   highlightedParcel = null,
   villagePolygon = null,
+  onbidActive = false,
+  onbidItems = [],
+  onOnbidItemClick,
 }: Props) {
   // 지적편집도/필지 콜백 — 클로저 stale 방지
   const onParcelClickRef = useRef(onParcelClick);
@@ -325,6 +349,11 @@ export default function KakaoMap({
   const labelOverlaysRef = useRef<any[]>([]);
   // 줌 변경 리스너 핸들 (마커 effect 재실행 시 정리)
   const zoomListenerRef = useRef<any>(null);
+  // 공매 매물 마커 오버레이 — onbidItems 변경 시 재구성
+  const onbidOverlaysRef = useRef<any[]>([]);
+  // 공매 마커 클릭 콜백 — 클로저 stale 방지
+  const onOnbidClickRef = useRef(onOnbidItemClick);
+  onOnbidClickRef.current = onOnbidItemClick;
   // 마커 참조 맵 (geocode_address → kakao.maps.Marker) — 선택 변경 시 이미지 교체용
   const markersByAddrRef = useRef<Map<string, { marker: any; row: MapSummaryRow }>>(
     new Map()
@@ -861,6 +890,59 @@ export default function KakaoMap({
       villagePolygonsRef.current.push(polygon);
     });
   }, [loaded, villagePolygon]);
+
+  // ─────────────────────────────────────────────
+  // 공매 매물 마커 — onbidItems 변경 시 재구성 (CustomOverlay)
+  // 좌표는 PNU 앞 10자리 → bjd_master JOIN 결과 (동/리 단위).
+  // 같은 동 매물 여러 건이면 같은 위치 — 향후 클러스터러 추가 (UI-5).
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!loaded || !map) return;
+
+    // 기존 매물 마커 제거
+    onbidOverlaysRef.current.forEach((o) => o.setMap(null));
+    onbidOverlaysRef.current = [];
+
+    if (!onbidActive || !onbidItems || onbidItems.length === 0) return;
+
+    onbidItems.forEach((item) => {
+      if (item.lat == null || item.lng == null) return;
+      const safeId = item.cltrMngNo.replace(/"/g, "&quot;");
+      const dayLabel =
+        item.daysLeft < 0 ? "마감" : `D-${item.daysLeft}`;
+      const cssClass = item.isUrgent
+        ? "onbid-marker urgent"
+        : item.daysLeft < 0
+          ? "onbid-marker ended"
+          : "onbid-marker";
+      const html = `<div class="${cssClass}" data-onbid-id="${safeId}" title="${item.onbidCltrNm.replace(/"/g, "&quot;")}">${dayLabel}</div>`;
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position: new window.kakao.maps.LatLng(item.lat, item.lng),
+        content: html,
+        yAnchor: 1,
+        xAnchor: 0.5,
+        zIndex: 100,
+      });
+      overlay.setMap(map);
+      onbidOverlaysRef.current.push(overlay);
+    });
+  }, [loaded, onbidActive, onbidItems]);
+
+  // 공매 마커 클릭 — 컨테이너 위임 (data-onbid-id)
+  useEffect(() => {
+    const container = mapRef.current;
+    if (!container) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const marker = target?.closest("[data-onbid-id]") as HTMLElement | null;
+      if (!marker) return;
+      const id = marker.getAttribute("data-onbid-id");
+      if (id) onOnbidClickRef.current?.(id);
+    };
+    container.addEventListener("click", onClick);
+    return () => container.removeEventListener("click", onClick);
+  }, []);
 
   return <div ref={mapRef} className="w-full h-full" />;
 }

@@ -25,6 +25,8 @@ import Toast from "./Toast";
 import TopRemainingList from "./TopRemainingList";
 import GpsTracker from "./GpsTracker";
 import RoadviewPanel from "./RoadviewPanel";
+import type { OnbidListItem } from "@/lib/onbid/types";
+import { MOCK_ITEMS as ONBID_MOCK } from "@/lib/onbid/mock";
 import LocationSummaryCard from "./LocationSummaryCard";
 import LocationDetailModal from "./LocationDetailModal";
 import ParcelInfoPanel from "./ParcelInfoPanel";
@@ -195,6 +197,15 @@ export default function MapClient({ isAdmin, email }: Props) {
       setSimpleToast("지적편집도는 지도를 더 확대해야 잘 보입니다");
     }
   }, [mapInstance, cadastralActive]);
+
+  // 데이터 모드 (전기 ↔ 공매, 상호 전환). 디폴트 = 전기 (onbidActive=false).
+  const [onbidActive, setOnbidActive] = useState(false);
+  /** 검색 결과 = 지도 마커 표시 데이터. ON 시 mock 전체로 초기화. */
+  const [onbidItems, setOnbidItems] = useState<OnbidListItem[]>([]);
+  const setOnbidMode = useCallback((next: boolean) => {
+    setOnbidActive(next);
+    setOnbidItems(next ? ONBID_MOCK : []);
+  }, []);
 
   const [roadviewActive, setRoadviewActive] = useState(false);
   const [roadviewPosition, setRoadviewPosition] = useState<{
@@ -675,6 +686,7 @@ export default function MapClient({ isAdmin, email }: Props) {
   // ─────────────────────────── render ───────────────────────────
   return (
     <div className="flex h-dvh overflow-hidden relative">
+      {/* Sidebar — 헤더/푸터 공통, 콘텐츠만 모드별 분기 (전기 = 탭 / 공매 = 검색폼) */}
       <Sidebar
         isAdmin={isAdmin}
         email={email}
@@ -694,6 +706,15 @@ export default function MapClient({ isAdmin, email }: Props) {
         onMapFilter={applyMapFilter}
         onClearMapFilter={clearMapFilter}
         panelResetKey={panelResetKey}
+        onbidActive={onbidActive}
+        onOnbidResults={setOnbidItems}
+        onOnbidItemClick={(item) => {
+          if (item.lat != null && item.lng != null && mapInstance) {
+            mapInstance.panTo(
+              new (window as any).kakao.maps.LatLng(item.lat, item.lng),
+            );
+          }
+        }}
       />
 
       <main className="flex-1 flex min-w-0">
@@ -768,6 +789,13 @@ export default function MapClient({ isAdmin, email }: Props) {
             onParcelClick={openParcelPanelOnMapClick}
             highlightedParcel={selectedGeometry?.polygon ?? null}
             villagePolygon={villagePolygon}
+            onbidActive={onbidActive}
+            onbidItems={onbidItems}
+            onOnbidItemClick={(cltrMngNo) => {
+              // UI-6: ParcelInfoPanel [공매] 탭 호출. 일단 mock 콘솔 로그.
+              const item = onbidItems.find((i) => i.cltrMngNo === cltrMngNo);
+              if (item) console.log("[onbid] 마커 클릭", item);
+            }}
           />
 
           {/* 지도 상태 바 */}
@@ -865,6 +893,8 @@ export default function MapClient({ isAdmin, email }: Props) {
             onToggleRoadview={handleToggleRoadview}
             cadastralActive={cadastralActive}
             onToggleCadastral={handleToggleCadastral}
+            onbidActive={onbidActive}
+            onSetOnbid={setOnbidMode}
             onZoomIn={() => mapInstance?.setLevel(mapInstance.getLevel() - 1)}
             onZoomOut={() => mapInstance?.setLevel(mapInstance.getLevel() + 1)}
             onShare={handleShare}
@@ -878,6 +908,7 @@ export default function MapClient({ isAdmin, email }: Props) {
               topN={10}
             />
           )}
+
 
           <DistanceTool
             map={mapInstance}

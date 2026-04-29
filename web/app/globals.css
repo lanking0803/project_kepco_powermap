@@ -165,3 +165,38 @@ body.roadview-mode * {
 .kepco-card-marker .label .remain { font-weight: 700; }
 .kepco-card-marker .label .remain.ok { color: #1d4ed8; }
 .kepco-card-marker .label .remain.no { color: #9ca3af; }
+
+/* ─── 공매 매물 마커 (CustomOverlay HTML) ─── */
+.onbid-marker {
+  background: #dc2626; /* rose-600 */
+  color: #fff;
+  font-family: "Malgun Gothic", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  white-space: nowrap;
+  transform: translateY(-4px);
+  user-select: none;
+}
+.onbid-marker:hover {
+  background: #b91c1c;
+  transform: translateY(-4px) scale(1.1);
+}
+.onbid-marker.urgent {
+  background: #b91c1c; /* rose-700 */
+  font-size: 12px;
+  animation: onbid-urgent-pulse 0.9s ease-in-out infinite;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.onbid-marker.ended {
+  background: #6b7280; /* gray-500 */
+  text-decoration: line-through;
+}
+@keyframes onbid-urgent-pulse {
+  0%, 100% { transform: translateY(-4px) scale(1); }
+  50% { transform: translateY(-4px) scale(1.18); }
+}
