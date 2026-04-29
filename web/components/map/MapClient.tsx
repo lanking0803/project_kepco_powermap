@@ -26,7 +26,6 @@ import TopRemainingList from "./TopRemainingList";
 import GpsTracker from "./GpsTracker";
 import RoadviewPanel from "./RoadviewPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
-import { MOCK_ITEMS as ONBID_MOCK } from "@/lib/onbid/mock";
 import {
   groupOnbidItemsByVillage,
   type OnbidVillageGroup,
@@ -207,7 +206,7 @@ export default function MapClient({ isAdmin, email }: Props) {
 
   // 데이터 모드 (전기 ↔ 공매, 상호 전환). 디폴트 = 전기 (onbidActive=false).
   const [onbidActive, setOnbidActive] = useState(false);
-  /** 검색 결과 매물. 사이드바 검색폼이 채움. ON 시 mock 전체로 초기화. */
+  /** 검색 결과 매물. 사이드바 검색폼이 /api/onbid/search 호출로 채움. */
   const [onbidItems, setOnbidItems] = useState<OnbidListItem[]>([]);
   /** 빨간 마을 마커 클릭으로 선택된 그룹 — OnbidVillageCard 표시 출처 */
   const [selectedOnbidVillage, setSelectedOnbidVillage] =
@@ -221,7 +220,8 @@ export default function MapClient({ isAdmin, email }: Props) {
   );
   const setOnbidMode = useCallback((next: boolean) => {
     setOnbidActive(next);
-    setOnbidItems(next ? ONBID_MOCK : []);
+    // 모드 전환 시 결과 비움 — 사용자가 검색 버튼 눌러서 채우는 흐름
+    if (!next) setOnbidItems([]);
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
   }, []);

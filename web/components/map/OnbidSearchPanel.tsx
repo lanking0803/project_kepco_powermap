@@ -6,7 +6,7 @@
  * 외곽 컨테이너/헤더는 부모 Sidebar 가 제공 (= 같은 모양 + 색만 다름).
  * 검색 입력 + 결과 카드 리스트만 담당.
  *
- * 백엔드 연결 시: MOCK_ITEMS 자리에 fetchOnbidSearch(params) 호출만 교체.
+ * 데이터: /api/onbid/search 호출 (캠코 OnbidRlstListSrvc2 + bjd_master JOIN).
  */
 
 import { useMemo, useState } from "react";
@@ -16,7 +16,6 @@ import {
   type OnbidSearchParams,
   type OurCategory,
 } from "@/lib/onbid/types";
-import { MOCK_ITEMS } from "@/lib/onbid/mock";
 
 interface Props {
   /** 검색 결과 변경 시 호출 — 지도 마커 갱신용 */
@@ -39,12 +38,32 @@ const EMPTY_PARAMS: OnbidSearchParams = {
   usbdMin: null,
   usbdMax: null,
   pageNo: 1,
-  numOfRows: 200,
+  numOfRows: 1000, // 한 번에 1,000건. 더 많으면 안내로 좁히도록 유도.
 };
 
-const MOCK_SIDOS = Array.from(
-  new Set(MOCK_ITEMS.map((i) => i.lctnSdnm)),
-).sort();
+/** 표시 한도 — 이 값 이상은 받지 않음 (캠코는 99,999 까지 가능하나 UX/렌더 부담) */
+const MAX_RESULT_LIMIT = 1000;
+
+/** 한국 행정 표준 시·도 (캠코 응답 lctnSdnm 과 동일 표기) */
+const SIDOS = [
+  "서울특별시",
+  "부산광역시",
+  "대구광역시",
+  "인천광역시",
+  "광주광역시",
+  "대전광역시",
+  "울산광역시",
+  "세종특별자치시",
+  "경기도",
+  "강원특별자치도",
+  "충청북도",
+  "충청남도",
+  "전북특별자치도",
+  "전라남도",
+  "경상북도",
+  "경상남도",
+  "제주특별자치도",
+];
 
 const ALL_CATEGORIES: OurCategory[] = [
   "토지",
@@ -57,41 +76,63 @@ const ALL_CATEGORIES: OurCategory[] = [
 export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
   const [params, setParams] = useState<OnbidSearchParams>(EMPTY_PARAMS);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [results, setResults] = useState<OnbidListItem[]>(() => MOCK_ITEMS);
+  const [results, setResults] = useState<OnbidListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [totalCountAll, setTotalCountAll] = useState<number | null>(null);
 
-  /** 백엔드 연결 시 이 함수만 fetchOnbidSearch(params) 로 교체 */
-  const runSearch = () => {
-    const filtered = MOCK_ITEMS.filter((it) => {
-      if (params.sido && it.lctnSdnm !== params.sido) return false;
-      if (params.sigungu && !it.lctnSggnm.includes(params.sigungu))
-        return false;
-      if (params.emdong && !it.lctnEmdNm.includes(params.emdong)) return false;
-      if (params.categories.length > 0) {
-        if (!it.ourCategory) return false;
-        if (!params.categories.includes(it.ourCategory)) return false;
+  /** /api/onbid/search 호출 — 캠코 실 데이터 */
+  const runSearch = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const qs = new URLSearchParams();
+      if (params.sido) qs.set("sido", params.sido);
+      if (params.sigungu) qs.set("sigungu", params.sigungu);
+      if (params.emdong) qs.set("emdong", params.emdong);
+      if (params.categories.length > 0)
+        qs.set("categories", params.categories.join(","));
+      if (params.landMin != null) qs.set("landMin", String(params.landMin));
+      if (params.landMax != null) qs.set("landMax", String(params.landMax));
+      // 감정가는 사용자가 만원 단위로 입력 → 원으로 변환
+      if (params.apslMin != null)
+        qs.set("apslMin", String(params.apslMin * 10000));
+      if (params.apslMax != null)
+        qs.set("apslMax", String(params.apslMax * 10000));
+      if (params.bidStart) qs.set("bidStart", params.bidStart);
+      if (params.bidEnd) qs.set("bidEnd", params.bidEnd);
+      if (params.usbdMin != null) qs.set("usbdMin", String(params.usbdMin));
+      if (params.usbdMax != null) qs.set("usbdMax", String(params.usbdMax));
+      qs.set("numOfRows", String(params.numOfRows));
+      qs.set("pageNo", String(params.pageNo));
+
+      const res = await fetch(`/api/onbid/search?${qs.toString()}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
       }
-      if (params.landMin != null && (it.landSqms ?? 0) < params.landMin)
-        return false;
-      if (params.landMax != null && (it.landSqms ?? Infinity) > params.landMax)
-        return false;
-      if (params.apslMin != null && it.apslEvlAmt < params.apslMin * 10000)
-        return false;
-      if (params.apslMax != null && it.apslEvlAmt > params.apslMax * 10000)
-        return false;
-      if (params.usbdMin != null && (it.usbdNft ?? 0) < params.usbdMin)
-        return false;
-      if (params.usbdMax != null && (it.usbdNft ?? Infinity) > params.usbdMax)
-        return false;
-      return true;
-    });
-    setResults(filtered);
-    onResults?.(filtered);
+      const items: OnbidListItem[] = json.items ?? [];
+      setResults(items);
+      setTotalCountAll(json.totalCount ?? null);
+      onResults?.(items);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setResults([]);
+      onResults?.([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const reset = () => {
     setParams(EMPTY_PARAMS);
-    setResults(MOCK_ITEMS);
-    onResults?.(MOCK_ITEMS);
+    setResults([]);
+    setError(null);
+    setTotalCountAll(null);
+    onResults?.([]);
   };
 
   const toggleCategory = (cat: OurCategory) => {
@@ -121,7 +162,7 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
                 className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-rose-500 focus:outline-none"
               >
                 <option value="">전체</option>
-                {MOCK_SIDOS.map((sd) => (
+                {SIDOS.map((sd) => (
                   <option key={sd} value={sd}>
                     {sd}
                   </option>
@@ -153,9 +194,28 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
           </div>
         </Section>
 
-        {/* 카테고리 */}
+        {/* 카테고리 — [전체] 는 모든 카테고리 해제 단축 (선택 0 = 전체 의미) */}
         <Section title="카테고리">
           <div className="flex flex-wrap gap-1">
+            {(() => {
+              const isAll = params.categories.length === 0;
+              return (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setParams((p) => ({ ...p, categories: [] }))
+                  }
+                  className={`text-[11px] px-2 py-1 rounded border transition-colors ${
+                    isAll
+                      ? "bg-rose-50 text-rose-700 border-rose-300 font-semibold"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {isAll ? "✓ " : ""}
+                  전체
+                </button>
+              );
+            })()}
             {ALL_CATEGORIES.map((cat) => {
               const checked = params.categories.includes(cat);
               return (
@@ -241,18 +301,31 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
           </div>
         )}
 
+        <div className="text-[10px] text-gray-500 leading-snug px-0.5">
+          ※ 한 번에 최대 <b className="text-rose-700">{MAX_RESULT_LIMIT.toLocaleString()}건</b>까지 표시합니다.
+          전국 전체 매물은 약 3만건이므로 <b>시군구</b>까지 좁히는 걸 권장합니다.
+        </div>
         <div className="flex gap-2 pt-1">
           <button
             type="button"
             onClick={runSearch}
-            className="flex-1 text-xs font-bold py-2 bg-rose-600 hover:bg-rose-700 text-white rounded shadow-sm"
+            disabled={loading}
+            className="flex-1 text-xs font-bold py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white rounded shadow-sm flex items-center justify-center gap-1.5"
           >
-            🔍 검색
+            {loading ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                조회 중...
+              </>
+            ) : (
+              <>🔍 검색</>
+            )}
           </button>
           <button
             type="button"
             onClick={reset}
-            className="text-xs py-2 px-3 bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 rounded"
+            disabled={loading}
+            className="text-xs py-2 px-3 bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 rounded"
           >
             초기화
           </button>
@@ -263,12 +336,37 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
       <div className="flex-1 flex flex-col min-h-0">
         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between border-b border-gray-200 bg-gray-50">
           <span>결과</span>
-          <span className="tabular-nums">{totalCount.toLocaleString()}건</span>
+          <span className="tabular-nums">
+            {totalCount.toLocaleString()}건
+            {totalCountAll != null && totalCountAll > totalCount && (
+              <span className="text-gray-400 font-normal ml-1">
+                / 전체 {totalCountAll.toLocaleString()}
+              </span>
+            )}
+          </span>
         </div>
+        {/* 한도 도달 안내 — 전체가 1,000건 초과 시 사용자에게 좁히도록 유도 */}
+        {totalCountAll != null && totalCountAll > MAX_RESULT_LIMIT && (
+          <div className="px-3 py-2 text-[11px] text-amber-800 bg-amber-50 border-b border-amber-200 leading-snug">
+            ⚠️ 매물이 너무 많아 <b>{MAX_RESULT_LIMIT.toLocaleString()}건만 표시</b>합니다.
+            <br />
+            시군구·읍면동·카테고리 등으로 조건을 좁혀주세요
+            <span className="text-gray-500"> (전체 {totalCountAll.toLocaleString()}건)</span>.
+          </div>
+        )}
         <div className="overflow-y-auto flex-1">
-          {results.length === 0 ? (
+          {loading ? (
+            <div className="p-4 text-center text-xs text-gray-500 flex flex-col items-center gap-2">
+              <span className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+              매물 조회 중...
+            </div>
+          ) : error ? (
+            <div className="p-4 text-center text-xs text-red-600">
+              조회 실패: {error}
+            </div>
+          ) : results.length === 0 ? (
             <div className="p-4 text-center text-xs text-gray-400">
-              검색 결과 없음
+              검색 조건을 입력하고 [검색] 버튼을 눌러주세요
             </div>
           ) : (
             results.map((it) => (
