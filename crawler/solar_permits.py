@@ -32,6 +32,7 @@ import re
 import sys
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -56,6 +57,7 @@ ENDPOINT = "https://api.data.go.kr/openapi/tn_pubr_public_solar_gen_flct_api"
 USER_AGENT = "Mozilla/5.0 (compatible; SUNLAP/1.0; +https://sunlap.kr)"
 PAGE_SLEEP_SEC = 0.3   # 페이지 간 휴식 — 외부 서버 부담 완화
 STORAGE_BUCKET = os.environ.get("SOLAR_STORAGE_BUCKET", "solar-permits")
+UPLOAD_WORKERS = 10    # ThreadPoolExecutor 동시 업로드 수 (10 = 안전선, Supabase rate limit 안 걸림)
 
 # 세션 재사용 — TCP keep-alive 로 연결 안정성 / 속도 향상
 _session = requests.Session()
@@ -394,24 +396,36 @@ def main() -> int:
     deleted = cleanup_storage_bucket()
     log.info(f"  기존 파일 삭제: {deleted:,}개")
 
-    # 각 BJD 별 업로드
+    # 각 BJD 별 업로드 — ThreadPoolExecutor 병렬 (10 worker)
+    # 직렬 ~50분 → 병렬 ~5~7분. requests 는 thread-safe 라 안전.
+    log.info(f"  병렬 업로드 시작 (worker={UPLOAD_WORKERS})")
     uploaded = 0
     total_bytes = 0
     failures: list[str] = []
-    for bjd, rows in bjd_groups.items():
-        # capacity_kw 내림차순 — 라우트 측이 위에서부터 읽기 가독성
-        rows_sorted = sorted(rows, key=lambda r: r.get("capacity_kw") or 0, reverse=True)
-        try:
-            n_bytes = upload_bjd_json(bjd, rows_sorted)
-            uploaded += 1
-            total_bytes += n_bytes
-        except Exception as e:
-            failures.append(f"{bjd}: {e}")
 
-        # 진행률 — 매 500개마다
-        if uploaded > 0 and uploaded % 500 == 0:
-            pct = uploaded / n_bjd * 100
-            log.info(f"  업로드 진행 [{uploaded:>5,}/{n_bjd:,}] {pct:5.1f}%")
+    def _upload_one(bjd: str, rows: list[dict]) -> tuple[str, int]:
+        """한 BJD JSON 업로드 (ThreadPoolExecutor 작업 단위)."""
+        rows_sorted = sorted(rows, key=lambda r: r.get("capacity_kw") or 0, reverse=True)
+        return bjd, upload_bjd_json(bjd, rows_sorted)
+
+    with ThreadPoolExecutor(max_workers=UPLOAD_WORKERS) as executor:
+        futures = {
+            executor.submit(_upload_one, bjd, rows): bjd
+            for bjd, rows in bjd_groups.items()
+        }
+        for future in as_completed(futures):
+            bjd_key = futures[future]
+            try:
+                _, n_bytes = future.result()
+                uploaded += 1
+                total_bytes += n_bytes
+            except Exception as e:
+                failures.append(f"{bjd_key}: {e}")
+
+            # 진행률 — 매 500개마다 (logging 은 thread-safe)
+            if uploaded > 0 and uploaded % 500 == 0:
+                pct = uploaded / n_bjd * 100
+                log.info(f"  업로드 진행 [{uploaded:>5,}/{n_bjd:,}] {pct:5.1f}%")
 
     stage3_elapsed = time.time() - stage3_started
     log.info("")
