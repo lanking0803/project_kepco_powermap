@@ -29,10 +29,10 @@ import {
   fetchBuildingsByPnu,
   type BuildingTitleInfo,
 } from "@/lib/api/buildings";
-import { fetchKepcoCapaByJibun } from "@/lib/api/kepco";
+import { fetchKepcoByPnu } from "@/lib/kepco/by-pnu";
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import type { BuildingPolygon } from "@/lib/vworld/buildings";
-import type { AddrMeta, KepcoDataRow } from "@/lib/types";
+import type { KepcoDataRow } from "@/lib/types";
 import type { Position } from "geojson";
 import {
   createDefaultRect,
@@ -83,6 +83,7 @@ import { getRepayMonths } from "@/lib/quote/finance";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 import FinanceTable from "./FinanceTable";
+import RegulationsCard from "./RegulationsCard";
 
 const M2_TO_PYEONG = 0.3025;
 
@@ -135,9 +136,8 @@ export default function QuoteModeClient({ pnu }: Props) {
   // 건축물대장 표제부 — 도로명주소건물(폴리곤) 과는 별개 데이터셋.
   // 동·식물관련시설은 대장 등록은 되지만 도로명주소 미부여로 폴리곤 0건 케이스가 흔함.
   const [bldgRegister, setBldgRegister] = useState<BuildingTitleInfo[]>([]);
-  // 부지 정보 floating overlay 용 — 메인 지도와 동일 ParcelInfoPanel
+  // 견적 PDF/수지 계산용 — KEPCO 용량 (capa[0] 의 변전소/주변압기/배전선로 여유 MW)
   const [capa, setCapa] = useState<KepcoDataRow[]>([]);
-  const [meta, setMeta] = useState<AddrMeta | null>(null);
   const [loadingParcel, setLoadingParcel] = useState(true);
   const [loadingBuildings, setLoadingBuildings] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,24 +183,22 @@ export default function QuoteModeClient({ pnu }: Props) {
     return () => ctl.abort();
   }, [pnu]);
 
-  // jibun 받은 후 KEPCO 용량 + meta 별도 fetch (ParcelInfoPanel 의 전기 탭 + 헤더 주소용)
+  // KEPCO 용량 별도 fetch — 견적 PDF/수지 계산에 필요 (capa[0]).
+  // PNU 단일 입력. ParcelInfoPanel [전기] 탭과 동일 endpoint(/api/capa/by-pnu)+모듈 캐시 공유 →
+  // 실제 외부 호출은 1회.
   useEffect(() => {
-    if (!jibun) return;
-    const bjdCode = jibun.pnu.slice(0, 10);
-    const jibunStr = jibun.jibun;
-    if (!/^\d{10}$/.test(bjdCode) || !jibunStr) return;
+    if (!/^\d{19}$/.test(pnu)) return;
     const ctl = new AbortController();
-    fetchKepcoCapaByJibun(bjdCode, jibunStr, { signal: ctl.signal })
+    fetchKepcoByPnu(pnu, { signal: ctl.signal })
       .then((res) => {
         setCapa(res.rows);
-        setMeta(res.meta);
       })
       .catch((e) => {
         if ((e as Error).name === "AbortError") return;
         console.error("KEPCO 용량 조회 실패:", e);
       });
     return () => ctl.abort();
-  }, [jibun]);
+  }, [pnu]);
 
   /** QuoteMap 의 dragend → 해당 동만 폴리곤/면적 갱신 */
   const handleBuildingChange = useCallback(
@@ -834,19 +832,16 @@ export default function QuoteModeClient({ pnu }: Props) {
             onClick={() => toggleStep(0)}
           />
           {activeStep === 0 && (
-            <ParcelInfoPanel
-              jibun={jibun}
-              geometry={geometry}
-              capa={capa}
-              meta={meta}
-              clickedJibun={jibun?.jibun ?? ""}
-              matchMode={jibun ? "exact" : null}
-              nearestJibun={null}
-              loading={loadingParcel}
-              onClose={() => {}}
-              polygonCount={loadingBuildings ? undefined : buildings.length}
-              inQuoteMode
-            />
+            <>
+              <ParcelInfoPanel
+                pnu={pnu}
+                onClose={() => {}}
+                polygonCount={loadingBuildings ? undefined : buildings.length}
+                inQuoteMode
+                onSolarMarkers={() => {}}
+              />
+              <RegulationsCard pnu={pnu} />
+            </>
           )}
           <SectionHeader
             step={1}

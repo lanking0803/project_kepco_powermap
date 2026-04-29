@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import { OUR_CATEGORY_LABEL } from "@/lib/onbid/types";
 import type { OnbidVillageGroup } from "@/lib/onbid/group";
+import { jibunFromPnu } from "@/lib/geo/pnu";
 
 type SortKey = "daysLeft" | "apslEvlAmt" | "discountRatio";
 
@@ -151,7 +152,7 @@ function ItemCard({
       : "bg-rose-50 text-rose-700 border border-rose-200";
 
   const discountPct = Math.round(item.discountRatio * 100);
-  const jibun = jibunFromPnu(item.ltnoPnu);
+  const jibun = jibunFromPnu(item.ltnoPnu) ?? "—";
 
   return (
     <button
@@ -213,20 +214,6 @@ function ItemCard({
       </div>
     </button>
   );
-}
-
-/**
- * PNU 19자리 → 사람이 읽는 지번 ("산23-1", "7", "7-9", "0-3").
- * 산구분: 11번째 글자 1=일반, 2=산.
- * 본번/부번: 앞 0 제거. 부번 0000 이면 본번만.
- */
-function jibunFromPnu(pnu: string): string {
-  if (!/^\d{19}$/.test(pnu)) return "—";
-  const isSan = pnu.charAt(10) === "2";
-  const bonbun = parseInt(pnu.slice(11, 15), 10);
-  const bubun = parseInt(pnu.slice(15, 19), 10);
-  const text = bubun > 0 ? `${bonbun}-${bubun}` : `${bonbun}`;
-  return isSan ? `산${text}` : text;
 }
 
 function formatPrice(won: number): string {

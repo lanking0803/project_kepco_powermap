@@ -511,9 +511,9 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
-      "path": "/api/capa/by-jibun",
-      "id": "capa-by-jibun",
-      "filePath": "app/api/capa/by-jibun/route.ts",
+      "path": "/api/capa/by-pnu",
+      "id": "capa-by-pnu",
+      "filePath": "app/api/capa/by-pnu/route.ts",
       "methods": [
         {
           "method": "GET",
@@ -523,83 +523,48 @@ export const MANIFEST: GeneratedManifest = {
             "auth": "user",
             "inputs": [
               {
-                "name": "bjd_code",
+                "name": "pnu",
                 "type": "string",
                 "required": true,
-                "sample": "4673025025",
-                "description": "법정동 코드 10자리"
-              },
-              {
-                "name": "jibun",
-                "type": "string",
-                "required": true,
-                "sample": "20-1",
-                "description": "지번 (예: 20, 20-1, 산5-3)"
+                "sample": "4417025021103950003",
+                "description": "PNU 19자리 (bjd_code 10 + 산구분 1 + 본번 4 + 부번 4). 행안부 표준 (1=일반/2=산)."
               }
             ],
-            "outputSchema": "{ ok, bjd_code, jibun, rows: KepcoDataRow[], total, meta: AddrMeta | null }",
+            "outputSchema": "{ ok, pnu, bjd_code, jibun, rows: KepcoDataRow[], total, meta: AddrMeta | null }",
             "externalDeps": [],
-            "notes": "exact match 만 — fallback 없음. KEPCO 미수집 지번은 빈 rows 반환. meta 는 bjd_master 의 sep_1~5 (헤더 주소 표시용 보조 데이터)."
+            "notes": "exact match 만 — fallback 없음. KEPCO 미수집 지번은 빈 rows. meta = bjd_master 의 sep_1~5 (헤더 주소 표시용 보조). PNU → bjd_code/jibun 분리는 lib/geo/pnu (jibunFromPnu)."
           },
-          "metaLine": 18,
+          "metaLine": 29,
           "metaExportName": "meta"
         }
       ]
     },
     {
-      "path": "/api/capa/lookup",
-      "id": "capa-lookup",
-      "filePath": "app/api/capa/lookup/route.ts",
+      "path": "/api/capa/refresh-by-pnu",
+      "id": "capa-refresh-by-pnu",
+      "filePath": "app/api/capa/refresh-by-pnu/route.ts",
       "methods": [
         {
           "method": "POST",
           "meta": {
-            "source": "DB → KEPCO live (lookup-capacity 위임, DB miss 시 fallback)",
+            "source": "KEPCO live (lookup-capacity, refresh=true 고정) + kepco_capa upsert",
             "cache": "no-store",
             "auth": "user",
             "inputs": [
               {
-                "name": "addr",
-                "type": "string",
-                "required": false,
-                "sample": "경기도 양평군 청운면 갈운리 24-1",
-                "description": "한글주소 (또는 bjd_code 둘 중 하나 필수)"
-              },
-              {
-                "name": "bjd_code",
-                "type": "string",
-                "required": false,
-                "sample": "4673025025",
-                "description": "행안부 법정동 코드 (refresh 용)"
-              },
-              {
-                "name": "jibun",
+                "name": "pnu",
                 "type": "string",
                 "required": true,
-                "sample": "24-1",
-                "description": "지번 번호 (예: 24-1, 산1-10)"
-              },
-              {
-                "name": "refresh",
-                "type": "boolean",
-                "required": false,
-                "sample": "false",
-                "description": "true 시 항상 KEPCO live 호출"
-              },
-              {
-                "name": "includeSplitDong",
-                "type": "boolean",
-                "required": false,
-                "sample": "false",
-                "description": "동분할 후보 추가"
+                "sample": "4673025025104230011",
+                "description": "PNU 19자리 (bjd_code 10 + 산구분 1 + 본번 4 + 부번 4). 행안부 표준 (1=일반/2=산)."
               }
             ],
-            "outputSchema": "{ ok, source: 'db'|'live'|'not_found', bjd_code: string|null, addr_jibun, rows: KepcoDataRow[], fetched_at, candidate_used? }",
+            "outputSchema": "{ ok, source: 'live'|'not_found', bjd_code, addr_jibun, rows: KepcoDataRow[], fetched_at, candidate_used? }",
             "externalDeps": [
-              "supabase",
-              "kepco"
+              "kepco",
+              "supabase"
             ],
-            "notes": "DB hit 시 외부 호출 0. DB miss / refresh=true 시 KEPCO live 1회 + DB upsert. POST + JSON body — 라이브 테스트 시 querystring 아닌 body 로 입력."
+            "notes": "항상 KEPCO live 1회 호출 + DB upsert (refresh=true 고정). DB-only 조회는 GET /api/capa/by-pnu 사용. PNU → bjd_code/jibun 분리는 lib/geo/pnu (jibunFromPnu)."
           },
           "metaLine": 30,
           "metaExportName": "meta"
@@ -1116,9 +1081,9 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
-      "path": "/api/transactions/by-bjd",
-      "id": "transactions-by-bjd",
-      "filePath": "app/api/transactions/by-bjd/route.ts",
+      "path": "/api/transactions/by-pnu",
+      "id": "transactions-by-pnu",
+      "filePath": "app/api/transactions/by-pnu/route.ts",
       "methods": [
         {
           "method": "GET",
@@ -1128,11 +1093,11 @@ export const MANIFEST: GeneratedManifest = {
             "auth": "user",
             "inputs": [
               {
-                "name": "bjd_code",
+                "name": "pnu",
                 "type": "string",
                 "required": true,
-                "sample": "4673025025",
-                "description": "행안부 법정동 코드 10자리. 앞 5자리 = LAWD_CD"
+                "sample": "4673025025104230011",
+                "description": "PNU 19자리 (앞 5자리 = LAWD_CD 시군구 코드). 행안부 표준."
               },
               {
                 "name": "months",
@@ -1149,14 +1114,14 @@ export const MANIFEST: GeneratedManifest = {
                 "description": "'land' (토지매매, 기본) | 'nrg' (상업·업무용)"
               }
             ],
-            "outputSchema": "{ ok, bjd_code, kind, months, rows: LandTransaction[]|NrgTransaction[], stats: { total, medianPricePerPyeong, trend, byCategory, monthly } }",
+            "outputSchema": "{ ok, pnu, sgg_bjd, kind, months, rows, stats: { total, medianPricePerPyeong, trend, byCategory, monthly } }",
             "externalDeps": [
               "rtms-land",
               "rtms-nrg"
             ],
-            "notes": "atomic=1 외부=1 원칙 예외 — RTMS 가 시군구·월 단위 강제 → months 회 fan-out (Promise.all, 부분실패 허용). wrapper 가 bjd_code 시군구 정규화 → 같은 시군구 다른 지번도 cache hit. 6h CDN."
+            "notes": "PNU 입력으로 통일했지만 데이터 단위는 시군구. 같은 시군구 다른 PNU 도 cache hit (서버 6h CDN). atomic=1 외부=1 원칙 예외 — RTMS 가 시군구·월 단위 강제 → months 회 fan-out (Promise.all, 부분실패 허용)."
           },
-          "metaLine": 28,
+          "metaLine": 30,
           "metaExportName": "meta"
         }
       ]
@@ -1301,7 +1266,7 @@ export const MANIFEST: GeneratedManifest = {
       "metaLine": 3,
       "consumedBy": [
         "admin-crawl-regions",
-        "capa-lookup"
+        "capa-refresh-by-pnu"
       ]
     },
     {
@@ -1432,7 +1397,7 @@ export const MANIFEST: GeneratedManifest = {
       "filePath": "app/admin/api-manager/_lib/services/rtms-land.ts",
       "metaLine": 3,
       "consumedBy": [
-        "transactions-by-bjd"
+        "transactions-by-pnu"
       ]
     },
     {
@@ -1480,7 +1445,7 @@ export const MANIFEST: GeneratedManifest = {
       "filePath": "app/admin/api-manager/_lib/services/rtms-nrg.ts",
       "metaLine": 3,
       "consumedBy": [
-        "transactions-by-bjd"
+        "transactions-by-pnu"
       ]
     },
     {
@@ -1552,7 +1517,7 @@ export const MANIFEST: GeneratedManifest = {
         "admin-crawl",
         "admin-users",
         "capa-by-bjd",
-        "capa-lookup",
+        "capa-refresh-by-pnu",
         "capa-summary-by-bjd",
         "health",
         "map-summary",

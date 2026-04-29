@@ -5,15 +5,20 @@
  *
  * 두 박스:
  *   1) 이 필지에 등록된 발전소 (정확 매칭, same_pnu)
- *   2) 이 동(리) 일대 통계 (광역, same_dong)
+ *   2) {장암면 지토리} 일대 통계 + 지도 마커 (광역, same_dong)
  *
- * lazy fetch — 입지 탭 진입 시 1회 호출. 캐시 키 = PNU.
- * 데이터 출처: solar_permits 테이블 (매월 1일 09:00 KST 갱신).
+ * 데이터 흐름:
+ *   - lazy fetch: 입지 탭 진입 시 1회 호출. 캐시 키 = PNU.
+ *   - 응답 받으면 onMarkers(sameDongMarkers) 호출 → 부모(MapClient)가 KakaoMap 마커 그리기
+ *   - 입지 탭 떠나면 useEffect cleanup 으로 onMarkers([]) → 마커 제거
+ *
+ * 데이터 출처: Storage 'solar-permits' bucket (매월 1일 09:00 KST 갱신).
  */
 import { useEffect, useState } from "react";
 import {
   fetchSolarByPnu,
   type SolarByPnuResult,
+  type SolarMarker,
   type SolarPermitRow,
 } from "@/lib/api/solar-permits";
 
@@ -21,9 +26,11 @@ interface Props {
   pnu: string;
   /** 동/리 표기 — 예: "장암면 지토리". 빈 값이면 "이" 로 폴백 ("이 일대"). */
   areaLabel: string;
+  /** 응답 받으면 좌표 보유 발전소 리스트를 부모에게 전달. unmount/탭이동 시 [] 호출됨. */
+  onMarkers: (markers: SolarMarker[]) => void;
 }
 
-export default function SolarSection({ pnu, areaLabel }: Props) {
+export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
   const [data, setData] = useState<SolarByPnuResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +45,7 @@ export default function SolarSection({ pnu, areaLabel }: Props) {
       .then((r) => {
         if (controller.signal.aborted) return;
         setData(r);
+        onMarkers(r.sameDongMarkers);
       })
       .catch((err: unknown) => {
         if ((err as Error)?.name === "AbortError") return;
@@ -46,7 +54,12 @@ export default function SolarSection({ pnu, areaLabel }: Props) {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      onMarkers([]); // 탭 이동/패널 닫힘 시 마커 정리
+    };
+    // onMarkers 는 useCallback 으로 안정화 가정 (부모 책임). pnu 만 의존성에 둠.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pnu]);
 
   return (
@@ -90,7 +103,7 @@ export default function SolarSection({ pnu, areaLabel }: Props) {
                 </div>
               )}
 
-              {/* ② 같은 동/리 (count > 0 일 때만 — 0 이면 위에서 통합 처리됨) */}
+              {/* ② 같은 동/리 (count > 0 일 때만) */}
               {data.sameDong.count > 0 && (
                 <div>
                   <div className="text-[11px] font-semibold text-gray-700 mb-1">
@@ -103,6 +116,11 @@ export default function SolarSection({ pnu, areaLabel }: Props) {
                     </b>{" "}
                     kW
                   </div>
+                  {data.sameDongMarkers.length > 0 && (
+                    <div className="text-[11px] text-gray-500 mt-0.5">
+                      ☀ 이 중 {data.sameDongMarkers.length}곳 위치 표시
+                    </div>
+                  )}
                 </div>
               )}
             </>

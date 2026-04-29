@@ -43,16 +43,14 @@ import { buildPnuFromBjdAndJibun } from "@/lib/geo/pnu";
 import {
   fetchKepcoSummaryByBjdCode,
   fetchKepcoCapaByBjdCode,
-  fetchKepcoCapaByJibun,
-  clearKepcoCapaCache,
 } from "@/lib/api/kepco";
+import { clearKepcoByPnuCache } from "@/lib/kepco/by-pnu";
 import {
   fetchVworldParcelByPnu,
   fetchVworldParcelByLatLng,
   fetchVworldAdminPolygonByBjdCode,
 } from "@/lib/api/vworld";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
-import { refreshKepcoCapaByJibun } from "@/lib/kepco-live/refresh-by-jibun";
 import {
   emptyFilters,
   type ColumnFilters,
@@ -60,17 +58,12 @@ import {
   type MarkerColor,
   type KepcoDataRow,
   type KepcoCapaSummary,
-  type AddrMeta,
 } from "@/lib/types";
 
 interface Props {
   isAdmin: boolean;
   email: string;
 }
-
-// 새로고침 (refreshParcelCapa) 관련 — 같은 지번 연속 갱신 / 토스트 표시 시간
-const REFRESH_COOLDOWN_SEC = 60;
-const REFRESH_ERROR_TOAST_MS = 3000;
 
 export default function MapClient({ isAdmin, email }: Props) {
   // ───────────────────────────── 데이터 ─────────────────────────────
@@ -106,7 +99,8 @@ export default function MapClient({ isAdmin, email }: Props) {
       const data = await r.json();
       setAllRows(data.rows ?? []);
       // KEPCO 용량 캐시 비움 (크롤이 갱신했으므로). VWorld 필지/폴리곤은 그대로 유지.
-      clearKepcoCapaCache();
+      // by-pnu / by-jibun / by-bjd / summary 모두 비움 (단일 진입점).
+      clearKepcoByPnuCache();
       setSimpleToast(
         mvJson.skipped
           ? "최근에 갱신된 데이터를 불러왔습니다."
@@ -390,28 +384,96 @@ export default function MapClient({ isAdmin, email }: Props) {
     setDetailModalOpen(false);
   }, []);
 
-  // ─────────────── 지번 클릭 → /api/parcel/by-pnu + /api/capa/by-jibun ───────────────
-  // PNU 직접 구성 (lib/geo/pnu) → VWorld + KEPCO 병렬 조회. exact-only.
+  // ─────────────── 지번 클릭 → 필지 정보 패널 ───────────────
+  // 단일 입력값 PNU. ParcelInfoPanel 내부에서 모든 탭이 PNU 만 보고 자체 fetch.
+  // MapClient 는 PNU 만 set 하면 됨 — 진입 모드(전기/공매/견적) 무관 동일 흐름.
+  const [selectedPnu, setSelectedPnu] = useState<string | null>(null);
+  // 지도 위 필지 폴리곤(주황 음영) 표시용 — VWorld 응답의 geometry.
+  // 패널과 별개 출처지만 모듈 캐시(lib/api/vworld) 가 같으므로 PNU hit 시 추가 호출 0.
   const [selectedJibun, setSelectedJibun] = useState<JibunInfo | null>(null);
-  // 입지 탭 활성 시 SolarSection 이 응답에서 추출한 좌표 보유 발전소 리스트.
-  // 패널 닫힘/탭 이동 시 [] 로 리셋 → KakaoMap 가 마커 정리.
-  const [solarMarkers, setSolarMarkers] = useState<SolarMarker[]>([]);
   const [selectedGeometry, setSelectedGeometry] = useState<ParcelGeometry | null>(
     null,
   );
-  const [parcelCapa, setParcelCapa] = useState<KepcoDataRow[]>([]);
-  const [parcelMeta, setParcelMeta] = useState<AddrMeta | null>(null);
-  const [parcelClickedJibun, setParcelClickedJibun] = useState<string>("");
-  const [parcelLoading, setParcelLoading] = useState(false);
-  /** 공매 모드에서 진입했는지 — ParcelInfoPanel [공매] 탭 디폴트 활성 여부 */
-  const [parcelOpenedFromOnbid, setParcelOpenedFromOnbid] = useState(false);
+  // 입지 탭 활성 시 SolarSection 이 응답에서 추출한 좌표 보유 발전소 리스트.
+  // 패널 닫힘/탭 이동 시 [] 로 리셋 → KakaoMap 가 마커 정리.
+  const [solarMarkers, setSolarMarkers] = useState<SolarMarker[]>([]);
   const parcelReqSeqRef = useRef(0);
   const parcelAbortRef = useRef<AbortController | null>(null);
-  // 새로고침 상태 — 사용자가 ElectricTab 의 새로고침 아이콘 클릭 시
-  const [refreshingCapa, setRefreshingCapa] = useState(false);
-  const [refreshCapaError, setRefreshCapaError] = useState<string | null>(null);
-  const refreshErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * 지번 패널 단일 진입점 — 모든 진입 경로(검색/지도/공매)가 호출.
+   *
+   * 책임:
+   *   1. selectedPnu set (ParcelInfoPanel 의 단일 입력) — 그 다음 모든 탭이 자체 fetch
+   *   2. 지도 폴리곤(주황 음영) 표시용 jibun/geometry 별도 fetch
+   *      (VWorld 캐시 hit 이면 추가 호출 0 — 패널과 동일 endpoint 공유)
+   *   3. 마을 폴리곤 (테두리) — fire-and-forget
+   *   4. 패널/모달 정리 — 다른 패널 닫고 새 PNU 로 진입
+   */
+  const openParcelPanelByPnu = useCallback(
+    async (pnu: string, opts?: { onNotFound?: () => void }) => {
+      if (!/^\d{19}$/.test(pnu)) {
+        setSimpleToast("PNU 형식이 올바르지 않습니다.");
+        return;
+      }
+      // 다른 패널/모달 정리
+      setDetailModalOpen(false);
+      setOnbidModalOpen(false);
+      setSelectedOnbidVillage(null);
+      villageReqSeqRef.current++;
+      villageAbortRef.current?.abort();
+      setSelectedVillage(null);
+
+      // 이전 in-flight 취소 (연타 절약)
+      parcelAbortRef.current?.abort();
+      const controller = new AbortController();
+      parcelAbortRef.current = controller;
+      const seq = ++parcelReqSeqRef.current;
+
+      // 즉시 PNU set → 패널 표시 (탭 내용은 각자 자체 fetch 로 진행)
+      setSelectedPnu(pnu);
+      setSelectedJibun(null);
+      setSelectedGeometry(null);
+
+      // 지도 폴리곤용 — 마을(테두리) fire-and-forget
+      const bjdCode = pnu.slice(0, 10);
+      fetchVworldAdminPolygonByBjdCode(bjdCode, { signal: controller.signal })
+        .then((r) => {
+          if (seq !== parcelReqSeqRef.current) return;
+          setVillagePolygon(
+            (r?.polygon as number[][][] | undefined) ?? null,
+          );
+        })
+        .catch(() => {});
+
+      // 지도 폴리곤용 — 필지(주황 음영) 별도 fetch.
+      //   ParcelInfoPanel 내부에서도 같은 fetchVworldParcelByPnu 호출하지만
+      //   모듈 캐시(lib/api/vworld) 가 PNU 키라 첫 번째가 inflight, 두 번째는 캐시 hit → 외부 1회.
+      try {
+        const parcelResult = await fetchVworldParcelByPnu(pnu, {
+          signal: controller.signal,
+        });
+        if (seq !== parcelReqSeqRef.current) return;
+        if (!parcelResult) {
+          setSimpleToast("⚠️ 이 필지 정보를 찾을 수 없어요");
+          opts?.onNotFound?.();
+          return;
+        }
+        setSelectedJibun(parcelResult.jibun);
+        setSelectedGeometry(parcelResult.geometry);
+        const c = parcelResult.geometry.center;
+        if (c?.lat != null) moveMapToRef.current?.(c.lat, c.lng);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        if (seq === parcelReqSeqRef.current) {
+          setSimpleToast("필지 조회 중 오류가 발생했어요");
+        }
+      }
+    },
+    [],
+  );
+
+  /** 검색결과(KepcoDataRow)/TopRanking 클릭 — bjd_code+addr_jibun 으로 PNU 합성. */
   const openParcelPanelOnJibunClick = useCallback(
     async (row: KepcoDataRow) => {
       const pnu = buildPnuFromBjdAndJibun(row.bjd_code, row.addr_jibun);
@@ -419,154 +481,19 @@ export default function MapClient({ isAdmin, email }: Props) {
         setSimpleToast("지번 정보가 부족해 PNU 를 만들 수 없어요.");
         return;
       }
-      setDetailModalOpen(false);
-      // 이전 in-flight fetch 취소 (연타 시 절약)
-      parcelAbortRef.current?.abort();
-      const controller = new AbortController();
-      parcelAbortRef.current = controller;
-      const seq = ++parcelReqSeqRef.current;
-      setParcelLoading(true);
-      setSelectedJibun(null);
-      setSelectedGeometry(null);
-      setParcelCapa([]);
-      setParcelMeta(null);
-      setParcelClickedJibun(row.addr_jibun ?? "");
-      // 이전 카드의 새로고침 잔재 정리 (영구 disabled 방지)
-      setRefreshingCapa(false);
-      setRefreshCapaError(null);
-      try {
-        // 마을 폴리곤 — 같은 BJD 의 행정구역 테두리. 마을 마커 흐름과 동일 함수 재사용.
-        // fire-and-forget: 폴리곤 실패는 시각 보조라 조용히 무시. lib 캐시 (BJD 키) 가 있어
-        // 이미 그려진 마을이면 추가 API 호출 0 — 새 BJD 첫 방문 시에만 1회 호출.
-        fetchVworldAdminPolygonByBjdCode(row.bjd_code, {
-          signal: controller.signal,
-        })
-          .then((r) => {
-            if (seq !== parcelReqSeqRef.current) return;
-            setVillagePolygon(
-              (r?.polygon as number[][][] | undefined) ?? null,
-            );
-          })
-          .catch(() => {});
-
-        const [parcelResult, capaResult] = await Promise.all([
-          fetchVworldParcelByPnu(pnu, { signal: controller.signal }),
-          fetchKepcoCapaByJibun(row.bjd_code, row.addr_jibun ?? "", {
-            signal: controller.signal,
-          }),
-        ]);
-        if (seq !== parcelReqSeqRef.current) return;
-        if (!parcelResult) {
-          setSimpleToast(`⚠️ ${row.addr_jibun} 필지 정보를 찾을 수 없어요`);
-          return;
-        }
-        setSelectedJibun(parcelResult.jibun);
-        setSelectedGeometry(parcelResult.geometry);
-        setParcelCapa(capaResult.rows);
-        setParcelMeta(capaResult.meta);
-        const c = parcelResult.geometry.center;
-        if (c?.lat != null) moveMapToRef.current?.(c.lat, c.lng);
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        if (seq === parcelReqSeqRef.current) {
-          setSimpleToast(`⚠️ ${row.addr_jibun} 조회 중 오류가 발생했어요`);
-        }
-      } finally {
-        if (seq === parcelReqSeqRef.current) setParcelLoading(false);
-      }
+      await openParcelPanelByPnu(pnu);
     },
-    [],
+    [openParcelPanelByPnu],
   );
 
   const closeParcelPanel = useCallback(() => {
     parcelReqSeqRef.current++;
     parcelAbortRef.current?.abort();
+    setSelectedPnu(null);
     setSelectedJibun(null);
     setSelectedGeometry(null);
-    setParcelCapa([]);
-    setParcelMeta(null);
-    setParcelClickedJibun("");
-    setParcelLoading(false);
-    setParcelOpenedFromOnbid(false);
     setSolarMarkers([]);
-    if (refreshErrorTimerRef.current) {
-      clearTimeout(refreshErrorTimerRef.current);
-      refreshErrorTimerRef.current = null;
-    }
-    setRefreshCapaError(null);
-    setRefreshingCapa(false);
   }, []);
-
-  /** 빨간 inline 메시지 3초 페이드 (cooldown / not_found / error 공용). */
-  const flashRefreshError = useCallback((msg: string) => {
-    if (refreshErrorTimerRef.current) clearTimeout(refreshErrorTimerRef.current);
-    setRefreshCapaError(msg);
-    refreshErrorTimerRef.current = setTimeout(
-      () => setRefreshCapaError(null),
-      REFRESH_ERROR_TOAST_MS,
-    );
-  }, []);
-
-  /** 새로고침 — 현재 카드의 bjd_code+jibun 으로 KEPCO live 호출 + kepco_capa upsert. */
-  const refreshParcelCapa = useCallback(async () => {
-    if (refreshingCapa) return;
-    const bjdCode =
-      parcelCapa[0]?.bjd_code ??
-      (selectedJibun?.pnu ? selectedJibun.pnu.slice(0, 10) : null);
-    const jibun = parcelClickedJibun;
-    const addr = parcelMeta
-      ? [parcelMeta.sep_1, parcelMeta.sep_2, parcelMeta.sep_3, parcelMeta.sep_4, parcelMeta.sep_5, jibun]
-          .filter(Boolean)
-          .join(" ")
-      : undefined;
-    if (!jibun || (!bjdCode && !addr)) {
-      flashRefreshError("새로고침 정보 부족");
-      return;
-    }
-
-    // 쿨다운 — 최근 갱신된 데이터면 KEPCO 호출 무시 (불필요 부하 방지)
-    const lastUpdated = parcelCapa[0]?.updated_at;
-    if (lastUpdated) {
-      const ageSec = (Date.now() - new Date(lastUpdated).getTime()) / 1000;
-      if (ageSec < REFRESH_COOLDOWN_SEC) {
-        const remain = Math.max(1, Math.ceil(REFRESH_COOLDOWN_SEC - ageSec));
-        flashRefreshError(`방금 갱신됨 — ${remain}초 후 다시 시도`);
-        return;
-      }
-    }
-
-    if (refreshErrorTimerRef.current) {
-      clearTimeout(refreshErrorTimerRef.current);
-      refreshErrorTimerRef.current = null;
-    }
-    const mySeq = parcelReqSeqRef.current;
-    setRefreshingCapa(true);
-    setRefreshCapaError(null);
-
-    const r = await refreshKepcoCapaByJibun({
-      addr,
-      bjd_code: bjdCode ?? undefined,
-      jibun,
-    });
-
-    // 카드가 닫혔거나 다른 지번으로 바뀌었으면 응답 폐기 (state 변경 X)
-    if (mySeq !== parcelReqSeqRef.current) return;
-
-    setRefreshingCapa(false);
-    if (r.ok) {
-      setParcelCapa(r.rows ?? []);
-      if (r.source === "not_found") flashRefreshError("KEPCO 에 데이터 없음");
-    } else {
-      flashRefreshError(r.error ?? "조회 실패");
-    }
-  }, [
-    refreshingCapa,
-    parcelCapa,
-    parcelMeta,
-    parcelClickedJibun,
-    selectedJibun,
-    flashRefreshError,
-  ]);
 
   useEffect(() => {
     closeParcelPanelRef.current = closeParcelPanel;
@@ -646,12 +573,16 @@ export default function MapClient({ isAdmin, email }: Props) {
     [moveMapTo, openVillagePanelOnMarkerClick],
   );
 
-  // 공매 매물 카드 클릭 (Modal) — 매물의 PNU 로 VWorld + KEPCO 병렬 조회.
-  // 결과는 ParcelInfoPanel 로 흘러가 [공매] 탭이 디폴트 활성됨 (defaultOnbidTab).
-  //
-  // ⚠️ 캠코 ltnoPnu 의 산구분(11번째)이 비표준(0=일반/1=산) 이라 직접 쓰면 VWorld 매칭률 0%.
-  //    pnuFromOnbidItem 으로 행안부 표준(1=일반/2=산) PNU 재구성 후 사용.
-  //    상세: lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증).
+  /**
+   * 공매 매물 카드 클릭 — 매물의 PNU 로 통합 진입점 호출.
+   *
+   * ⚠️ 캠코 ltnoPnu 의 산구분(11번째)이 비표준(0=일반/1=산) 이라 직접 쓰면 VWorld 매칭률 0%.
+   *    pnuFromOnbidItem 으로 행안부 표준(1=일반/2=산) PNU 재구성 후 사용.
+   *    상세: lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증).
+   *
+   * 모드 분기 없음 — 공매 매물에서 진입해도 패널은 마지막 본 탭으로 시작.
+   * 사용자가 [공매] 탭을 보려면 한 번 클릭 (그러면 다음 진입부턴 자동으로 그 탭).
+   */
   const openParcelPanelOnOnbidItemClick = useCallback(
     async (onbid: OnbidListItem) => {
       const pnu = pnuFromOnbidItem(onbid);
@@ -659,58 +590,11 @@ export default function MapClient({ isAdmin, email }: Props) {
         setSimpleToast("이 매물의 PNU 를 만들 수 없습니다.");
         return;
       }
-      // 모달/카드 정리
-      setOnbidModalOpen(false);
-      setSelectedOnbidVillage(null);
-      // 마을 패널/모달 정리
-      villageReqSeqRef.current++;
-      villageAbortRef.current?.abort();
-      setSelectedVillage(null);
-      setVillagePolygon(null);
-      setDetailModalOpen(false);
-
-      parcelAbortRef.current?.abort();
-      const controller = new AbortController();
-      parcelAbortRef.current = controller;
-      const seq = ++parcelReqSeqRef.current;
-      setParcelLoading(true);
-      setSelectedJibun(null);
-      setSelectedGeometry(null);
-      setParcelCapa([]);
-      setParcelMeta(null);
-      setParcelClickedJibun("");
-      setParcelOpenedFromOnbid(true);
-      setRefreshingCapa(false);
-      setRefreshCapaError(null);
-      try {
-        const bjdCode = pnu.slice(0, 10);
-        const [parcelResult, capaResult] = await Promise.all([
-          fetchVworldParcelByPnu(pnu, { signal: controller.signal }),
-          fetchKepcoCapaByBjdCode(bjdCode, { signal: controller.signal }).catch(
-            () => [] as KepcoDataRow[],
-          ),
-        ]);
-        if (seq !== parcelReqSeqRef.current) return;
-        if (!parcelResult) {
-          setSimpleToast(`⚠️ 매물 필지 정보를 찾을 수 없어요`);
-          return;
-        }
-        setSelectedJibun(parcelResult.jibun);
-        setSelectedGeometry(parcelResult.geometry);
-        setParcelCapa(Array.isArray(capaResult) ? capaResult : []);
-        setParcelClickedJibun(parcelResult.jibun.jibun);
-        const c = parcelResult.geometry.center;
-        if (c?.lat != null) moveMapToRef.current?.(c.lat, c.lng);
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        if (seq === parcelReqSeqRef.current) {
-          setSimpleToast("매물 조회 중 오류가 발생했어요");
-        }
-      } finally {
-        if (seq === parcelReqSeqRef.current) setParcelLoading(false);
-      }
+      await openParcelPanelByPnu(pnu, {
+        onNotFound: () => setSimpleToast("⚠️ 매물 필지 정보를 찾을 수 없어요"),
+      });
     },
-    [],
+    [openParcelPanelByPnu],
   );
 
   // 공매 마을 마커 클릭 — 동 폴리곤 음영 + OnbidVillageCard 표시.
@@ -754,52 +638,25 @@ export default function MapClient({ isAdmin, email }: Props) {
     setVillagePolygon(null);
   }, []);
 
-  // 지도 좌표 클릭 (좌표 → 필지). VWorld 가 BBOX → point-in-polygon 으로 정확 1필지 선별.
-  // 응답 jibun.pnu 의 앞 10자리가 bjd_code → 그것으로 KEPCO 용량 추가 호출 (직렬, PNU dependency).
-  // 지번 클릭과 parcelAbortRef/parcelReqSeqRef 공유 (지번 패널이 한 개라 동일 race 가드).
+  /**
+   * 지도 좌표 클릭 — VWorld BBOX → point-in-polygon 으로 정확 1필지 선별 → PNU 로 통합 진입.
+   * 좌표 → PNU 변환만 여기서 하고, 그 다음은 다른 진입 경로와 동일 (분기 0).
+   */
   const openParcelPanelOnMapClick = useCallback(
     async (lat: number, lng: number) => {
-      parcelAbortRef.current?.abort();
-      const controller = new AbortController();
-      parcelAbortRef.current = controller;
-      const seq = ++parcelReqSeqRef.current;
-      setParcelLoading(true);
-      setSelectedJibun(null);
-      setSelectedGeometry(null);
-      setParcelCapa([]);
-      setParcelMeta(null);
-      setParcelClickedJibun("");
       try {
-        const parcel = await fetchVworldParcelByLatLng(lat, lng, {
-          signal: controller.signal,
-        });
-        if (seq !== parcelReqSeqRef.current) return;
+        const parcel = await fetchVworldParcelByLatLng(lat, lng);
         if (!parcel) {
           setSimpleToast("이 위치에 필지가 없습니다 (바다/산 등)");
           return;
         }
-        const bjdCode = parcel.jibun.pnu.slice(0, 10);
-        setParcelClickedJibun(parcel.jibun.jibun);
-        const capaResult = await fetchKepcoCapaByJibun(
-          bjdCode,
-          parcel.jibun.jibun,
-          { signal: controller.signal },
-        );
-        if (seq !== parcelReqSeqRef.current) return;
-        setSelectedJibun(parcel.jibun);
-        setSelectedGeometry(parcel.geometry);
-        setParcelCapa(capaResult.rows);
-        setParcelMeta(capaResult.meta);
+        await openParcelPanelByPnu(parcel.jibun.pnu);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        if (seq === parcelReqSeqRef.current) {
-          setSimpleToast("필지 조회 중 오류가 발생했어요");
-        }
-      } finally {
-        if (seq === parcelReqSeqRef.current) setParcelLoading(false);
+        setSimpleToast("필지 조회 중 오류가 발생했어요");
       }
     },
-    [],
+    [openParcelPanelByPnu],
   );
 
   // ─────────────────────── 공유 / 줌 ───────────────────────
@@ -1109,7 +966,7 @@ export default function MapClient({ isAdmin, email }: Props) {
           )}
 
           {/* 마을 요약 카드 (마커 클릭, 단 지번 패널이 열려있으면 숨김) */}
-          {selectedVillage && !detailModalOpen && !selectedJibun && !parcelLoading && (
+          {selectedVillage && !detailModalOpen && !selectedPnu && (
             <LocationSummaryCard
               key={selectedVillage.bjdCode}
               markerRow={selectedVillage.markerRow}
@@ -1132,22 +989,13 @@ export default function MapClient({ isAdmin, email }: Props) {
             />
           )}
 
-          {/* 지번 클릭 — 필지 정보 패널 */}
-          {(parcelLoading || selectedJibun) && (
+          {/* 지번 클릭 — 필지 정보 패널.
+              모든 탭이 단일 입력 PNU 만 사용 (활성 시점에 자체 fetch).
+              진입 모드(전기/공매/견적) 무관 동일 흐름 — 분기 0. */}
+          {selectedPnu && (
             <ParcelInfoPanel
-              jibun={selectedJibun}
-              geometry={selectedGeometry}
-              capa={parcelCapa}
-              meta={parcelMeta}
-              clickedJibun={parcelClickedJibun}
-              matchMode={parcelCapa.length > 0 ? "exact" : null}
-              nearestJibun={null}
-              loading={parcelLoading}
+              pnu={selectedPnu}
               onClose={closeParcelPanel}
-              onRefreshCapa={refreshParcelCapa}
-              refreshingCapa={refreshingCapa}
-              refreshCapaError={refreshCapaError}
-              defaultOnbidTab={parcelOpenedFromOnbid}
               onSolarMarkers={setSolarMarkers}
             />
           )}
@@ -1155,8 +1003,7 @@ export default function MapClient({ isAdmin, email }: Props) {
           {/* 공매 마을 요약 카드 — 빨간 마커 클릭, 지번 패널 떠있으면 숨김 */}
           {selectedOnbidVillage &&
             !onbidModalOpen &&
-            !selectedJibun &&
-            !parcelLoading && (
+            !selectedPnu && (
               <OnbidVillageCard
                 key={selectedOnbidVillage.key}
                 group={selectedOnbidVillage}

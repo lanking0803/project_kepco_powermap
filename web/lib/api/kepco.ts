@@ -1,36 +1,29 @@
 /**
- * Client-side fetch wrappers — KEPCO 용량 atomic endpoints.
+ * Client-side fetch wrappers — KEPCO 용량 마을(BJD) 단위 endpoints.
  *
  * 컴포넌트는 이 파일의 함수만 호출 (fetch URL 인라인 금지 — URL 변경 시 grep 한 곳만).
  * 응답의 raw row 는 주소 필드 없음 (kepco_capa 컬럼만) → 사용 직전
  * enrichKepcoCapaRowsWithVillageInfo() 로 마을 정보 합성 필요.
  *
+ * PNU 단위(상세정보 팝업) 는 별도 모듈:
+ *   - lib/kepco/by-pnu.ts (fetchKepcoByPnu, refreshKepcoByPnu)
+ *
  * 캐시:
  *   - 모듈 scope Map (페이지 라이프타임 동안 유지)
  *   - 같은 키 hit 시 fetch 0회
- *   - 새로고침 (handleRefresh) 시 clearKepcoCapaCache() 로 비움 (크롤이 갱신하므로)
  *
- * Endpoint ↔ 함수 매핑 (네이밍 컨벤션 [verb][Source][Entity][By+Input]):
- *   /api/capa/summary-by-bjd ↔ fetchKepcoSummaryByBjdCode  (카드용 집계, ~80B)
- *   /api/capa/by-bjd         ↔ fetchKepcoCapaByBjdCode     (모달용 raw rows)
- *   /api/capa/by-jibun       ↔ fetchKepcoCapaByJibun       (지번 단위)
+ * Endpoint ↔ 함수 매핑:
+ *   /api/capa/summary-by-bjd ↔ fetchKepcoSummaryByBjdCode  (마을 카드용 집계, ~80B)
+ *   /api/capa/by-bjd         ↔ fetchKepcoCapaByBjdCode     (마을 모달용 raw rows)
  */
-import type { AddrMeta, KepcoCapaSummary, KepcoDataRow } from "@/lib/types";
+import type { KepcoCapaSummary, KepcoDataRow } from "@/lib/types";
 
 interface CapaApiResponse {
   ok: boolean;
   bjd_code?: string;
-  jibun?: string;
   rows?: KepcoDataRow[];
   total?: number;
-  meta?: AddrMeta | null;
   error?: string;
-}
-
-/** by-jibun 응답 — capa rows + 행정구역 메타 (헤더 표시용). */
-export interface CapaByJibunResult {
-  rows: KepcoDataRow[];
-  meta: AddrMeta | null;
 }
 
 interface SummaryApiResponse {
@@ -46,7 +39,6 @@ interface FetchOptions {
 
 const capaSummaryByBjdCache = new Map<string, KepcoCapaSummary>();
 const capaByBjdCache = new Map<string, KepcoDataRow[]>();
-const capaByJibunCache = new Map<string, CapaByJibunResult>();
 
 /**
  * /api/capa/summary-by-bjd — 마을 카드용 시설별 여유·부족 집계. 캐시 키 = bjd_code.
@@ -88,35 +80,4 @@ export async function fetchKepcoCapaByBjdCode(
   const rows = data.rows ?? [];
   capaByBjdCache.set(bjdCode, rows);
   return rows;
-}
-
-/** /api/capa/by-jibun — 지번 단위 (exact only) + 행정구역 메타. 캐시 키 = `${bjd}:${jibun}`. */
-export async function fetchKepcoCapaByJibun(
-  bjdCode: string,
-  jibun: string,
-  options?: FetchOptions,
-): Promise<CapaByJibunResult> {
-  const key = `${bjdCode}:${jibun}`;
-  const cached = capaByJibunCache.get(key);
-  if (cached) return cached;
-
-  const res = await fetch(
-    `/api/capa/by-jibun?bjd_code=${encodeURIComponent(bjdCode)}&jibun=${encodeURIComponent(jibun)}`,
-    { signal: options?.signal },
-  );
-  const data = (await res.json()) as CapaApiResponse;
-  if (!data.ok) throw new Error(data.error || "지번 용량 조회 실패");
-  const result: CapaByJibunResult = {
-    rows: data.rows ?? [],
-    meta: data.meta ?? null,
-  };
-  capaByJibunCache.set(key, result);
-  return result;
-}
-
-/** 새로고침 시 호출 — KEPCO 데이터는 크롤이 갱신하므로 새 데이터 받기 위해 비움 */
-export function clearKepcoCapaCache(): void {
-  capaSummaryByBjdCache.clear();
-  capaByBjdCache.clear();
-  capaByJibunCache.clear();
 }

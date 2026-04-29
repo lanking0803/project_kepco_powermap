@@ -150,6 +150,7 @@ export async function fetchOnbidListPage(
     throw new Error(`캠코 응답 JSON 아님: ${text.slice(0, 200)}`);
   }
   const json = JSON.parse(text) as {
+    // 정상/매물 있음
     header?: { resultCode?: string; resultMsg?: string };
     body?: {
       totalCount?: number;
@@ -157,10 +158,29 @@ export async function fetchOnbidListPage(
       numOfRows?: number;
       items?: { item?: OnbidRawListItem | OnbidRawListItem[] } | string;
     };
+    // 매물 0건 — 캠코가 wrapper 를 다르게 회신 (실측):
+    //   { "result": { "resultCode": "03", "resultMsg": "NODATA_ERROR" } }
+    result?: { resultCode?: string; resultMsg?: string };
   };
+
+  // 매물 0건 (NODATA_ERROR) 은 정상 빈 결과로 처리.
+  if (json.result?.resultCode === "03") {
+    return {
+      totalCount: 0,
+      pageNo: params.pageNo,
+      numOfRows: params.numOfRows,
+      items: [],
+    };
+  }
 
   const code = json.header?.resultCode;
   if (code !== "00") {
+    // 진짜 비정상 — 인증/한도/장애 등.
+    console.error(
+      "[onbid/list] 비정상 응답 — URL:",
+      url.toString().replace(/serviceKey=[^&]+/, "serviceKey=***"),
+    );
+    console.error("[onbid/list] raw body (first 800 chars):", text.slice(0, 800));
     throw new Error(
       `캠코 resultCode=${code} msg=${json.header?.resultMsg ?? ""}`,
     );

@@ -171,7 +171,7 @@ function parseSearchXml(xml: string): LawOrdinance[] {
   return rows;
 }
 
-/** XML 한 블록에서 단일 필드 추출 (CDATA 자동 벗기기) */
+/** XML 한 블록에서 단일 필드 추출 (CDATA 자동 벗기기 + 엔티티 디코딩) */
 function extractField(block: string, tag: string): string {
   const re = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
   const m = block.match(re);
@@ -179,7 +179,21 @@ function extractField(block: string, tag: string): string {
   let val = m[1];
   const cdata = val.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
   if (cdata) val = cdata[1];
-  return val.trim();
+  return decodeXmlEntities(val.trim());
+}
+
+/**
+ * XML 엔티티 디코딩 — `&amp;` → `&` 등.
+ * 법제처 응답의 자치법규상세링크가 `&amp;` 로 escape 돼있어 그대로 a href 넣으면
+ * 브라우저가 `&amp;type=HTML` 을 리터럴 파라미터로 처리해 404. 디코딩 필수.
+ */
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }
 
 /** 캐시 초기화 (테스트/관리용 — 운영 호출 X) */

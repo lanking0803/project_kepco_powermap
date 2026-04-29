@@ -1,19 +1,20 @@
 /**
  * GET /api/solar-permits/by-pnu?pnu=...
  *
- * 매물 PNU 19자리 → 같은 필지 + 같은 동/리 태양광 발전소 현황.
+ * 매물 PNU 19자리 → 같은 필지 + 같은 동/리 태양광 발전소 현황 + 마커 좌표.
  *
  * 응답 (성공):
  *   {
- *     ok: true,
- *     pnu, bjd_code,
- *     same_pnu: [{ facility_name, capacity_kw, operating_status, permit_date, lat, lng }],
- *     same_dong: { count, total_kw }
+ *     ok, pnu, bjd_code,
+ *     same_pnu: SolarPermitRow[],                                                   // 정확 매칭
+ *     same_dong: { count, total_kw },                                               // 동/리 집계
+ *     same_dong_markers: [{ lat, lng, pnu, jibun, name, kw }]                       // 좌표 보유 행만
  *   }
  *
  * 데이터 출처: Supabase Storage 'solar-permits' bucket (Public, BJD 별 JSON).
  *   - 매월 1일 09:00 KST GH Actions cron 으로 워커가 갱신 (crawler/solar_permits.py)
  *   - Public bucket → Supabase Smart CDN (Fastly) 가 자동 분산
+ *   - 외부 API 가 좌표 ~47% 만 제공 → same_dong_markers.length 가 same_dong.count 보다 작을 수 있음 (정상)
  *
  * 캐시 4겹:
  *   ① 클라이언트 페이지 라이프타임 (lib/api/solar-permits.ts Map)
@@ -24,6 +25,7 @@
  * 저장소 변경 이력:
  *   v1: solar_permits 테이블 (DB 2쿼리)
  *   v2: Storage bucket Public raw fetch + JS 가공
+ *   v2.1: same_dong_markers 추가 (지도 마커용, 동일 BJD JSON 재사용 — 추가 호출 0)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -42,6 +44,24 @@ interface SolarRow {
   lng: number | null;
 }
 
+interface SolarMarker {
+  lat: number;
+  lng: number;
+  pnu: string;
+  jibun: string;
+  name: string;
+  kw: number | null;
+}
+
+/** PNU 19자리 → "821" / "821-3" / "산 87-4" 형태의 사람이 읽을 지번 라벨. */
+function pnuToJibun(pnu: string): string {
+  const isSan = pnu[10] === "2";
+  const main = parseInt(pnu.slice(11, 15), 10);
+  const sub = parseInt(pnu.slice(15, 19), 10);
+  const base = sub > 0 ? `${main}-${sub}` : `${main}`;
+  return isSan ? `산 ${base}` : base;
+}
+
 export const meta: EndpointMeta = {
   source:
     "Storage (solar-permits bucket, public) — data.go.kr NIA 15107742 가 출처, 매월 1일 GH cron 으로 BJD 별 JSON 적재",
@@ -57,10 +77,10 @@ export const meta: EndpointMeta = {
     },
   ],
   outputSchema:
-    "{ ok, pnu, bjd_code, same_pnu: SolarPermitRow[], same_dong: { count, total_kw } }",
+    "{ ok, pnu, bjd_code, same_pnu, same_dong: { count, total_kw }, same_dong_markers: { lat, lng, pnu, jibun, name, kw }[] }",
   externalDeps: [],
   notes:
-    "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). 매월 갱신되는 정적 스냅샷이라 캐시 길게(10분).",
+    "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). same_dong_markers 는 외부 API 좌표 결측 (~53%) 제외한 행만 — count 보다 작은 게 정상.",
 };
 
 export async function GET(request: NextRequest) {
@@ -142,12 +162,24 @@ export async function GET(request: NextRequest) {
       lng: r.lng,
     }));
 
-  // same_dong — 그 BJD 전체 합산 (rows 전체 = 같은 법정동/리)
+  // same_dong — 그 BJD 전체 합산
   const sameDongCount = rows.length;
   const sameDongTotal = rows.reduce(
     (s, r) => s + (Number(r.capacity_kw) || 0),
     0,
   );
+
+  // same_dong_markers — 좌표 보유 행만 (외부 API 가 좌표 ~47% 만 채움)
+  const sameDongMarkers: SolarMarker[] = rows
+    .filter((r) => r.lat != null && r.lng != null)
+    .map((r) => ({
+      lat: r.lat as number,
+      lng: r.lng as number,
+      pnu: r.pnu,
+      jibun: pnuToJibun(r.pnu),
+      name: r.facility_name,
+      kw: r.capacity_kw,
+    }));
 
   return NextResponse.json(
     {
@@ -159,6 +191,7 @@ export async function GET(request: NextRequest) {
         count: sameDongCount,
         total_kw: Math.round(sameDongTotal),
       },
+      same_dong_markers: sameDongMarkers,
     },
     {
       headers: { "Cache-Control": "private, s-maxage=600, max-age=120" },
@@ -174,6 +207,7 @@ function emptyResponse(pnu: string, bjd_code: string) {
       bjd_code,
       same_pnu: [],
       same_dong: { count: 0, total_kw: 0 },
+      same_dong_markers: [],
     },
     {
       headers: { "Cache-Control": "private, s-maxage=600, max-age=120" },

@@ -16,6 +16,7 @@ import {
   type OnbidSearchParams,
   type OurCategory,
 } from "@/lib/onbid/types";
+import { jibunFromPnu } from "@/lib/geo/pnu";
 
 interface Props {
   /** 검색 결과 변경 시 호출 — 지도 마커 갱신용 */
@@ -465,7 +466,7 @@ function ResultCard({
   const apslMan = Math.round(item.apslEvlAmt / 10000);
   const lowstMan = Math.round(item.lowstBidPrc / 10000);
   const discountPct = Math.round(item.discountRatio * 100);
-  const jibun = jibunFromPnu(item.ltnoPnu);
+  const jibun = jibunFromPnu(item.ltnoPnu) ?? "—";
   return (
     <div
       className={`w-full px-3 py-2 border-b border-gray-200 transition-colors ${
@@ -539,15 +540,3 @@ function ResultCard({
   );
 }
 
-/**
- * PNU 19자리 → 지번 텍스트.
- * 산구분: 11번째 글자 1=일반, 2=산. 부번 0이면 본번만.
- */
-function jibunFromPnu(pnu: string): string {
-  if (!/^\d{19}$/.test(pnu)) return "—";
-  const isSan = pnu.charAt(10) === "2";
-  const bonbun = parseInt(pnu.slice(11, 15), 10);
-  const bubun = parseInt(pnu.slice(15, 19), 10);
-  const text = bubun > 0 ? `${bonbun}-${bubun}` : `${bonbun}`;
-  return isSan ? `산${text}` : text;
-}

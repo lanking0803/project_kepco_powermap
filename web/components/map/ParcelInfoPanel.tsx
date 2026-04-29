@@ -13,7 +13,7 @@
  *   - 모바일: 하단 바텀시트 (화면 하단부)
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 import { hasCapacity } from "@/lib/types";
@@ -23,9 +23,12 @@ import {
   fetchBuildingsByPnu,
   type BuildingTitleInfo,
 } from "@/lib/api/buildings";
+import { fetchVworldParcelByPnu } from "@/lib/api/vworld";
+import { fetchKepcoByPnu, refreshKepcoByPnu } from "@/lib/kepco/by-pnu";
+import { jibunFromPnu } from "@/lib/geo/pnu";
 import {
-  fetchLandTransactionsByBjd,
-  fetchNrgTransactionsByBjd,
+  fetchLandTransactionsByPnu,
+  fetchNrgTransactionsByPnu,
   type LandTransaction,
   type NrgTransaction,
   type TradeStats,
@@ -58,21 +61,12 @@ import OnbidTab from "./onbid/OnbidTab";
 type TabKey = "parcel" | "electric" | "onbid" | "price" | "location" | "regulation";
 
 interface Props {
-  jibun: JibunInfo | null;
-  geometry: ParcelGeometry | null;
-  capa: KepcoDataRow[];
-  /** by-jibun 응답의 행정구역 메타 (헤더 표시용, DB 기준). null 이면 jibun fallback. */
-  meta: AddrMeta | null;
-  /** 사용자가 클릭한 지번 번호 (헤더 표시용, parcel 응답 전에도 즉시 표시). */
-  clickedJibun: string;
-  matchMode: "exact" | "nearest_jibun" | null;
-  nearestJibun: string | null;
-  loading: boolean;
+  /**
+   * 패널이 표시할 필지의 PNU 19자리.
+   * 모든 탭의 단일 입력값 — 진입 모드(전기/공매/견적) 무관 동일 흐름.
+   */
+  pnu: string;
   onClose: () => void;
-  /** 전기 탭 새로고침 — undefined 면 버튼 숨김 */
-  onRefreshCapa?: () => void;
-  refreshingCapa?: boolean;
-  refreshCapaError?: string | null;
   /**
    * 견적 모드용 — VWorld 도로명주소건물(lt_c_spbd) 폴리곤 개수.
    * undefined: 알 수 없음(메인 지도). 0 + 건축물대장≥1 일 때만 ⚠️ 도로명주소 미부여 안내.
@@ -84,16 +78,12 @@ interface Props {
    */
   inQuoteMode?: boolean;
   /**
-   * 공매 모드 진입 시 [공매] 탭이 디폴트로 열리도록 한다.
-   * (전기 모드/일반 진입 시 false → [전기] 탭 디폴트 그대로)
-   */
-  defaultOnbidTab?: boolean;
-  /**
    * 입지 탭 활성 시 SolarSection 이 응답에서 추출한 좌표 보유 발전소 리스트.
    * 부모(MapClient) 가 KakaoMap 솔라 마커 prop 으로 전달. 탭 이동/패널 닫힘 시 [] 호출됨.
    */
   onSolarMarkers: (markers: SolarMarker[]) => void;
 }
+
 
 const M2_TO_PYEONG = 0.3025;
 
@@ -140,44 +130,92 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "regulation", label: "규제" },
 ];
 
+/** 마지막으로 본 탭 localStorage 키 — 다음 패널 진입 시 그 탭으로 시작. */
+const LAST_TAB_STORAGE_KEY = "parcel-panel:last-tab";
+const DEFAULT_TAB: TabKey = "electric";
+
+function readLastTab(): TabKey {
+  if (typeof window === "undefined") return DEFAULT_TAB;
+  try {
+    const v = window.localStorage.getItem(LAST_TAB_STORAGE_KEY);
+    if (v && TABS.some((t) => t.key === v)) return v as TabKey;
+  } catch {}
+  return DEFAULT_TAB;
+}
+
 export default function ParcelInfoPanel({
-  jibun,
-  geometry,
-  capa,
-  meta,
-  clickedJibun,
-  matchMode,
-  nearestJibun,
-  loading,
+  pnu,
   onClose,
-  onRefreshCapa,
-  refreshingCapa,
-  refreshCapaError,
   polygonCount,
   inQuoteMode,
-  defaultOnbidTab,
   onSolarMarkers,
 }: Props) {
-  // 공매 모드 진입 시 [공매] 탭 디폴트, 그 외 [전기] 디폴트.
-  const [tab, setTab] = useState<TabKey>(defaultOnbidTab ? "onbid" : "electric");
+  // 마지막 본 탭 기억 — 진입 모드 무관 단일 정책 (분기 0).
+  const [tab, setTabState] = useState<TabKey>(() => readLastTab());
+  const setTab = useCallback((v: TabKey) => {
+    setTabState(v);
+    try {
+      window.localStorage.setItem(LAST_TAB_STORAGE_KEY, v);
+    } catch {}
+  }, []);
 
-  // 헤더 주소 출처 우선순위:
-  //   1. meta (by-jibun, DB) — 가장 빠르고 권위 있음 (행안부 표준)
-  //   2. jibun (parcel API, VWorld) — meta 없을 때 fallback (sentinel 케이스 등)
-  const headerParts: string[] = meta
-    ? ([meta.sep_1, meta.sep_2, meta.sep_3, meta.sep_4, meta.sep_5, clickedJibun].filter(
+  // PNU → VWorld parcel (jibun + geometry) self-fetch.
+  // 모듈 캐시 (lib/api/vworld) 가 있어 같은 PNU 재방문 비용 0.
+  const [jibun, setJibun] = useState<JibunInfo | null>(null);
+  const [geometry, setGeometry] = useState<ParcelGeometry | null>(null);
+  const [parcelLoading, setParcelLoading] = useState(false);
+  const [parcelError, setParcelError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!/^\d{19}$/.test(pnu)) {
+      setJibun(null);
+      setGeometry(null);
+      return;
+    }
+    let alive = true;
+    setParcelLoading(true);
+    setParcelError(null);
+    setJibun(null);
+    setGeometry(null);
+    fetchVworldParcelByPnu(pnu)
+      .then((res) => {
+        if (!alive) return;
+        if (res) {
+          setJibun(res.jibun);
+          setGeometry(res.geometry);
+        }
+      })
+      .catch((e: unknown) => {
+        if (alive) setParcelError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (alive) setParcelLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [pnu]);
+
+  // 헤더 주소 — VWorld jibun 우선 사용. 없으면 PNU 에서 지번만 도출 (즉시 표시 가능).
+  const fallbackJibun = useMemo(() => jibunFromPnu(pnu) ?? "", [pnu]);
+  const clickedJibun = jibun?.jibun || fallbackJibun;
+  const headerParts: string[] = jibun
+    ? ([jibun.ctp_nm, jibun.sig_nm, jibun.emd_nm, jibun.li_nm || null, jibun.jibun].filter(
         Boolean,
       ) as string[])
-    : jibun
-      ? ([jibun.ctp_nm, jibun.sig_nm, jibun.emd_nm, jibun.li_nm || null, jibun.jibun].filter(
-          Boolean,
-        ) as string[])
+    : fallbackJibun
+      ? [fallbackJibun]
       : [];
 
   // 견적 모드 임베드 시 = 좌측 패널 0번 섹션 안. floating overlay X / 자체 헤더 X.
   const wrapperClass = inQuoteMode
     ? "bg-white flex flex-col"
     : "absolute left-4 right-4 bottom-4 md:left-auto md:right-4 md:bottom-4 md:w-[520px] max-w-[calc(100%-32px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-10 flex flex-col h-[62dvh] md:h-[min(560px,calc(100dvh-120px))] kepco-slide-up";
+
+  // 패널이 한 번이라도 jibun/geometry 받기 전엔 탭 내용 숨김.
+  // (탭 자체 fetch 가 PNU 만 의존하면 이미 시작 가능하지만, ParcelTab/PriceTab 이
+  //  geometry 의존이라 일관성 위해 받은 후 일괄 노출)
+  const ready = jibun != null && geometry != null;
 
   return (
     <div className={wrapperClass}>
@@ -186,8 +224,10 @@ export default function ParcelInfoPanel({
         <div className="px-3 py-2.5 md:px-4 md:py-3 border-b bg-gray-50 flex items-start justify-between gap-2 flex-shrink-0">
           <div className="flex-1 min-w-0">
             {headerParts.length === 0 ? (
-              loading ? (
+              parcelLoading ? (
                 <div className="text-sm text-gray-500 py-1">필지 정보 불러오는 중...</div>
+              ) : parcelError ? (
+                <div className="text-sm text-red-600 py-1">조회 실패: {parcelError}</div>
               ) : (
                 <div className="text-sm text-gray-600 py-1">이 위치에 필지 없음</div>
               )
@@ -208,7 +248,7 @@ export default function ParcelInfoPanel({
       )}
 
       {/* 탭 */}
-      {!loading && jibun && (
+      {ready && (
         <div className="flex border-b border-gray-200 flex-shrink-0">
           {TABS.map((t) => {
             const isOnbid = t.key === "onbid";
@@ -232,8 +272,8 @@ export default function ParcelInfoPanel({
         </div>
       )}
 
-      {/* 탭 내용 */}
-      {!loading && jibun && (
+      {/* 탭 내용 — 모든 탭이 단일 입력 PNU 만 받음. 활성 시점에 자체 fetch. */}
+      {ready && jibun && (
         <div className="flex-1 overflow-auto px-3 py-3 md:px-4 md:py-3">
           {tab === "parcel" && (
             <ParcelTab
@@ -244,28 +284,20 @@ export default function ParcelInfoPanel({
             />
           )}
           {tab === "electric" && (
-            <ElectricTab
-              capa={capa}
-              matchMode={matchMode}
-              nearestJibun={nearestJibun}
-              clickedJibun={clickedJibun || jibun.jibun}
-              onRefresh={onRefreshCapa}
-              refreshing={refreshingCapa}
-              refreshError={refreshCapaError}
-            />
+            <ElectricTab pnu={pnu} clickedJibun={clickedJibun} />
           )}
-          {tab === "onbid" && <OnbidTab pnu={jibun.pnu} />}
+          {tab === "onbid" && <OnbidTab pnu={pnu} />}
           {tab === "price" && (
             <PriceTab
               jibun={jibun}
               geometry={geometry}
-              clickedJibun={clickedJibun || jibun.jibun}
-              meta={meta}
+              clickedJibun={clickedJibun}
+              meta={null}
             />
           )}
           {tab === "location" && (
             <LocationTab
-              pnu={jibun.pnu}
+              pnu={pnu}
               areaLabel={[jibun.emd_nm, jibun.li_nm].filter(Boolean).join(" ")}
               onSolarMarkers={onSolarMarkers}
             />
@@ -759,42 +791,103 @@ function RefreshArrowIcon({
   );
 }
 
+/**
+ * 전기 탭 — PNU 만 받아 자체 fetch.
+ *
+ * 데이터 흐름:
+ *   1. 탭 활성 시점 useEffect → fetchKepcoByPnu(pnu) → /api/capa/by-jibun (모듈 캐시)
+ *   2. 응답: capa rows + AddrMeta (지번 단위 매칭)
+ *   3. 새로고침 — 캐시 비우고 재요청 (KEPCO 크롤 갱신 반영)
+ *
+ * 진입 모드 무관(전기/공매/견적) — PNU 만 있으면 어디서든 동일하게 작동.
+ */
 function ElectricTab({
-  capa,
-  matchMode,
-  nearestJibun,
+  pnu,
   clickedJibun,
-  onRefresh,
-  refreshing,
-  refreshError,
 }: {
-  capa: KepcoDataRow[];
-  matchMode: "exact" | "nearest_jibun" | null;
-  nearestJibun: string | null;
+  pnu: string;
   clickedJibun: string;
-  onRefresh?: () => void;
-  refreshing?: boolean;
-  refreshError?: string | null;
 }) {
+  const [capa, setCapa] = useState<KepcoDataRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+
+  // 같은 PNU 재방문 시 모듈 캐시 hit 으로 즉시 표시. 첫 진입에만 스피너.
+  useEffect(() => {
+    if (!/^\d{19}$/.test(pnu)) return;
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    fetchKepcoByPnu(pnu)
+      .then((res) => {
+        if (alive) setCapa(res.rows);
+      })
+      .catch((e: unknown) => {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [pnu]);
+
+  // 새로고침 = KEPCO live 호출 + DB upsert (POST /api/capa/refresh-by-pnu).
+  // 단순 캐시 비우고 DB 재조회가 아니라, 외부 KEPCO 시스템에서 최신 데이터를 끌어옴.
+  // 응답이 모듈 캐시에 반영되어 이후 다른 곳의 fetchKepcoByPnu 도 즉시 새 데이터 hit.
+  const handleRefresh = useCallback(async () => {
+    if (!/^\d{19}$/.test(pnu)) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const r = await refreshKepcoByPnu(pnu);
+      setCapa(r.rows);
+      if (r.source === "not_found") {
+        setRefreshError("KEPCO 에 데이터 없음");
+      }
+    } catch (e) {
+      setRefreshError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [pnu]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-2">
+        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="text-xs text-gray-500">전기 정보 조회 중...</div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="text-center py-8 text-xs text-red-600">
+        조회 실패: {error}
+      </div>
+    );
+  }
+
   if (capa.length === 0) {
     return (
       <div className="py-6 text-center space-y-3">
         <div className="text-sm text-gray-500">
-          수집되지 않았거나 KEPCO 미보유 지번일 수 있어요.
+          이 지번({clickedJibun})에 매칭된 KEPCO 용량 정보가 없습니다.
         </div>
-        {onRefresh && (
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
-                       bg-blue-50 text-blue-700 rounded border border-blue-200
-                       hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <RefreshArrowIcon spinning={refreshing} className="w-3 h-3" />
-            {refreshing ? "KEPCO 조회 중..." : "KEPCO 에서 지금 확인"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
+                     bg-blue-50 text-blue-700 rounded border border-blue-200
+                     hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <RefreshArrowIcon spinning={refreshing} className="w-3 h-3" />
+          {refreshing ? "KEPCO 조회 중..." : "KEPCO 에서 지금 확인"}
+        </button>
         {refreshError && (
           <div className="text-[11px] text-red-500">{refreshError}</div>
         )}
@@ -821,12 +914,6 @@ function ElectricTab({
 
   return (
     <div className="space-y-3">
-      {matchMode === "nearest_jibun" && nearestJibun && (
-        <div className="px-2 py-1.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-700 leading-snug">
-          <b>{clickedJibun}</b> 데이터가 없어 같은 리에서 가장 가까운{" "}
-          <b>{nearestJibun}</b> 정보를 보여드립니다.
-        </div>
-      )}
       {capa.map((row, i) => (
         <div key={row.id ?? i} className="space-y-1.5">
           {capa.length > 1 && (
@@ -866,18 +953,16 @@ function ElectricTab({
           title={absolute || undefined}
         >
           <span>KEPCO 마지막 확인: {relative}</span>
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={refreshing}
-              className="text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="KEPCO 에서 최신 데이터 가져오기"
-              aria-label="새로고침"
-            >
-              <RefreshArrowIcon spinning={refreshing} className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="KEPCO 에서 최신 데이터 가져오기"
+            aria-label="새로고침"
+          >
+            <RefreshArrowIcon spinning={refreshing} className="w-4 h-4" />
+          </button>
         </div>
       )}
       {refreshError && (
@@ -924,7 +1009,6 @@ function PriceTab({
   clickedJibun: string;
   meta: AddrMeta | null;
 }) {
-  const bjdCode = jibun.pnu.slice(0, 10);
   const [kind, setKind] = useState<"land" | "nrg">("land");
 
   // 클릭한 지번의 읍면동/리 — 드롭다운 자동 선택용.
@@ -974,8 +1058,8 @@ function PriceTab({
 
         {kind === "land" ? (
           <LandSection
-            key={`land:${bjdCode}`}
-            bjdCode={bjdCode}
+            key={`land:${jibun.pnu}`}
+            pnu={jibun.pnu}
             jibun={jibun}
             geometry={geometry}
             clickedJibun={clickedJibun}
@@ -983,8 +1067,8 @@ function PriceTab({
           />
         ) : (
           <NrgSection
-            key={`nrg:${bjdCode}`}
-            bjdCode={bjdCode}
+            key={`nrg:${jibun.pnu}`}
+            pnu={jibun.pnu}
             jibun={jibun}
             clickedJibun={clickedJibun}
             shared={sharedFilter}
@@ -1055,13 +1139,13 @@ function KindTabs({
 }
 
 function LandSection({
-  bjdCode,
+  pnu,
   jibun,
   geometry,
   clickedJibun,
   shared,
 }: {
-  bjdCode: string;
+  pnu: string;
   jibun: JibunInfo;
   geometry: ParcelGeometry | null;
   clickedJibun: string;
@@ -1081,11 +1165,11 @@ function LandSection({
     categoryOverride === undefined ? null : categoryOverride;
 
   useEffect(() => {
-    if (!/^\d{10}$/.test(bjdCode)) return;
+    if (!/^\d{19}$/.test(pnu)) return;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetchLandTransactionsByBjd(bjdCode, months, { signal: controller.signal })
+    fetchLandTransactionsByPnu(pnu, months, { signal: controller.signal })
       .then((result) => {
         if (controller.signal.aborted) return;
         setData(result);
@@ -1098,7 +1182,7 @@ function LandSection({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [bjdCode, months]);
+  }, [pnu, months]);
 
   const myJibun = clickedJibun || jibun.jibun;
   const myArea = geometry?.area_m2 ?? 0;
@@ -1252,12 +1336,12 @@ function LandSection({
 }
 
 function NrgSection({
-  bjdCode,
+  pnu,
   jibun,
   clickedJibun,
   shared,
 }: {
-  bjdCode: string;
+  pnu: string;
   jibun: JibunInfo;
   clickedJibun: string;
   shared: SharedRegionFilter;
@@ -1272,11 +1356,11 @@ function NrgSection({
   const [visibleCount, setVisibleCount] = useState(5);
 
   useEffect(() => {
-    if (!/^\d{10}$/.test(bjdCode)) return;
+    if (!/^\d{19}$/.test(pnu)) return;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetchNrgTransactionsByBjd(bjdCode, months, { signal: controller.signal })
+    fetchNrgTransactionsByPnu(pnu, months, { signal: controller.signal })
       .then((result) => {
         if (controller.signal.aborted) return;
         setData(result);
@@ -1289,7 +1373,7 @@ function NrgSection({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [bjdCode, months]);
+  }, [pnu, months]);
 
   const myJibun = clickedJibun || jibun.jibun;
   const sggLabel = `${jibun.ctp_nm} ${jibun.sig_nm}`;

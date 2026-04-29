@@ -22,3 +22,16 @@ export function buildPnuFromBjdAndJibun(
   if (!bonbun || !bubun) return null;
   return `${bjdCode}${isSan ? "2" : "1"}${bonbun}${bubun}`;
 }
+
+/**
+ * PNU 19자리 → 지번 텍스트 ("36-2", "산23" 등). buildPnuFromBjdAndJibun 의 역변환.
+ * 부번 0000 이면 본번만. 형식 오류면 null.
+ */
+export function jibunFromPnu(pnu: string): string | null {
+  if (!/^\d{19}$/.test(pnu)) return null;
+  const isSan = pnu.charAt(10) === "2";
+  const bonbun = parseInt(pnu.slice(11, 15), 10);
+  const bubun = parseInt(pnu.slice(15, 19), 10);
+  const text = bubun > 0 ? `${bonbun}-${bubun}` : `${bonbun}`;
+  return isSan ? `산${text}` : text;
+}

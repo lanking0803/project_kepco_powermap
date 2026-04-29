@@ -2,17 +2,18 @@
  * Client-side fetch wrapper — 실거래가 atomic endpoint (kind 분기).
  *
  * 컴포넌트는 이 파일의 함수만 호출 (vendor 추상화 — RTMS 모름).
+ * 입력은 PNU 단일 (상세정보 팝업 모든 탭의 통일 정책).
  *
  * 캐시 + URL 정규화:
  *   - RTMS 는 LAWD_CD(시군구 5자리) 단위 응답이라 같은 시군구는 결과 동일.
- *   - 호출 시 bjd_code 앞 5자리만 남기고 뒤 5자리는 "00000" 으로 정규화
- *     → 같은 시군구의 다른 지번 클릭 시 URL 동일 → CDN/client 캐시 hit.
- *   - 키 = `${LAWD_CD}00000:${months}:${kind}` — 종류별로 독립
- *   - 0건 결과도 캐시 (재호출 방지)
+ *   - 클라이언트 캐시 키 = 시군구 BJD (PNU 앞 5자리 + "00000") → 같은 시군구 내
+ *     다른 PNU 도 cache hit (무료 시세 비교).
+ *   - 서버도 PNU → 시군구 BJD 도출 후 동일 LAWD_CD 호출 → CDN 캐시 hit.
+ *   - 0건 결과도 캐시 (재호출 방지).
  *
  * Endpoint ↔ 함수:
- *   /api/transactions/by-bjd?kind=land ↔ fetchLandTransactionsByBjd
- *   /api/transactions/by-bjd?kind=nrg  ↔ fetchNrgTransactionsByBjd
+ *   /api/transactions/by-pnu?kind=land ↔ fetchLandTransactionsByPnu
+ *   /api/transactions/by-pnu?kind=nrg  ↔ fetchNrgTransactionsByPnu
  */
 import type { LandTransaction } from "@/lib/rtms/land-trade";
 import type { NrgTransaction } from "@/lib/rtms/nrg-trade";
@@ -22,7 +23,8 @@ export type TransactionKind = "land" | "nrg";
 
 interface ApiResponseLand {
   ok: boolean;
-  bjd_code?: string;
+  pnu?: string;
+  sgg_bjd?: string;
   kind?: "land";
   months?: number;
   rows?: LandTransaction[];
@@ -32,7 +34,8 @@ interface ApiResponseLand {
 
 interface ApiResponseNrg {
   ok: boolean;
-  bjd_code?: string;
+  pnu?: string;
+  sgg_bjd?: string;
   kind?: "nrg";
   months?: number;
   rows?: NrgTransaction[];
@@ -58,38 +61,38 @@ export interface NrgTransactionsResult {
 
 const cache = new Map<string, LandTransactionsResult | NrgTransactionsResult>();
 
-/** RTMS 는 시군구 단위 응답 → bjd_code 앞 5자리만 의미 있음. */
-function toSggBjd(bjd: string): string {
-  return bjd.slice(0, 5) + "00000";
+/** PNU 앞 5자리 + "00000" = 시군구 BJD (캐시 키 정규화). */
+function pnuToSggBjd(pnu: string): string {
+  return pnu.slice(0, 5) + "00000";
 }
 
-function key(bjd: string, months: number, kind: TransactionKind): string {
-  return `${toSggBjd(bjd)}:${months}:${kind}`;
+function key(pnu: string, months: number, kind: TransactionKind): string {
+  return `${pnuToSggBjd(pnu)}:${months}:${kind}`;
 }
 
 async function fetchByKind(
-  bjdCode: string,
+  pnu: string,
   months: number,
   kind: TransactionKind,
   options?: FetchOptions,
 ): Promise<unknown> {
-  const url = `/api/transactions/by-bjd?bjd_code=${toSggBjd(bjdCode)}&months=${months}&kind=${kind}`;
+  const url = `/api/transactions/by-pnu?pnu=${encodeURIComponent(pnu)}&months=${months}&kind=${kind}`;
   const res = await fetch(url, { signal: options?.signal });
   return res.json();
 }
 
-/** /api/transactions/by-bjd?kind=land — 시군구 단위 토지 실거래가 + 통계. */
-export async function fetchLandTransactionsByBjd(
-  bjdCode: string,
+/** /api/transactions/by-pnu?kind=land — PNU 입력 → 시군구 단위 토지 실거래가 + 통계. */
+export async function fetchLandTransactionsByPnu(
+  pnu: string,
   months: number = 12,
   options?: FetchOptions,
 ): Promise<LandTransactionsResult> {
-  const k = key(bjdCode, months, "land");
+  const k = key(pnu, months, "land");
   const cached = cache.get(k) as LandTransactionsResult | undefined;
   if (cached) return cached;
 
   const data = (await fetchByKind(
-    bjdCode,
+    pnu,
     months,
     "land",
     options,
@@ -104,18 +107,18 @@ export async function fetchLandTransactionsByBjd(
   return result;
 }
 
-/** /api/transactions/by-bjd?kind=nrg — 시군구 단위 상업·업무용 매매 + 통계. */
-export async function fetchNrgTransactionsByBjd(
-  bjdCode: string,
+/** /api/transactions/by-pnu?kind=nrg — PNU 입력 → 시군구 단위 상업·업무용 매매 + 통계. */
+export async function fetchNrgTransactionsByPnu(
+  pnu: string,
   months: number = 12,
   options?: FetchOptions,
 ): Promise<NrgTransactionsResult> {
-  const k = key(bjdCode, months, "nrg");
+  const k = key(pnu, months, "nrg");
   const cached = cache.get(k) as NrgTransactionsResult | undefined;
   if (cached) return cached;
 
   const data = (await fetchByKind(
-    bjdCode,
+    pnu,
     months,
     "nrg",
     options,
