@@ -833,6 +833,35 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/solar-permits/by-pnu",
+      "id": "solar-permits-by-pnu",
+      "filePath": "app/api/solar-permits/by-pnu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "DB (solar_permits) — data.go.kr NIA 15107742 가 출처, 매월 1일 GH cron 적재",
+            "cache": "private, s-maxage=600, max-age=120",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4684039022012340005",
+                "description": "매물 PNU 19자리 숫자 (시도2+시군구3+읍면동3+산구분1+본번4+부번4)"
+              }
+            ],
+            "outputSchema": "{ ok, pnu, bjd_code, same_pnu: SolarPermitRow[], same_dong: { count, total_kw } }",
+            "externalDeps": [],
+            "notes": "매월 갱신되는 정적 스냅샷이라 캐시 길게(10분) 가능. same_pnu = 같은 필지 정확 매칭, same_dong = 같은 법정동(리) 단위 집계 (영업 멘트용)."
+          },
+          "metaLine": 22,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/transactions/by-bjd",
       "id": "transactions-by-bjd",
       "filePath": "app/api/transactions/by-bjd/route.ts",

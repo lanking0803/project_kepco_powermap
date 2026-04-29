@@ -51,6 +51,7 @@ import {
 } from "@/lib/building-hub/classify";
 import AddrLine from "./AddrLine";
 import { FacilityCard } from "./FacilityCard";
+import SolarSection from "./SolarSection";
 
 type TabKey = "parcel" | "electric" | "price" | "location" | "regulation";
 
@@ -239,7 +240,7 @@ export default function ParcelInfoPanel({
               meta={meta}
             />
           )}
-          {tab === "location" && <LocationTab />}
+          {tab === "location" && <LocationTab pnu={jibun.pnu} />}
           {tab === "regulation" && <RegulationTab />}
         </div>
       )}
@@ -2110,16 +2111,21 @@ function ensureOption(
   return Array.from(set).sort();
 }
 
-function LocationTab() {
+function LocationTab({ pnu }: { pnu: string }) {
   // 입지 = 지리적 / 주변 정보 (참고용). 인허가 가능성 자체는 RegulationTab.
   return (
-    <div className="py-2">
-      <div className="text-[11px] text-gray-400 mb-1.5">2차 개발 예정</div>
-      <ul className="text-[11px] text-gray-500 space-y-0.5 pl-3 list-disc">
-        <li>취락지구 포함 여부</li>
-        <li>주변 도로 거리 (도로 SHP)</li>
-        <li>주변 태양광 허가 분포 (경쟁사)</li>
-      </ul>
+    <div className="space-y-4 py-1">
+      {/* 1차 — 태양광 발전소 (실제 데이터, solar_permits 테이블) */}
+      <SolarSection pnu={pnu} />
+
+      {/* 향후 — 2차 개발 예정 항목 */}
+      <div className="pt-2 border-t border-gray-100">
+        <div className="text-[11px] text-gray-400 mb-1.5">2차 개발 예정</div>
+        <ul className="text-[11px] text-gray-500 space-y-0.5 pl-3 list-disc">
+          <li>취락지구 포함 여부</li>
+          <li>주변 도로 거리 (도로 SHP)</li>
+        </ul>
+      </div>
     </div>
   );
 }
