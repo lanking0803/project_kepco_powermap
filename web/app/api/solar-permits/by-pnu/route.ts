@@ -11,16 +11,40 @@
  *     same_dong: { count, total_kw }
  *   }
  *
- * 데이터 출처: solar_permits 테이블 (매월 1일 09:00 KST GH Actions cron 으로 적재)
- * 외부 API 호출 없음. 우리 DB 단일 조회 1회 (Promise.all 로 2쿼리 동시).
+ * 데이터 출처: Supabase Storage 'solar-permits' bucket (Public, BJD 별 JSON).
+ *   - 매월 1일 09:00 KST GH Actions cron 으로 워커가 갱신 (crawler/solar_permits.py)
+ *   - Public bucket → Supabase Smart CDN (Fastly) 가 자동 분산
+ *
+ * 캐시 4겹:
+ *   ① 클라이언트 페이지 라이프타임 (lib/api/solar-permits.ts Map)
+ *   ② 브라우저 (max-age=120)
+ *   ③ Vercel CDN (s-maxage=600)
+ *   ④ Supabase Smart CDN (Fastly)
+ *
+ * 저장소 변경 이력:
+ *   v1: solar_permits 테이블 (DB 2쿼리)
+ *   v2: Storage bucket Public raw fetch + JS 가공
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
+const BUCKET = "solar-permits";
+const SAME_PNU_LIMIT = 50;
+
+interface SolarRow {
+  pnu: string;
+  facility_name: string;
+  capacity_kw: number | null;
+  operating_status: string | null;
+  permit_date: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
 export const meta: EndpointMeta = {
-  source: "DB (solar_permits) — data.go.kr NIA 15107742 가 출처, 매월 1일 GH cron 적재",
+  source:
+    "Storage (solar-permits bucket, public) — data.go.kr NIA 15107742 가 출처, 매월 1일 GH cron 으로 BJD 별 JSON 적재",
   cache: "private, s-maxage=600, max-age=120",
   auth: "user",
   inputs: [
@@ -36,7 +60,7 @@ export const meta: EndpointMeta = {
     "{ ok, pnu, bjd_code, same_pnu: SolarPermitRow[], same_dong: { count, total_kw } }",
   externalDeps: [],
   notes:
-    "매월 갱신되는 정적 스냅샷이라 캐시 길게(10분) 가능. same_pnu = 같은 필지 정확 매칭, same_dong = 같은 법정동(리) 단위 집계 (영업 멘트용).",
+    "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). 매월 갱신되는 정적 스냅샷이라 캐시 길게(10분).",
 };
 
 export async function GET(request: NextRequest) {
@@ -57,40 +81,70 @@ export async function GET(request: NextRequest) {
   }
   const bjd_code = pnu.slice(0, 10);
 
-  const supabase = createAdminClient();
-
-  // 동시 2쿼리 — 같은 필지 + 같은 동/리 집계
-  const [samePnuRes, sameDongRes] = await Promise.all([
-    supabase
-      .from("solar_permits")
-      .select(
-        "facility_name, capacity_kw, operating_status, permit_date, lat, lng",
-      )
-      .eq("pnu", pnu)
-      .order("capacity_kw", { ascending: false })
-      .limit(50),
-    supabase
-      .from("solar_permits")
-      .select("capacity_kw")
-      .eq("bjd_code", bjd_code)
-      .limit(1000),
-  ]);
-
-  if (samePnuRes.error) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
     return NextResponse.json(
-      { ok: false, error: samePnuRes.error.message },
-      { status: 502 },
-    );
-  }
-  if (sameDongRes.error) {
-    return NextResponse.json(
-      { ok: false, error: sameDongRes.error.message },
-      { status: 502 },
+      { ok: false, error: "NEXT_PUBLIC_SUPABASE_URL 환경변수 누락." },
+      { status: 500 },
     );
   }
 
-  const sameDongRows = sameDongRes.data ?? [];
-  const sameDongTotal = sameDongRows.reduce(
+  const objectUrl = `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${bjd_code}.json`;
+
+  const res = await fetch(objectUrl);
+
+  // Supabase Storage 는 객체 미존재 시 HTTP 400 + body 의 statusCode "404" 로 응답.
+  // 즉 res.status 만으론 not-found 판별 불가 — body 파싱 후 분기.
+  if (!res.ok) {
+    let errBody: { statusCode?: string; error?: string; message?: string } | null =
+      null;
+    try {
+      errBody = await res.json();
+    } catch {
+      // JSON 아닌 응답 — 일반 에러로 처리
+    }
+    if (errBody?.statusCode === "404" || errBody?.error === "not_found") {
+      // 그 BJD 에 발전소 0건 (정상 케이스)
+      return emptyResponse(pnu, bjd_code);
+    }
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Storage 응답 ${res.status}${
+          errBody?.message ? `: ${errBody.message}` : ""
+        }`,
+      },
+      { status: 502 },
+    );
+  }
+
+  let rows: SolarRow[];
+  try {
+    rows = (await res.json()) as SolarRow[];
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: `JSON 파싱 실패: ${(e as Error).message}` },
+      { status: 502 },
+    );
+  }
+
+  // same_pnu — 정확히 일치하는 PNU, capacity_kw 내림차순, 50건 제한 (v1 과 동일)
+  const samePnu = rows
+    .filter((r) => r.pnu === pnu)
+    .sort((a, b) => (b.capacity_kw ?? 0) - (a.capacity_kw ?? 0))
+    .slice(0, SAME_PNU_LIMIT)
+    .map((r) => ({
+      facility_name: r.facility_name,
+      capacity_kw: r.capacity_kw,
+      operating_status: r.operating_status,
+      permit_date: r.permit_date,
+      lat: r.lat,
+      lng: r.lng,
+    }));
+
+  // same_dong — 그 BJD 전체 합산 (rows 전체 = 같은 법정동/리)
+  const sameDongCount = rows.length;
+  const sameDongTotal = rows.reduce(
     (s, r) => s + (Number(r.capacity_kw) || 0),
     0,
   );
@@ -100,11 +154,26 @@ export async function GET(request: NextRequest) {
       ok: true,
       pnu,
       bjd_code,
-      same_pnu: samePnuRes.data ?? [],
+      same_pnu: samePnu,
       same_dong: {
-        count: sameDongRows.length,
+        count: sameDongCount,
         total_kw: Math.round(sameDongTotal),
       },
+    },
+    {
+      headers: { "Cache-Control": "private, s-maxage=600, max-age=120" },
+    },
+  );
+}
+
+function emptyResponse(pnu: string, bjd_code: string) {
+  return NextResponse.json(
+    {
+      ok: true,
+      pnu,
+      bjd_code,
+      same_pnu: [],
+      same_dong: { count: 0, total_kw: 0 },
     },
     {
       headers: { "Cache-Control": "private, s-maxage=600, max-age=120" },

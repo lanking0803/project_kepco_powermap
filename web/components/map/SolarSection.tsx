@@ -19,9 +19,11 @@ import {
 
 interface Props {
   pnu: string;
+  /** 동/리 표기 — 예: "장암면 지토리". 빈 값이면 "이" 로 폴백 ("이 일대"). */
+  areaLabel: string;
 }
 
-export default function SolarSection({ pnu }: Props) {
+export default function SolarSection({ pnu, areaLabel }: Props) {
   const [data, setData] = useState<SolarByPnuResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export default function SolarSection({ pnu }: Props) {
               {data.sameDong.count > 0 && (
                 <div>
                   <div className="text-[11px] font-semibold text-gray-700 mb-1">
-                    ◇ 이 동(리) 일대
+                    ◇ {areaLabel || "이"} 일대
                   </div>
                   <div className="text-sm text-gray-900">
                     발전소 <b>{data.sameDong.count.toLocaleString()}</b>개 · 총{" "}

@@ -840,7 +840,7 @@ export const MANIFEST: GeneratedManifest = {
         {
           "method": "GET",
           "meta": {
-            "source": "DB (solar_permits) — data.go.kr NIA 15107742 가 출처, 매월 1일 GH cron 적재",
+            "source": "Storage (solar-permits bucket, public) — data.go.kr NIA 15107742 가 출처, 매월 1일 GH cron 으로 BJD 별 JSON 적재",
             "cache": "private, s-maxage=600, max-age=120",
             "auth": "user",
             "inputs": [
@@ -854,9 +854,9 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "outputSchema": "{ ok, pnu, bjd_code, same_pnu: SolarPermitRow[], same_dong: { count, total_kw } }",
             "externalDeps": [],
-            "notes": "매월 갱신되는 정적 스냅샷이라 캐시 길게(10분) 가능. same_pnu = 같은 필지 정확 매칭, same_dong = 같은 법정동(리) 단위 집계 (영업 멘트용)."
+            "notes": "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). 매월 갱신되는 정적 스냅샷이라 캐시 길게(10분)."
           },
-          "metaLine": 22,
+          "metaLine": 45,
           "metaExportName": "meta"
         }
       ]

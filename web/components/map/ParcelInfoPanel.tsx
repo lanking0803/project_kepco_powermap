@@ -240,7 +240,12 @@ export default function ParcelInfoPanel({
               meta={meta}
             />
           )}
-          {tab === "location" && <LocationTab pnu={jibun.pnu} />}
+          {tab === "location" && (
+            <LocationTab
+              pnu={jibun.pnu}
+              areaLabel={[jibun.emd_nm, jibun.li_nm].filter(Boolean).join(" ")}
+            />
+          )}
           {tab === "regulation" && <RegulationTab />}
         </div>
       )}
@@ -2111,12 +2116,18 @@ function ensureOption(
   return Array.from(set).sort();
 }
 
-function LocationTab({ pnu }: { pnu: string }) {
+function LocationTab({
+  pnu,
+  areaLabel,
+}: {
+  pnu: string;
+  areaLabel: string;
+}) {
   // 입지 = 지리적 / 주변 정보 (참고용). 인허가 가능성 자체는 RegulationTab.
   return (
     <div className="space-y-4 py-1">
-      {/* 1차 — 태양광 발전소 (실제 데이터, solar_permits 테이블) */}
-      <SolarSection pnu={pnu} />
+      {/* 1차 — 태양광 발전소 (Storage 'solar-permits' bucket) */}
+      <SolarSection pnu={pnu} areaLabel={areaLabel} />
 
       {/* 향후 — 2차 개발 예정 항목 */}
       <div className="pt-2 border-t border-gray-100">
