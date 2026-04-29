@@ -52,8 +52,10 @@ import {
 import AddrLine from "./AddrLine";
 import { FacilityCard } from "./FacilityCard";
 import SolarSection from "./SolarSection";
+import type { SolarMarker } from "@/lib/api/solar-permits";
+import OnbidTab from "./onbid/OnbidTab";
 
-type TabKey = "parcel" | "electric" | "price" | "location" | "regulation";
+type TabKey = "parcel" | "electric" | "onbid" | "price" | "location" | "regulation";
 
 interface Props {
   jibun: JibunInfo | null;
@@ -81,6 +83,16 @@ interface Props {
    * (이미 견적 모드 안이라 중복).
    */
   inQuoteMode?: boolean;
+  /**
+   * 공매 모드 진입 시 [공매] 탭이 디폴트로 열리도록 한다.
+   * (전기 모드/일반 진입 시 false → [전기] 탭 디폴트 그대로)
+   */
+  defaultOnbidTab?: boolean;
+  /**
+   * 입지 탭 활성 시 SolarSection 이 응답에서 추출한 좌표 보유 발전소 리스트.
+   * 부모(MapClient) 가 KakaoMap 솔라 마커 prop 으로 전달. 탭 이동/패널 닫힘 시 [] 호출됨.
+   */
+  onSolarMarkers: (markers: SolarMarker[]) => void;
 }
 
 const M2_TO_PYEONG = 0.3025;
@@ -122,6 +134,7 @@ function expandJimok(jimok: string): string {
 const TABS: { key: TabKey; label: string }[] = [
   { key: "parcel", label: "필지" },
   { key: "electric", label: "전기" },
+  { key: "onbid", label: "공매" },
   { key: "price", label: "가격" },
   { key: "location", label: "입지" },
   { key: "regulation", label: "규제" },
@@ -142,8 +155,11 @@ export default function ParcelInfoPanel({
   refreshCapaError,
   polygonCount,
   inQuoteMode,
+  defaultOnbidTab,
+  onSolarMarkers,
 }: Props) {
-  const [tab, setTab] = useState<TabKey>("electric");
+  // 공매 모드 진입 시 [공매] 탭 디폴트, 그 외 [전기] 디폴트.
+  const [tab, setTab] = useState<TabKey>(defaultOnbidTab ? "onbid" : "electric");
 
   // 헤더 주소 출처 우선순위:
   //   1. meta (by-jibun, DB) — 가장 빠르고 권위 있음 (행안부 표준)
@@ -194,19 +210,25 @@ export default function ParcelInfoPanel({
       {/* 탭 */}
       {!loading && jibun && (
         <div className="flex border-b border-gray-200 flex-shrink-0">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex-1 py-2 text-xs font-semibold transition-colors border-b-2 ${
-                tab === t.key
-                  ? "text-blue-600 border-blue-600 bg-white"
-                  : "text-gray-500 border-transparent hover:bg-gray-50"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TABS.map((t) => {
+            const isOnbid = t.key === "onbid";
+            const activeColor = isOnbid
+              ? "text-rose-600 border-rose-600 bg-white"
+              : "text-blue-600 border-blue-600 bg-white";
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 py-2 text-xs font-semibold transition-colors border-b-2 ${
+                  tab === t.key
+                    ? activeColor
+                    : "text-gray-500 border-transparent hover:bg-gray-50"
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -232,6 +254,7 @@ export default function ParcelInfoPanel({
               refreshError={refreshCapaError}
             />
           )}
+          {tab === "onbid" && <OnbidTab pnu={jibun.pnu} />}
           {tab === "price" && (
             <PriceTab
               jibun={jibun}
@@ -244,6 +267,7 @@ export default function ParcelInfoPanel({
             <LocationTab
               pnu={jibun.pnu}
               areaLabel={[jibun.emd_nm, jibun.li_nm].filter(Boolean).join(" ")}
+              onSolarMarkers={onSolarMarkers}
             />
           )}
           {tab === "regulation" && <RegulationTab />}
@@ -2119,15 +2143,21 @@ function ensureOption(
 function LocationTab({
   pnu,
   areaLabel,
+  onSolarMarkers,
 }: {
   pnu: string;
   areaLabel: string;
+  onSolarMarkers: (markers: SolarMarker[]) => void;
 }) {
   // 입지 = 지리적 / 주변 정보 (참고용). 인허가 가능성 자체는 RegulationTab.
   return (
     <div className="space-y-4 py-1">
       {/* 1차 — 태양광 발전소 (Storage 'solar-permits' bucket) */}
-      <SolarSection pnu={pnu} areaLabel={areaLabel} />
+      <SolarSection
+        pnu={pnu}
+        areaLabel={areaLabel}
+        onMarkers={onSolarMarkers}
+      />
 
       {/* 향후 — 2차 개발 예정 항목 */}
       <div className="pt-2 border-t border-gray-100">

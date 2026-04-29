@@ -313,3 +313,55 @@ body.roadview-mode * {
   0%, 100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3); }
   50% { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0), 0 1px 3px rgba(0, 0, 0, 0.3); }
 }
+
+/* ──────────────── 솔라 발전소 마커 (입지 탭 활성 시) ──────────────── */
+/* 태양 아이콘 ☀ + 지번(본번-부번) 라벨. 클릭 = 그 PNU 의 ParcelInfoPanel 이동. */
+.solar-card-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #fef3c7;          /* amber-100 — 따뜻한 노란 (태양광 직관) */
+  border: 1px solid #f59e0b;    /* amber-500 */
+  color: #78350f;               /* amber-900 — 텍스트 가독성 */
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.solar-card-marker:hover {
+  background: #fde68a;          /* amber-200 */
+  transform: scale(1.08);
+  z-index: 1000;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.solar-marker-icon {
+  font-size: 13px;
+  line-height: 1;
+  color: #d97706;               /* amber-600 — 아이콘 강조 */
+  flex-shrink: 0;
+}
+.solar-marker-jibun {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.solar-marker-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dc2626;          /* red-600 — 갯수 배지 */
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 9999px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  margin-left: 1px;
+}

@@ -13,7 +13,7 @@
  * 본 파일에서는 callback stub 만 둔다.
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useIsMobile } from "@/lib/useIsMobile";
 import KakaoMap from "./KakaoMap";
@@ -27,9 +27,16 @@ import GpsTracker from "./GpsTracker";
 import RoadviewPanel from "./RoadviewPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import { MOCK_ITEMS as ONBID_MOCK } from "@/lib/onbid/mock";
+import {
+  groupOnbidItemsByVillage,
+  type OnbidVillageGroup,
+} from "@/lib/onbid/group";
+import OnbidVillageCard from "./onbid/OnbidVillageCard";
+import OnbidVillageModal from "./onbid/OnbidVillageModal";
 import LocationSummaryCard from "./LocationSummaryCard";
 import LocationDetailModal from "./LocationDetailModal";
 import ParcelInfoPanel from "./ParcelInfoPanel";
+import type { SolarMarker } from "@/lib/api/solar-permits";
 import PatentWatermark from "./PatentWatermark";
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import { buildPnuFromBjdAndJibun } from "@/lib/geo/pnu";
@@ -200,11 +207,23 @@ export default function MapClient({ isAdmin, email }: Props) {
 
   // 데이터 모드 (전기 ↔ 공매, 상호 전환). 디폴트 = 전기 (onbidActive=false).
   const [onbidActive, setOnbidActive] = useState(false);
-  /** 검색 결과 = 지도 마커 표시 데이터. ON 시 mock 전체로 초기화. */
+  /** 검색 결과 매물. 사이드바 검색폼이 채움. ON 시 mock 전체로 초기화. */
   const [onbidItems, setOnbidItems] = useState<OnbidListItem[]>([]);
+  /** 빨간 마을 마커 클릭으로 선택된 그룹 — OnbidVillageCard 표시 출처 */
+  const [selectedOnbidVillage, setSelectedOnbidVillage] =
+    useState<OnbidVillageGroup | null>(null);
+  /** [매물 N건 보기] 클릭 시 OnbidVillageModal 표시 토글 */
+  const [onbidModalOpen, setOnbidModalOpen] = useState(false);
+  /** 매물 → 마을 그룹화 결과. 지도 마커 표시 + Card/Modal 데이터 출처. */
+  const onbidVillages = useMemo(
+    () => groupOnbidItemsByVillage(onbidItems),
+    [onbidItems],
+  );
   const setOnbidMode = useCallback((next: boolean) => {
     setOnbidActive(next);
     setOnbidItems(next ? ONBID_MOCK : []);
+    setSelectedOnbidVillage(null);
+    setOnbidModalOpen(false);
   }, []);
 
   const [roadviewActive, setRoadviewActive] = useState(false);
@@ -373,6 +392,9 @@ export default function MapClient({ isAdmin, email }: Props) {
   // ─────────────── 지번 클릭 → /api/parcel/by-pnu + /api/capa/by-jibun ───────────────
   // PNU 직접 구성 (lib/geo/pnu) → VWorld + KEPCO 병렬 조회. exact-only.
   const [selectedJibun, setSelectedJibun] = useState<JibunInfo | null>(null);
+  // 입지 탭 활성 시 SolarSection 이 응답에서 추출한 좌표 보유 발전소 리스트.
+  // 패널 닫힘/탭 이동 시 [] 로 리셋 → KakaoMap 가 마커 정리.
+  const [solarMarkers, setSolarMarkers] = useState<SolarMarker[]>([]);
   const [selectedGeometry, setSelectedGeometry] = useState<ParcelGeometry | null>(
     null,
   );
@@ -380,6 +402,8 @@ export default function MapClient({ isAdmin, email }: Props) {
   const [parcelMeta, setParcelMeta] = useState<AddrMeta | null>(null);
   const [parcelClickedJibun, setParcelClickedJibun] = useState<string>("");
   const [parcelLoading, setParcelLoading] = useState(false);
+  /** 공매 모드에서 진입했는지 — ParcelInfoPanel [공매] 탭 디폴트 활성 여부 */
+  const [parcelOpenedFromOnbid, setParcelOpenedFromOnbid] = useState(false);
   const parcelReqSeqRef = useRef(0);
   const parcelAbortRef = useRef<AbortController | null>(null);
   // 새로고침 상태 — 사용자가 ElectricTab 의 새로고침 아이콘 클릭 시
@@ -410,6 +434,20 @@ export default function MapClient({ isAdmin, email }: Props) {
       setRefreshingCapa(false);
       setRefreshCapaError(null);
       try {
+        // 마을 폴리곤 — 같은 BJD 의 행정구역 테두리. 마을 마커 흐름과 동일 함수 재사용.
+        // fire-and-forget: 폴리곤 실패는 시각 보조라 조용히 무시. lib 캐시 (BJD 키) 가 있어
+        // 이미 그려진 마을이면 추가 API 호출 0 — 새 BJD 첫 방문 시에만 1회 호출.
+        fetchVworldAdminPolygonByBjdCode(row.bjd_code, {
+          signal: controller.signal,
+        })
+          .then((r) => {
+            if (seq !== parcelReqSeqRef.current) return;
+            setVillagePolygon(
+              (r?.polygon as number[][][] | undefined) ?? null,
+            );
+          })
+          .catch(() => {});
+
         const [parcelResult, capaResult] = await Promise.all([
           fetchVworldParcelByPnu(pnu, { signal: controller.signal }),
           fetchKepcoCapaByJibun(row.bjd_code, row.addr_jibun ?? "", {
@@ -448,6 +486,8 @@ export default function MapClient({ isAdmin, email }: Props) {
     setParcelMeta(null);
     setParcelClickedJibun("");
     setParcelLoading(false);
+    setParcelOpenedFromOnbid(false);
+    setSolarMarkers([]);
     if (refreshErrorTimerRef.current) {
       clearTimeout(refreshErrorTimerRef.current);
       refreshErrorTimerRef.current = null;
@@ -605,6 +645,110 @@ export default function MapClient({ isAdmin, email }: Props) {
     [moveMapTo, openVillagePanelOnMarkerClick],
   );
 
+  // 공매 매물 카드 클릭 (Modal) — 매물의 PNU 로 VWorld + KEPCO 병렬 조회.
+  // 결과는 ParcelInfoPanel 로 흘러가 [공매] 탭이 디폴트 활성됨 (defaultOnbidTab).
+  const openParcelPanelOnOnbidItemClick = useCallback(
+    async (onbid: OnbidListItem) => {
+      const pnu = onbid.ltnoPnu;
+      if (!pnu || !/^\d{19}$/.test(pnu)) {
+        setSimpleToast("이 매물의 PNU 가 유효하지 않습니다.");
+        return;
+      }
+      // 모달/카드 정리
+      setOnbidModalOpen(false);
+      setSelectedOnbidVillage(null);
+      // 마을 패널/모달 정리
+      villageReqSeqRef.current++;
+      villageAbortRef.current?.abort();
+      setSelectedVillage(null);
+      setVillagePolygon(null);
+      setDetailModalOpen(false);
+
+      parcelAbortRef.current?.abort();
+      const controller = new AbortController();
+      parcelAbortRef.current = controller;
+      const seq = ++parcelReqSeqRef.current;
+      setParcelLoading(true);
+      setSelectedJibun(null);
+      setSelectedGeometry(null);
+      setParcelCapa([]);
+      setParcelMeta(null);
+      setParcelClickedJibun("");
+      setParcelOpenedFromOnbid(true);
+      setRefreshingCapa(false);
+      setRefreshCapaError(null);
+      try {
+        const bjdCode = pnu.slice(0, 10);
+        const [parcelResult, capaResult] = await Promise.all([
+          fetchVworldParcelByPnu(pnu, { signal: controller.signal }),
+          fetchKepcoCapaByBjdCode(bjdCode, { signal: controller.signal }).catch(
+            () => [] as KepcoDataRow[],
+          ),
+        ]);
+        if (seq !== parcelReqSeqRef.current) return;
+        if (!parcelResult) {
+          setSimpleToast(`⚠️ 매물 필지 정보를 찾을 수 없어요`);
+          return;
+        }
+        setSelectedJibun(parcelResult.jibun);
+        setSelectedGeometry(parcelResult.geometry);
+        setParcelCapa(Array.isArray(capaResult) ? capaResult : []);
+        setParcelClickedJibun(parcelResult.jibun.jibun);
+        const c = parcelResult.geometry.center;
+        if (c?.lat != null) moveMapToRef.current?.(c.lat, c.lng);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        if (seq === parcelReqSeqRef.current) {
+          setSimpleToast("매물 조회 중 오류가 발생했어요");
+        }
+      } finally {
+        if (seq === parcelReqSeqRef.current) setParcelLoading(false);
+      }
+    },
+    [],
+  );
+
+  // 공매 마을 마커 클릭 — 동 폴리곤 음영 + OnbidVillageCard 표시.
+  // 전기와 동일한 폴리곤 호출 재활용. 매물 데이터는 이미 그룹에 있음 (별도 fetch 없음).
+  const openOnbidVillage = useCallback(
+    async (key: string) => {
+      const group = onbidVillages.find((g) => g.key === key);
+      if (!group) return;
+
+      // 다른 패널들 정리
+      villageReqSeqRef.current++;
+      villageAbortRef.current?.abort();
+      setSelectedVillage(null);
+      setDetailModalOpen(false);
+      // 지번 패널 닫기 (열려있으면)
+      closeParcelPanelRef.current?.();
+
+      setSelectedOnbidVillage(group);
+      moveMapToRef.current?.(group.lat, group.lng);
+
+      // 동 폴리곤 — 매물 PNU 앞 10자리 (모두 동일 동이라 첫 매물 사용).
+      const firstPnu = group.items[0]?.ltnoPnu;
+      if (firstPnu && /^\d{19}$/.test(firstPnu)) {
+        const bjdCode = firstPnu.slice(0, 10);
+        try {
+          const polyRes = await fetchVworldAdminPolygonByBjdCode(bjdCode);
+          setVillagePolygon(
+            (polyRes?.polygon as number[][][] | undefined) ?? null,
+          );
+        } catch {
+          setVillagePolygon(null);
+        }
+      }
+    },
+    [onbidVillages],
+  );
+
+  const closeOnbidVillage = useCallback(() => {
+    setSelectedOnbidVillage(null);
+    setOnbidModalOpen(false);
+    setVillagePolygon(null);
+  }, []);
+
   // 지도 좌표 클릭 (좌표 → 필지). VWorld 가 BBOX → point-in-polygon 으로 정확 1필지 선별.
   // 응답 jibun.pnu 의 앞 10자리가 bjd_code → 그것으로 KEPCO 용량 추가 호출 (직렬, PNU dependency).
   // 지번 클릭과 parcelAbortRef/parcelReqSeqRef 공유 (지번 패널이 한 개라 동일 race 가드).
@@ -708,13 +852,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         panelResetKey={panelResetKey}
         onbidActive={onbidActive}
         onOnbidResults={setOnbidItems}
-        onOnbidItemClick={(item) => {
-          if (item.lat != null && item.lng != null && mapInstance) {
-            mapInstance.panTo(
-              new (window as any).kakao.maps.LatLng(item.lat, item.lng),
-            );
-          }
-        }}
+        onOnbidItemClick={openParcelPanelOnOnbidItemClick}
       />
 
       <main className="flex-1 flex min-w-0">
@@ -790,11 +928,25 @@ export default function MapClient({ isAdmin, email }: Props) {
             highlightedParcel={selectedGeometry?.polygon ?? null}
             villagePolygon={villagePolygon}
             onbidActive={onbidActive}
-            onbidItems={onbidItems}
-            onOnbidItemClick={(cltrMngNo) => {
-              // UI-6: ParcelInfoPanel [공매] 탭 호출. 일단 mock 콘솔 로그.
-              const item = onbidItems.find((i) => i.cltrMngNo === cltrMngNo);
-              if (item) console.log("[onbid] 마커 클릭", item);
+            onbidVillages={onbidVillages.map((g) => ({
+              key: g.key,
+              lat: g.lat,
+              lng: g.lng,
+              count: g.items.length,
+              hasUrgent: g.hasUrgent,
+              emdName: g.emd,
+              minDaysLeft: g.minDaysLeft,
+            }))}
+            onOnbidVillageClick={openOnbidVillage}
+            solarMarkers={solarMarkers}
+            onSolarMarkerClick={(marker) => {
+              // 기존 Sidebar 지번 클릭 흐름 그대로 재사용 — marker.pnu 직접 사용 (좌표 변환 X)
+              openParcelPanelOnJibunClick({
+                bjd_code: marker.pnu.slice(0, 10),
+                addr_jibun: marker.jibun,
+                lat: marker.lat,
+                lng: marker.lng,
+              } as KepcoDataRow);
             }}
           />
 
@@ -990,6 +1142,30 @@ export default function MapClient({ isAdmin, email }: Props) {
               onRefreshCapa={refreshParcelCapa}
               refreshingCapa={refreshingCapa}
               refreshCapaError={refreshCapaError}
+              defaultOnbidTab={parcelOpenedFromOnbid}
+              onSolarMarkers={setSolarMarkers}
+            />
+          )}
+
+          {/* 공매 마을 요약 카드 — 빨간 마커 클릭, 지번 패널 떠있으면 숨김 */}
+          {selectedOnbidVillage &&
+            !onbidModalOpen &&
+            !selectedJibun &&
+            !parcelLoading && (
+              <OnbidVillageCard
+                key={selectedOnbidVillage.key}
+                group={selectedOnbidVillage}
+                onShowDetail={() => setOnbidModalOpen(true)}
+                onClose={closeOnbidVillage}
+              />
+            )}
+
+          {/* 공매 마을 매물 리스트 모달 */}
+          {onbidModalOpen && selectedOnbidVillage && (
+            <OnbidVillageModal
+              group={selectedOnbidVillage}
+              onClose={() => setOnbidModalOpen(false)}
+              onItemClick={openParcelPanelOnOnbidItemClick}
             />
           )}
 

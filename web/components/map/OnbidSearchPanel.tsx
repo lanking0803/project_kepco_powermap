@@ -367,54 +367,89 @@ function ResultCard({
   const apslMan = Math.round(item.apslEvlAmt / 10000);
   const lowstMan = Math.round(item.lowstBidPrc / 10000);
   const discountPct = Math.round(item.discountRatio * 100);
+  const jibun = jibunFromPnu(item.ltnoPnu);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2 border-b border-gray-200 hover:bg-rose-50 transition-colors ${
+    <div
+      className={`w-full px-3 py-2 border-b border-gray-200 transition-colors ${
         item.isUrgent ? "bg-rose-50/60" : "bg-white"
-      }`}
+      } hover:bg-rose-50`}
     >
-      <div className="flex items-center gap-1.5 mb-0.5">
-        {item.isUrgent ? (
-          <span className="text-[9px] px-1 py-px bg-rose-600 text-white rounded font-bold animate-pulse">
-            D-{item.daysLeft}
-          </span>
-        ) : item.daysLeft >= 0 ? (
-          <span className="text-[9px] px-1 py-px bg-gray-100 text-gray-600 rounded">
-            D-{item.daysLeft}
-          </span>
-        ) : (
-          <span className="text-[9px] px-1 py-px bg-gray-300 text-gray-700 rounded">
-            마감
-          </span>
-        )}
-        {item.ourCategory && (
-          <span className="text-[9px] px-1 py-px bg-blue-50 text-blue-700 rounded">
-            {OUR_CATEGORY_LABEL[item.ourCategory]}
-          </span>
-        )}
-        <span className="text-[9px] text-gray-400 ml-auto">
-          {item.lctnSdnm} {item.lctnSggnm}
-        </span>
+      <div className="flex items-stretch gap-2">
+        {/* 좌측 본문 — 카드 클릭으로 ParcelInfoPanel 매물 PNU 흐름 */}
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex-1 min-w-0 text-left active:opacity-70"
+        >
+          <div className="flex items-center gap-1.5 mb-0.5">
+            {item.isUrgent ? (
+              <span className="text-[9px] px-1 py-px bg-rose-600 text-white rounded font-bold animate-pulse">
+                D-{item.daysLeft}
+              </span>
+            ) : item.daysLeft >= 0 ? (
+              <span className="text-[9px] px-1 py-px bg-gray-100 text-gray-600 rounded">
+                D-{item.daysLeft}
+              </span>
+            ) : (
+              <span className="text-[9px] px-1 py-px bg-gray-300 text-gray-700 rounded">
+                마감
+              </span>
+            )}
+            {item.ourCategory && (
+              <span className="text-[9px] px-1 py-px bg-blue-50 text-blue-700 rounded">
+                {OUR_CATEGORY_LABEL[item.ourCategory]}
+              </span>
+            )}
+            <span className="text-[9px] text-gray-400 ml-auto">
+              {item.lctnSdnm} {item.lctnSggnm}
+            </span>
+          </div>
+          <div className="text-[11px] text-gray-900 font-semibold leading-tight mb-1 truncate">
+            {item.onbidCltrNm}
+          </div>
+          <div className="flex items-center gap-2 text-[10px]">
+            <span className="text-gray-400 line-through tabular-nums">
+              {apslMan.toLocaleString()}만
+            </span>
+            <span className="text-rose-700 font-bold tabular-nums">
+              → {lowstMan.toLocaleString()}만
+            </span>
+            <span className="text-emerald-600 font-semibold">
+              {discountPct}% ↓
+            </span>
+            {item.usbdNft != null && item.usbdNft > 0 && (
+              <span className="text-gray-500 ml-auto">유찰 {item.usbdNft}회</span>
+            )}
+          </div>
+        </button>
+
+        {/* 우측 — 📍 지번 핀 (전기 SearchResultList 패턴 미러) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          className="flex-shrink-0 inline-flex items-center gap-0.5 self-center px-2 py-1 rounded text-rose-600 font-semibold hover:bg-rose-100 active:bg-rose-200 transition-colors text-xs"
+          title="지도에서 이 지번 위치 보기"
+        >
+          <span className="text-[10px]">📍</span>
+          <span className="tabular-nums">{jibun}</span>
+        </button>
       </div>
-      <div className="text-[11px] text-gray-900 font-semibold leading-tight mb-1 truncate">
-        {item.onbidCltrNm}
-      </div>
-      <div className="flex items-center gap-2 text-[10px]">
-        <span className="text-gray-400 line-through tabular-nums">
-          {apslMan.toLocaleString()}만
-        </span>
-        <span className="text-rose-700 font-bold tabular-nums">
-          → {lowstMan.toLocaleString()}만
-        </span>
-        <span className="text-emerald-600 font-semibold">
-          {discountPct}% ↓
-        </span>
-        {item.usbdNft != null && item.usbdNft > 0 && (
-          <span className="text-gray-500 ml-auto">유찰 {item.usbdNft}회</span>
-        )}
-      </div>
-    </button>
+    </div>
   );
+}
+
+/**
+ * PNU 19자리 → 지번 텍스트.
+ * 산구분: 11번째 글자 1=일반, 2=산. 부번 0이면 본번만.
+ */
+function jibunFromPnu(pnu: string): string {
+  if (!/^\d{19}$/.test(pnu)) return "—";
+  const isSan = pnu.charAt(10) === "2";
+  const bonbun = parseInt(pnu.slice(11, 15), 10);
+  const bubun = parseInt(pnu.slice(15, 19), 10);
+  const text = bubun > 0 ? `${bonbun}-${bubun}` : `${bonbun}`;
+  return isSan ? `산${text}` : text;
 }

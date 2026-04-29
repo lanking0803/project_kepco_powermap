@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MapSummaryRow, MarkerColor } from "@/lib/types";
+import type { SolarMarker } from "@/lib/api/solar-permits";
 import {
   colorForMarker,
   ratiosForMarker,
@@ -18,18 +19,20 @@ declare global {
   }
 }
 
-/** 공매 매물 마커 1건 — KakaoMap 에 전달되는 최소 필드. OnbidListItem 과 호환. */
-export interface OnbidMarkerData {
-  cltrMngNo: string;
-  lat: number | null;
-  lng: number | null;
-  daysLeft: number;
-  isUrgent: boolean;
-  onbidCltrNm: string;
-  /** 동/리/면 명 — 가까운 줌 카드 라벨용 (캠코 lctnEmdNm) */
-  lctnEmdNm: string;
-  /** 최저입찰가 — 가까운 줌 카드 라벨용 (원) */
-  lowstBidPrc: number;
+/** 공매 마을 마커 1개 — 같은 동의 매물 N건을 묶은 그룹. */
+export interface OnbidVillageMarkerData {
+  /** 그룹 키 (시도|시군구|동) — 클릭 콜백 식별자 */
+  key: string;
+  lat: number;
+  lng: number;
+  /** 그룹 내 매물 수 — 마커 안 숫자 + 카드 배지 */
+  count: number;
+  /** D-3 이내 매물 1건 이상 보유 — 펄스 강조용 */
+  hasUrgent: boolean;
+  /** 동/면/읍 명 — 가까운 줌 카드 라벨용 */
+  emdName: string;
+  /** 가장 임박한 D-day (마감 제외). 모두 마감이면 null */
+  minDaysLeft: number | null;
 }
 
 interface Props {
@@ -95,12 +98,22 @@ interface Props {
    */
   onbidActive?: boolean;
   /**
-   * 공매 매물 마커 — 검색 결과. 빈 배열이면 표시 X.
-   * 각 매물 lat/lng 가 동/리 단위 좌표 (bjd_master), 같은 동 매물은 같은 위치.
+   * 공매 마을 마커 — 매물을 동 단위로 그룹화한 결과. 빈 배열이면 표시 X.
+   * 각 마을은 1 마커, count 가 매물 수.
    */
-  onbidItems?: OnbidMarkerData[];
-  /** 매물 마커 클릭 콜백 — ParcelInfoPanel 의 [공매] 탭 호출용 (UI-6) */
-  onOnbidItemClick?: (cltrMngNo: string) => void;
+  onbidVillages?: OnbidVillageMarkerData[];
+  /** 마을 마커 클릭 콜백 — group key 전달, MapClient 가 OnbidVillageCard 표시 */
+  onOnbidVillageClick?: (key: string) => void;
+  /**
+   * 솔라 발전소 마커 — 입지 탭 활성 시 같은 리(BJD)의 좌표 보유 발전소들.
+   * 같은 PNU 는 1 마커 + 갯수 배지.
+   */
+  solarMarkers?: SolarMarker[];
+  /**
+   * 솔라 마커 클릭 콜백 — marker.pnu 직접 사용 (좌표 변환 우회).
+   * MapClient 가 기존 openParcelPanelOnJibunClick 그대로 재사용.
+   */
+  onSolarMarkerClick?: (marker: SolarMarker) => void;
 }
 
 /**
@@ -366,8 +379,10 @@ export default function KakaoMap({
   highlightedParcel = null,
   villagePolygon = null,
   onbidActive = false,
-  onbidItems = [],
-  onOnbidItemClick,
+  onbidVillages = [],
+  onOnbidVillageClick,
+  solarMarkers = [],
+  onSolarMarkerClick,
 }: Props) {
   // 지적편집도/필지 콜백 — 클로저 stale 방지
   const onParcelClickRef = useRef(onParcelClick);
@@ -393,13 +408,18 @@ export default function KakaoMap({
   const labelOverlaysRef = useRef<any[]>([]);
   // 줌 변경 리스너 핸들 (마커 effect 재실행 시 정리)
   const zoomListenerRef = useRef<any>(null);
-  // 공매 매물 마커 오버레이 — onbidItems 변경 시 재구성
+  // 공매 마을 마커 오버레이 — onbidVillages 변경 시 재구성
   const onbidOverlaysRef = useRef<any[]>([]);
+  // 솔라 발전소 마커 오버레이 — solarMarkers 변경 시 재구성 (입지 탭 토글)
+  const solarOverlaysRef = useRef<any[]>([]);
+  // 솔라 마커 클릭 콜백 — 클로저 stale 방지
+  const onSolarMarkerClickRef = useRef(onSolarMarkerClick);
+  onSolarMarkerClickRef.current = onSolarMarkerClick;
   // 공매 rebuild 함수 (props 갱신 시 closure 갱신용 ref)
   const onbidRebuildRef = useRef<() => void>(() => {});
-  // 공매 마커 클릭 콜백 — 클로저 stale 방지
-  const onOnbidClickRef = useRef(onOnbidItemClick);
-  onOnbidClickRef.current = onOnbidItemClick;
+  // 공매 마을 마커 클릭 콜백 — 클로저 stale 방지
+  const onOnbidClickRef = useRef(onOnbidVillageClick);
+  onOnbidClickRef.current = onOnbidVillageClick;
   // 마커 참조 맵 (geocode_address → kakao.maps.Marker) — 선택 변경 시 이미지 교체용
   const markersByAddrRef = useRef<Map<string, { marker: any; row: MapSummaryRow }>>(
     new Map()
@@ -949,17 +969,7 @@ export default function KakaoMap({
   // 같은 동 매물 여러 건이면 같은 위치 — 그룹화하여 배지(매물 수) 표시.
   // ─────────────────────────────────────────────
 
-  // 가격 포맷 헬퍼 — 8.6억 / 9,800만 / 200만
-  const formatPrice = (won: number): string => {
-    if (won >= 100_000_000) {
-      const eok = won / 100_000_000;
-      return eok >= 10 ? `${Math.round(eok)}억` : `${eok.toFixed(1)}억`;
-    }
-    if (won >= 10_000) return `${Math.round(won / 10_000).toLocaleString()}만`;
-    return `${won.toLocaleString()}원`;
-  };
-
-  // rebuild 함수 — 최신 props 반영
+  // rebuild 함수 — 최신 props 반영. 그룹화는 부모(MapClient) 가 이미 한 상태.
   useEffect(() => {
     onbidRebuildRef.current = () => {
       const map = mapInstanceRef.current;
@@ -969,51 +979,30 @@ export default function KakaoMap({
       onbidOverlaysRef.current.forEach((o) => o.setMap(null));
       onbidOverlaysRef.current = [];
 
-      // 공매 모드 OFF or 데이터 없음 → 아무것도 안 그림
-      if (!onbidActive || !onbidItems || onbidItems.length === 0) return;
-
-      const valid = onbidItems.filter(
-        (i) => i.lat != null && i.lng != null,
-      ) as (OnbidMarkerData & { lat: number; lng: number })[];
-      if (valid.length === 0) return;
-
-      // 같은 좌표 그룹화 (lat/lng 4자리 반올림 키) — 배지 카운트용
-      const groups = new Map<
-        string,
-        { items: typeof valid; lat: number; lng: number }
-      >();
-      for (const it of valid) {
-        const key = `${it.lat.toFixed(4)},${it.lng.toFixed(4)}`;
-        const g = groups.get(key);
-        if (g) g.items.push(it);
-        else groups.set(key, { items: [it], lat: it.lat, lng: it.lng });
-      }
+      if (!onbidActive || !onbidVillages || onbidVillages.length === 0) return;
 
       const level = map.getLevel();
       const showCard = level <= LABEL_VISIBLE_LEVEL;
 
-      if (showCard) {
-        // 가까운 줌 — 카드 오버레이.
-        // 같은 좌표 그룹은 대표 1건으로 표시하되 배지에 그룹 크기 노출.
-        groups.forEach((g) => {
-          // 그룹 내 임박/마감 우선순위: urgent > active > ended
-          const urgent = g.items.find((i) => i.isUrgent && i.daysLeft >= 0);
-          const active = g.items.find((i) => i.daysLeft >= 0 && !i.isUrgent);
-          const rep = urgent ?? active ?? g.items[0];
-          const dayLabel = rep.daysLeft < 0 ? "마감" : `D-${rep.daysLeft}`;
-          const labelText = rep.lctnEmdNm || "";
-          const priceLabel = rep.lowstBidPrc > 0 ? formatPrice(rep.lowstBidPrc) : "";
+      onbidVillages.forEach((v) => {
+        const position = new window.kakao.maps.LatLng(v.lat, v.lng);
+        const safeKey = v.key.replace(/"/g, "&quot;");
+
+        if (showCard) {
+          // 가까운 줌 — 카드. D-day 대신 매물 수 강조.
+          const dayLabel =
+            v.minDaysLeft == null ? "마감" : `D-${v.minDaysLeft}`;
           const html = makeOnbidCardHtml(
-            rep.cltrMngNo,
+            safeKey,
             dayLabel,
-            g.items.length,
-            !!urgent,
-            rep.daysLeft < 0,
-            labelText,
-            priceLabel,
+            v.count,
+            v.hasUrgent,
+            v.minDaysLeft == null,
+            v.emdName,
+            `${v.count}건`,
           );
           const overlay = new window.kakao.maps.CustomOverlay({
-            position: new window.kakao.maps.LatLng(g.lat, g.lng),
+            position,
             content: html,
             yAnchor: 1,
             xAnchor: 0.5,
@@ -1021,17 +1010,9 @@ export default function KakaoMap({
           });
           overlay.setMap(map);
           onbidOverlaysRef.current.push(overlay);
-        });
-      } else {
-        // 먼 줌 — 빨간 원 CustomOverlay (SDK 기본 파란 핀 회피).
-        // 매물 수가 검색 결과 수백 건 수준이라 클러스터러 없이 직접 그려도 성능 OK.
-        groups.forEach((g) => {
-          const position = new window.kakao.maps.LatLng(g.lat, g.lng);
-          const rep = g.items[0];
-          const safeId = rep.cltrMngNo.replace(/"/g, "&quot;");
-          const count = g.items.length;
-          const isUrgent = g.items.some((i) => i.isUrgent && i.daysLeft >= 0);
-          const dotHtml = `<div class="onbid-dot${isUrgent ? " urgent" : ""}" data-onbid-id="${safeId}">${count > 1 ? count : ""}</div>`;
+        } else {
+          // 먼 줌 — 빨간 원. 안에 매물 수.
+          const dotHtml = `<div class="onbid-dot${v.hasUrgent ? " urgent" : ""}" data-onbid-id="${safeKey}">${v.count > 1 ? v.count : ""}</div>`;
           const dotOverlay = new window.kakao.maps.CustomOverlay({
             position,
             content: dotHtml,
@@ -1041,16 +1022,96 @@ export default function KakaoMap({
           });
           dotOverlay.setMap(map);
           onbidOverlaysRef.current.push(dotOverlay);
-        });
-      }
+        }
+      });
     };
-  }, [onbidActive, onbidItems]);
+  }, [onbidActive, onbidVillages]);
 
   // 공매 모드/데이터 변경 시 rebuild 직접 호출
   useEffect(() => {
     if (!loaded || !mapInstanceRef.current) return;
     onbidRebuildRef.current();
-  }, [loaded, onbidActive, onbidItems]);
+  }, [loaded, onbidActive, onbidVillages]);
+
+  // ─────────────────── 솔라 발전소 마커 ───────────────────
+  // 입지 탭 활성 시 같은 리(BJD) 발전소들을 마커로 표시.
+  // 같은 PNU 의 발전소는 1개 마커 + 갯수 배지로 그룹화.
+  // 클릭 → onParcelClickRef (지도 클릭과 동일 흐름) → ParcelInfoPanel 그 PNU 로 이동.
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // 기존 솔라 오버레이 정리
+    solarOverlaysRef.current.forEach((o) => o.setMap(null));
+    solarOverlaysRef.current = [];
+
+    if (!solarMarkers || solarMarkers.length === 0) return;
+
+    // PNU 단위 그룹화 — 같은 필지에 발전소 여러 개면 1 마커 + 갯수 배지
+    interface SolarGroup {
+      lat: number;
+      lng: number;
+      jibun: string;
+      count: number;
+      totalKw: number;
+      names: string[];
+      first: SolarMarker; // 클릭 시 그대로 onSolarMarkerClick 으로 forward
+    }
+    const groups = new Map<string, SolarGroup>();
+    for (const m of solarMarkers) {
+      const existing = groups.get(m.pnu);
+      if (existing) {
+        existing.count += 1;
+        existing.totalKw += m.kw ?? 0;
+        if (existing.names.length < 3) existing.names.push(m.name);
+      } else {
+        groups.set(m.pnu, {
+          lat: m.lat,
+          lng: m.lng,
+          jibun: m.jibun,
+          count: 1,
+          totalKw: m.kw ?? 0,
+          names: [m.name],
+          first: m,
+        });
+      }
+    }
+
+    groups.forEach((g) => {
+      const div = document.createElement("div");
+      div.className = "solar-card-marker";
+      const tooltip =
+        g.names.join(" / ") +
+        (g.totalKw > 0 ? ` (${g.totalKw.toFixed(0)} kW)` : "");
+      div.title = tooltip;
+      const badge =
+        g.count > 1
+          ? `<span class="solar-marker-badge">${g.count}</span>`
+          : "";
+      div.innerHTML = `<span class="solar-marker-icon">☀</span><span class="solar-marker-jibun">${g.jibun}</span>${badge}`;
+      div.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // marker.pnu 그대로 전달 — MapClient 가 기존 jibun 클릭 흐름 재사용
+        onSolarMarkerClickRef.current?.(g.first);
+      });
+
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position: new window.kakao.maps.LatLng(g.lat, g.lng),
+        content: div,
+        yAnchor: 0.5,
+        xAnchor: 0.5,
+        zIndex: 200, // 공매 (50/100) 위에
+        clickable: true, // SDK 가 클릭 가능 영역으로 인식 → 지도 click 이벤트 차단 (이중 fetch 방지)
+      });
+      overlay.setMap(map);
+      solarOverlaysRef.current.push(overlay);
+    });
+
+    return () => {
+      solarOverlaysRef.current.forEach((o) => o.setMap(null));
+      solarOverlaysRef.current = [];
+    };
+  }, [loaded, solarMarkers]);
 
   // 줌 변경 시 공매 rebuild (카드 ↔ 클러스터 전환)
   useEffect(() => {
