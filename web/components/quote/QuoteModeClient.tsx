@@ -83,7 +83,6 @@ import { getRepayMonths } from "@/lib/quote/finance";
 import ParcelInfoPanel from "@/components/map/ParcelInfoPanel";
 import QuoteMap, { type EditableBuilding } from "./QuoteMap";
 import FinanceTable from "./FinanceTable";
-import RegulationsCard from "./RegulationsCard";
 
 const M2_TO_PYEONG = 0.3025;
 
@@ -832,16 +831,13 @@ export default function QuoteModeClient({ pnu }: Props) {
             onClick={() => toggleStep(0)}
           />
           {activeStep === 0 && (
-            <>
-              <ParcelInfoPanel
-                pnu={pnu}
-                onClose={() => {}}
-                polygonCount={loadingBuildings ? undefined : buildings.length}
-                inQuoteMode
-                onSolarMarkers={() => {}}
-              />
-              <RegulationsCard pnu={pnu} />
-            </>
+            <ParcelInfoPanel
+              pnu={pnu}
+              onClose={() => {}}
+              polygonCount={loadingBuildings ? undefined : buildings.length}
+              inQuoteMode
+              onSolarMarkers={() => {}}
+            />
           )}
           <SectionHeader
             step={1}

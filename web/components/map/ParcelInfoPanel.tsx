@@ -57,6 +57,7 @@ import { FacilityCard } from "./FacilityCard";
 import SolarSection from "./SolarSection";
 import type { SolarMarker } from "@/lib/api/solar-permits";
 import OnbidTab from "./onbid/OnbidTab";
+import RegulationsCard from "@/components/quote/RegulationsCard";
 
 type TabKey = "parcel" | "electric" | "onbid" | "price" | "location" | "regulation";
 
@@ -302,7 +303,7 @@ export default function ParcelInfoPanel({
               onSolarMarkers={onSolarMarkers}
             />
           )}
-          {tab === "regulation" && <RegulationTab />}
+          {tab === "regulation" && <RegulationsCard pnu={pnu} />}
         </div>
       )}
     </div>
@@ -2251,21 +2252,6 @@ function LocationTab({
           <li>주변 도로 거리 (도로 SHP)</li>
         </ul>
       </div>
-    </div>
-  );
-}
-
-function RegulationTab() {
-  // 규제 = 인허가 가능성 deal-breaker. 3차 핵심 차별화 (이격거리·조례).
-  return (
-    <div className="py-2">
-      <div className="text-[11px] text-gray-400 mb-1.5">3차 개발 예정</div>
-      <ul className="text-[11px] text-gray-500 space-y-0.5 pl-3 list-disc">
-        <li>주택 5가구 500m 이격 판정</li>
-        <li>도로 200m 이격 판정</li>
-        <li>시도별 조례 적용 결과</li>
-        <li>보호구역 (보전산지/농업진흥지역)</li>
-      </ul>
     </div>
   );
 }
