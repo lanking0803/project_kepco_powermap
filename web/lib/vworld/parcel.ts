@@ -336,8 +336,11 @@ function extractPolygonCoords(geom: Polygon | MultiPolygon): Position[][] {
 export async function getParcelByPnu(
   pnu: string,
 ): Promise<ParcelResult | null> {
+  // [DIAG-2026-04-30] 진단 로그 — region/타이밍/응답 상태 확인용. 원인 확정 후 제거.
+  const region = process.env.VERCEL_REGION || "local";
+  const t0 = Date.now();
   if (!VWORLD_KEY) {
-    console.error("[VWorld Parcel] VWORLD_KEY 미설정");
+    console.error(`[DIAG by-pnu] VWORLD_KEY 미설정 region=${region}`);
     return null;
   }
   const cleaned = (pnu || "").trim();
@@ -363,6 +366,8 @@ export async function getParcelByPnu(
     FILTER: filter,
   });
 
+  console.log(`[DIAG by-pnu] start pnu=${cleaned} region=${region}`);
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -371,19 +376,41 @@ export async function getParcelByPnu(
       headers: { Referer: `https://${VWORLD_DOMAIN}` },
     });
     clearTimeout(timer);
+    const elapsed = Date.now() - t0;
     if (!res.ok) {
-      console.error(`[VWorld Parcel PNU] HTTP ${res.status} (${cleaned})`);
+      const bodyPreview = await res.text().then((t) => t.slice(0, 200)).catch(() => "(read fail)");
+      console.error(
+        `[DIAG by-pnu] HTTP ${res.status} pnu=${cleaned} region=${region} elapsed=${elapsed}ms body="${bodyPreview}"`,
+      );
       return null;
     }
-    const data = (await res.json()) as WfsResponse;
+    const rawText = await res.text();
+    let data: WfsResponse;
+    try {
+      data = JSON.parse(rawText) as WfsResponse;
+    } catch (parseErr) {
+      console.error(
+        `[DIAG by-pnu] JSON parse fail pnu=${cleaned} region=${region} elapsed=${elapsed}ms bodyLen=${rawText.length} preview="${rawText.slice(0, 200)}"`,
+      );
+      return null;
+    }
+    const featuresLen = data.features?.length ?? 0;
+    console.log(
+      `[DIAG by-pnu] ok pnu=${cleaned} region=${region} elapsed=${elapsed}ms featuresLen=${featuresLen}`,
+    );
     const match = data.features?.[0];
     if (!match) return null;
     return splitParcelFeature(match);
   } catch (err) {
+    const elapsed = Date.now() - t0;
     if ((err as Error).name === "AbortError") {
-      console.error(`[VWorld Parcel PNU] 타임아웃 ${TIMEOUT_MS}ms (${cleaned})`);
+      console.error(
+        `[DIAG by-pnu] ABORT timeout=${TIMEOUT_MS}ms pnu=${cleaned} region=${region} elapsed=${elapsed}ms`,
+      );
     } else {
-      console.error(`[VWorld Parcel PNU] 호출 실패 (${cleaned}):`, err);
+      console.error(
+        `[DIAG by-pnu] EXCEPTION pnu=${cleaned} region=${region} elapsed=${elapsed}ms err=${(err as Error)?.name}:${(err as Error)?.message}`,
+      );
     }
     return null;
   } finally {
