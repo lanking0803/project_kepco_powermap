@@ -88,9 +88,16 @@ export async function searchOrdinancesByQuery(
   const startedAt = Date.now();
 
   try {
+    // 법제처 OPEN API 는 도메인 등록제 — 서버사이드 fetch 는 Referer/Origin 이
+    // 안 붙어서 거부될 수 있으므로 명시적으로 등록 도메인 헤더 부착.
     const res = await fetch(`${SEARCH_URL}?${params.toString()}`, {
       signal: controller.signal,
       cache: "no-store",
+      headers: {
+        Referer: "https://sunlap.kr/",
+        Origin: "https://sunlap.kr",
+        "User-Agent": "Mozilla/5.0 (sunlap.kr 견적 모드)",
+      },
     });
     clearTimeout(timer);
     const elapsed = Date.now() - startedAt;
