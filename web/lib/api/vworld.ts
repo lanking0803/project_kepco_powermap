@@ -48,6 +48,9 @@ interface FetchOptions {
 
 const parcelByPnuCache = new Map<string, ParcelLookupResult | null>();
 const polygonByBjdCache = new Map<string, AdminPolygonResult | null>();
+// inflight Promise 캐시 — 같은 PNU 동시 호출(MapClient + ParcelInfoPanel + StrictMode 등)
+// 시 첫 호출의 Promise 를 재사용해 fetch 1회로 합침. resolve 후엔 결과 캐시로 이관.
+const parcelByPnuInflight = new Map<string, Promise<ParcelLookupResult | null>>();
 
 /** /api/parcel/by-pnu — PNU 19자리 → 필지. 캐시 키 = PNU. null 결과도 캐시 (재호출 방지) */
 export async function fetchVworldParcelByPnu(
@@ -56,17 +59,28 @@ export async function fetchVworldParcelByPnu(
 ): Promise<ParcelLookupResult | null> {
   if (parcelByPnuCache.has(pnu)) return parcelByPnuCache.get(pnu)!;
 
-  const res = await fetch(`/api/parcel/by-pnu?pnu=${encodeURIComponent(pnu)}`, {
-    signal: options?.signal,
+  // 같은 PNU 동시 호출은 첫 fetch Promise 를 공유 (signal 은 첫 호출 것만 적용)
+  const existing = parcelByPnuInflight.get(pnu);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const res = await fetch(`/api/parcel/by-pnu?pnu=${encodeURIComponent(pnu)}`, {
+      signal: options?.signal,
+    });
+    const data = (await res.json()) as ParcelApiResponse;
+    if (!data.ok) throw new Error(data.error || "필지(PNU) 조회 실패");
+    const result =
+      data.jibun && data.geometry
+        ? { jibun: data.jibun, geometry: data.geometry }
+        : null;
+    parcelByPnuCache.set(pnu, result);
+    return result;
+  })().finally(() => {
+    parcelByPnuInflight.delete(pnu);
   });
-  const data = (await res.json()) as ParcelApiResponse;
-  if (!data.ok) throw new Error(data.error || "필지(PNU) 조회 실패");
-  const result =
-    data.jibun && data.geometry
-      ? { jibun: data.jibun, geometry: data.geometry }
-      : null;
-  parcelByPnuCache.set(pnu, result);
-  return result;
+
+  parcelByPnuInflight.set(pnu, promise);
+  return promise;
 }
 
 /** /api/parcel/by-latlng — 좌표 → 필지 (캐시 X, 좌표 픽셀마다 다름) */
