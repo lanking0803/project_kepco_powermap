@@ -358,6 +358,12 @@ export default function QuoteModeClient({ pnu }: Props) {
   const [placementOverrides, setPlacementOverrides] = useState<
     Record<string, PlacementSpec>
   >({});
+  /** 동별 회전각 사용자 변경 (degrees, 0~180).
+   *  미설정이면 calcAutoRotation(시설 회전 규칙) 결과 사용.
+   *  시설 종류가 바뀌면 자동 클리어. 핸들 드래그/우측 카드 ↺ 로 조작. */
+  const [rotationOverrides, setRotationOverrides] = useState<
+    Record<string, number>
+  >({});
   /** 단가/이격거리 인라인 편집 펼친 동의 id (한 번에 한 동만 편집) */
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
 
@@ -406,9 +412,30 @@ export default function QuoteModeClient({ pnu }: Props) {
         delete next[id];
         return next;
       });
+      setRotationOverrides((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     },
     [],
   );
+
+  /** 회전 핸들 드래그 / 우측 카드 input 로 호출. degrees, 0~180 정규화는 호출자 책임. */
+  const handleRotationChange = useCallback((id: string, deg: number) => {
+    setRotationOverrides((prev) => ({ ...prev, [id]: deg }));
+  }, []);
+
+  /** 우측 카드 ↺ / 핸들 더블클릭 → 시설 자동 회전으로 복귀 */
+  const handleResetRotation = useCallback((id: string) => {
+    setRotationOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
 
   const handleSpecChange = useCallback((id: string, spec: FacilitySpec) => {
     setSpecOverrides((prev) => ({ ...prev, [id]: spec }));
@@ -466,8 +493,11 @@ export default function QuoteModeClient({ pnu }: Props) {
           );
         const placement =
           placementOverrides[id] ?? FACILITY_PLACEMENT[facility];
-        // Step 3-2: 시설별 자동 회전 (정남 / 건물 가장 긴 변 평행)
-        const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
+        // 사용자 회전 우선, 없으면 시설별 자동 회전 (정남 / 건물 가장 긴 변 평행)
+        const autoRot = calcAutoRotation(b.edited_polygon, placement.rotation);
+        const userRot = rotationOverrides[id];
+        const rotation = userRot ?? autoRot;
+        const isAutoRotation = userRot === undefined;
         const layout = showPanels
           ? fillPanelGrid(b.edited_polygon, activeModule, placement, rotation)
           : { panels: [], count: 0, rotation };
@@ -481,12 +511,15 @@ export default function QuoteModeClient({ pnu }: Props) {
           panels: layout.panels,
           widthM: dims.widthM,
           heightM: dims.heightM,
+          rotation,
+          isAutoRotation,
         };
       }),
     [
       buildings,
       facilityOverrides,
       placementOverrides,
+      rotationOverrides,
       geometry,
       bldgRegister,
       activeModule,
@@ -549,6 +582,9 @@ export default function QuoteModeClient({ pnu }: Props) {
       const panelCount = layout?.count ?? 0;
       const kw = layout?.kwActual ?? 0;
       const cost = calcCost(kw, spec);
+      const autoRot = calcAutoRotation(b.edited_polygon, placement.rotation);
+      const userRot = rotationOverrides[id];
+      const rotation = userRot ?? autoRot;
       return {
         id,
         building: b,
@@ -560,9 +596,11 @@ export default function QuoteModeClient({ pnu }: Props) {
         panelCount,
         kw,
         cost,
+        rotation,
         isAutoKind: !facilityOverrides[id],
         isCustomSpec: !!specOverrides[id],
         isCustomPlacement: !!placementOverrides[id],
+        isCustomRotation: userRot !== undefined,
       };
     });
   }, [
@@ -572,6 +610,7 @@ export default function QuoteModeClient({ pnu }: Props) {
     facilityOverrides,
     specOverrides,
     placementOverrides,
+    rotationOverrides,
     panelLayouts,
   ]);
 
@@ -678,8 +717,10 @@ export default function QuoteModeClient({ pnu }: Props) {
       const facility =
         facilityOverrides[id] ??
         recommendFacility(b.source, geometry.jimok ?? "", bldgRegister);
-      const placement = FACILITY_PLACEMENT[facility];
-      const rotation = calcAutoRotation(b.edited_polygon, placement.rotation);
+      const placement = placementOverrides[id] ?? FACILITY_PLACEMENT[facility];
+      const rotation =
+        rotationOverrides[id] ??
+        calcAutoRotation(b.edited_polygon, placement.rotation);
       const layout = fillPanelGrid(
         b.edited_polygon,
         activeModule,
@@ -731,6 +772,8 @@ export default function QuoteModeClient({ pnu }: Props) {
     geometry,
     buildings,
     facilityOverrides,
+    placementOverrides,
+    rotationOverrides,
     bldgRegister,
     activeModule,
     capa,
@@ -1080,6 +1123,7 @@ export default function QuoteModeClient({ pnu }: Props) {
                       handlePlacementChange(row.id, placement)
                     }
                     onResetPlacement={() => handleResetPlacement(row.id)}
+                    onResetRotation={() => handleResetRotation(row.id)}
                     onToggleEditSpec={() =>
                       setEditingSpecId((prev) =>
                         prev === row.id ? null : row.id,
@@ -1497,6 +1541,8 @@ export default function QuoteModeClient({ pnu }: Props) {
               selectedBuildingId={selectedBuildingId}
               onSelectBuilding={handleSelectBuilding}
               onRequestDelete={handleRequestDelete}
+              onRotationChange={handleRotationChange}
+              onResetRotation={handleResetRotation}
             />
           )}
           {(loadingParcel || loadingBuildings) && (
@@ -1848,9 +1894,13 @@ interface FacilityRow {
   /** 실제 kW = panelCount × 모듈 와트 (격자 기반) */
   kw: number;
   cost: number;
+  /** 적용된 패널 회전각 (degrees, 0~180) */
+  rotation: number;
   isAutoKind: boolean;
   isCustomSpec: boolean;
   isCustomPlacement: boolean;
+  /** 사용자가 핸들로 회전 직접 조작했는지 */
+  isCustomRotation: boolean;
 }
 
 interface FacilityCardProps {
@@ -1863,6 +1913,8 @@ interface FacilityCardProps {
   onResetSpec: () => void;
   onPlacementChange: (placement: PlacementSpec) => void;
   onResetPlacement: () => void;
+  /** 회전 자동 복귀 — 핸들 dblclick 또는 카드 ↺ */
+  onResetRotation: () => void;
   onToggleEditSpec: () => void;
   /** 지도/카드 양방향 동 선택 강조 */
   isSelected?: boolean;
@@ -1884,6 +1936,7 @@ function FacilityCard({
   onResetSpec,
   onPlacementChange,
   onResetPlacement,
+  onResetRotation,
   onToggleEditSpec,
   isSelected,
   onSelect,
@@ -1898,13 +1951,18 @@ function FacilityCard({
     panelCount,
     kw,
     cost,
+    rotation,
     isAutoKind,
     isCustomSpec,
     isCustomPlacement,
+    isCustomRotation,
   } = row;
   const py_round = Math.round(py);
   const isUserAdded = b.source === "user_added";
-  const isCustomized = isCustomSpec || isCustomPlacement;
+  const isCustomized = isCustomSpec || isCustomPlacement || isCustomRotation;
+  // 직사각형 패널은 180° 대칭이라 표시는 0~180 정규화 (200° → 20°).
+  // 핸들 좌표는 0~360 그대로 두어 사용자가 끈 위치에 머물게 함.
+  const rotation_round = ((Math.round(rotation) % 180) + 180) % 180;
 
   // 인라인 편집 로컬 입력값 (확정 전까지 휘발)
   // 평/kW 는 격자 기반 도입 후 dead 변수 → UI 에서 제거. 단가 + 이격거리만 편집.
@@ -2009,21 +2067,45 @@ function FacilityCard({
 
       {/* 배치/단가 표시 또는 편집 */}
       {!isEditingSpec ? (
-        <div className="flex items-center justify-between gap-2 mt-1.5 text-[10px] text-gray-500">
-          <span className="truncate">
-            행간 {placement.rowGapM}m · 가장자리 {placement.edgeInsetM}m ·{" "}
-            {(spec.costPerKw / 10000).toLocaleString()}만/kW
-            {isCustomized && (
-              <span className="ml-1 text-blue-700 font-semibold">수정됨</span>
+        <>
+          <div className="flex items-center justify-between gap-2 mt-1.5 text-[10px] text-gray-500">
+            <span className="truncate">
+              행간 {placement.rowGapM}m · 가장자리 {placement.edgeInsetM}m ·{" "}
+              {(spec.costPerKw / 10000).toLocaleString()}만/kW
+              {isCustomized && (
+                <span className="ml-1 text-blue-700 font-semibold">수정됨</span>
+              )}
+            </span>
+            <button
+              onClick={onToggleEditSpec}
+              className="text-[10px] px-1.5 py-0.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0"
+            >
+              ✏ 편집
+            </button>
+          </div>
+          {/* 패널 회전 — 지도 위 ◯ 핸들로 직접 회전. 카드는 표시 + 자동 복귀만. */}
+          <div className="flex items-center justify-between gap-2 mt-1 text-[10px] text-gray-500">
+            <span className="truncate">
+              <span title="지도의 ◯ 핸들을 끌어 패널 방향 조정. Shift = 15° 스냅, 더블클릭 = 자동 복귀">
+                패널 회전: <b className={isCustomRotation ? "text-blue-700" : ""}>{rotation_round}°</b>
+              </span>
+              {isCustomRotation ? (
+                <span className="ml-1 text-blue-700">(수동)</span>
+              ) : (
+                <span className="ml-1 text-gray-400">(자동)</span>
+              )}
+            </span>
+            {isCustomRotation && (
+              <button
+                onClick={onResetRotation}
+                className="text-[10px] px-1.5 py-0.5 text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded shrink-0"
+                title="시설별 자동 회전으로 복귀"
+              >
+                ↺ 자동
+              </button>
             )}
-          </span>
-          <button
-            onClick={onToggleEditSpec}
-            className="text-[10px] px-1.5 py-0.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shrink-0"
-          >
-            ✏ 편집
-          </button>
-        </div>
+          </div>
+        </>
       ) : (
         <div className="mt-1.5 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded space-y-1.5">
           <div className="flex items-center gap-1.5 text-[11px]">
