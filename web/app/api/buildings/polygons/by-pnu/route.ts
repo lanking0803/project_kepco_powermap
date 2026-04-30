@@ -19,6 +19,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { getBuildingsByPnuWithDebug } from "@/lib/vworld/buildings";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
+// VWorld 는 한국 외 IP 차단. Vercel 기본 region(iad1) → fetch failed 발생.
+export const preferredRegion = "icn1";
+
 export const meta: EndpointMeta = {
   source: "VWorld WFS lt_c_spbd (도로명주소건물, fes:Filter pnu 1:1 매칭)",
   cache: "private, s-maxage=86400, max-age=3600",
