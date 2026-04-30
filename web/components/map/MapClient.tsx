@@ -455,7 +455,15 @@ export default function MapClient({ isAdmin, email }: Props) {
         });
         if (seq !== parcelReqSeqRef.current) return;
         if (!parcelResult) {
-          setSimpleToast("⚠️ 이 필지 정보를 찾을 수 없어요");
+          // 매칭 실패 — VWorld 공식 지적도(LX) 에 이 PNU 가 없음.
+          // 외부 데이터(태양광/공매 등)의 옛 지번/오타/행정구역 개편으로 발생 가능.
+          // 빈 팝업 안 뜨게 selectedPnu 도 같이 닫고, 상세 메시지 노출.
+          setSelectedPnu(null);
+          setSelectedJibun(null);
+          setSelectedGeometry(null);
+          setSimpleToast(
+            "⚠️ 이 지번은 공식 지적도에 등록되지 않아 상세정보를 표시할 수 없습니다.\n원본 데이터의 옛 지번이거나 행정구역 개편으로 변경된 주소일 수 있습니다.",
+          );
           opts?.onNotFound?.();
           return;
         }
@@ -952,7 +960,7 @@ export default function MapClient({ isAdmin, email }: Props) {
             <Toast
               message={simpleToast}
               onClose={() => setSimpleToast(null)}
-              duration={3000}
+              duration={6000}
             />
           )}
 
