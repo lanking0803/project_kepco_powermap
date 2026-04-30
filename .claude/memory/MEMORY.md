@@ -38,3 +38,4 @@
 - 🏷 [표준코드 번들 — 보류](project_stdcode_bundle.md) — xlsx 7종 보유. DB X / 정적 JSON O 결정. UI 개발 시점에 구현
 - 🗺 [지적도 데이터 출처 + 카카오 SDK 한계](reference_cadastral_data_sources.md) — VWorld LX 편집지적도 사용. 카카오 외부 타일 오버레이 비호환 (재시도 금지)
 - 🌏 [Vercel region = icn1 고정](reference_vercel_region.md) — vercel.json 프로젝트 전역. 한국 외부 API 가 미국 iad1 IP 거절. preferredRegion 은 Edge 전용이라 Node 에서 무시 (함정)
+- 🪤 [Supabase RPC plan 함정](reference_supabase_rpc_plan_trap.md) — 동일 SQL 직접 1.5ms ↔ RPC 2초+. generic plan 캐시로 인덱스 못 탐. 쿼리빌더 직접 호출 또는 표현식 인덱스로 회피
