@@ -416,13 +416,6 @@ export default function MapClient({ isAdmin, email }: Props) {
         setSimpleToast("PNU 형식이 올바르지 않습니다.");
         return;
       }
-      // 다른 패널/모달 정리
-      setDetailModalOpen(false);
-      setOnbidModalOpen(false);
-      setSelectedOnbidVillage(null);
-      villageReqSeqRef.current++;
-      villageAbortRef.current?.abort();
-      setSelectedVillage(null);
 
       // 이전 in-flight 취소 (연타 절약)
       parcelAbortRef.current?.abort();
@@ -430,45 +423,45 @@ export default function MapClient({ isAdmin, email }: Props) {
       parcelAbortRef.current = controller;
       const seq = ++parcelReqSeqRef.current;
 
-      // 즉시 PNU set → 패널 표시 (탭 내용은 각자 자체 fetch 로 진행)
-      setSelectedPnu(pnu);
-      setSelectedJibun(null);
-      setSelectedGeometry(null);
-
-      // 지도 폴리곤용 — 마을(테두리) fire-and-forget
-      const bjdCode = pnu.slice(0, 10);
-      fetchVworldAdminPolygonByBjdCode(bjdCode, { signal: controller.signal })
-        .then((r) => {
-          if (seq !== parcelReqSeqRef.current) return;
-          setVillagePolygon(
-            (r?.polygon as number[][][] | undefined) ?? null,
-          );
-        })
-        .catch(() => {});
-
-      // 지도 폴리곤용 — 필지(주황 음영) 별도 fetch.
-      //   ParcelInfoPanel 내부에서도 같은 fetchVworldParcelByPnu 호출하지만
-      //   모듈 캐시(lib/api/vworld) 가 PNU 키라 첫 번째가 inflight, 두 번째는 캐시 hit → 외부 1회.
+      // ⚠️ VWorld 매칭 결과 확정 전에는 아무 화면도 안 바꿈.
+      //   매칭 실패(외부 데이터 옛 지번/오타) 시 사용자가 보던 화면 유지 + 토스트만.
       try {
         const parcelResult = await fetchVworldParcelByPnu(pnu, {
           signal: controller.signal,
         });
         if (seq !== parcelReqSeqRef.current) return;
         if (!parcelResult) {
-          // 매칭 실패 — VWorld 공식 지적도(LX) 에 이 PNU 가 없음.
-          // 외부 데이터(태양광/공매 등)의 옛 지번/오타/행정구역 개편으로 발생 가능.
-          // 빈 팝업 안 뜨게 selectedPnu 도 같이 닫고, 상세 메시지 노출.
-          setSelectedPnu(null);
-          setSelectedJibun(null);
-          setSelectedGeometry(null);
+          // 매칭 실패 — 토스트만, 화면 그대로.
           setSimpleToast(
             "⚠️ 이 지번은 공식 지적도에 등록되지 않아 상세정보를 표시할 수 없습니다.\n원본 데이터의 옛 지번이거나 행정구역 개편으로 변경된 주소일 수 있습니다.",
           );
           opts?.onNotFound?.();
           return;
         }
+
+        // 매칭 성공 — 이제부터 다른 패널/모달 정리하고 새 패널 띄움.
+        setDetailModalOpen(false);
+        setOnbidModalOpen(false);
+        setSelectedOnbidVillage(null);
+        villageReqSeqRef.current++;
+        villageAbortRef.current?.abort();
+        setSelectedVillage(null);
+
+        setSelectedPnu(pnu);
         setSelectedJibun(parcelResult.jibun);
         setSelectedGeometry(parcelResult.geometry);
+
+        // 지도 폴리곤용 — 마을(테두리) fire-and-forget
+        const bjdCode = pnu.slice(0, 10);
+        fetchVworldAdminPolygonByBjdCode(bjdCode, { signal: controller.signal })
+          .then((r) => {
+            if (seq !== parcelReqSeqRef.current) return;
+            setVillagePolygon(
+              (r?.polygon as number[][][] | undefined) ?? null,
+            );
+          })
+          .catch(() => {});
+
         const c = parcelResult.geometry.center;
         if (c?.lat != null) moveMapToRef.current?.(c.lat, c.lng);
       } catch (err) {
