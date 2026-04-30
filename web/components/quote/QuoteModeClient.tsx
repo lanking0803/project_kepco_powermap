@@ -42,7 +42,6 @@ import {
   removeVertex,
   findLongestEdge,
   findFlattestVertex,
-  rotatePolygon,
 } from "@/lib/geometry/polygon-edit";
 import {
   FACILITY_KINDS,
@@ -219,6 +218,17 @@ export default function QuoteModeClient({ pnu }: Props) {
     [],
   );
 
+  /** 동 이름(buld_nm) 직접 수정 — 우측 카드 ✎ 편집. 빈 이름 거부 */
+  const handleBuildingRename = useCallback((id: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setBuildings((prev) =>
+      prev.map((b) =>
+        makeBuildingId(b) === id ? { ...b, buld_nm: trimmed } : b,
+      ),
+    );
+  }, []);
+
   /**
    * [+ 영역 추가] — 부지 중심에 기본 15m × 15m 사각형 생성.
    * 사용자가 꼭지점 드래그로 위치/크기 조정.
@@ -231,9 +241,11 @@ export default function QuoteModeClient({ pnu }: Props) {
     const area_m2 = calcAreaM2(polygon);
 
     setBuildings((prev) => {
-      // 사용자추가 라벨용 카운터 — 기존 user_added 동수 + 1
+      // 기본 이름 = 전체 동의 다음 번호 (자동 + 사용자 추가 합쳐서). 견적서까지
+      // 그대로 노출되므로 자연스러운 이름. 사용자가 직접 수정 가능 (✎ 편집).
       const userCount = prev.filter((b) => b.source === "user_added").length + 1;
       const local_id = `user_${Date.now()}_${userCount}`;
+      const defaultName = `${prev.length + 1}동`;
       const newBuilding: EditedBuilding = {
         // VWorld 필드는 빈 문자열/0 으로 채움
         pk: "",
@@ -246,7 +258,7 @@ export default function QuoteModeClient({ pnu }: Props) {
         buld_no: "",
         gro_flo_co: 1,
         und_flo_co: 0,
-        buld_nm: `사용자추가 ${userCount}`,
+        buld_nm: defaultName,
         polygon,
         area_m2,
         center,
@@ -992,7 +1004,10 @@ export default function QuoteModeClient({ pnu }: Props) {
                             className={`absolute left-0 top-0 bottom-0 w-1 ${barColor}`}
                           />
                           <span className="truncate flex-1 min-w-0 font-semibold text-gray-900">
-                            {b.buld_nm || `${i + 1}동`}
+                            <BuildingNameEdit
+                              value={b.buld_nm || `${i + 1}동`}
+                              onChange={(name) => handleBuildingRename(id, name)}
+                            />
                             {!isUserAdded && (
                               <span className="text-gray-400 ml-1 font-normal">
                                 {b.gro_flo_co}F
@@ -1125,6 +1140,7 @@ export default function QuoteModeClient({ pnu }: Props) {
                     }
                     onResetPlacement={() => handleResetPlacement(row.id)}
                     onResetRotation={() => handleResetRotation(row.id)}
+                    onRename={(name) => handleBuildingRename(row.id, name)}
                     onToggleEditSpec={() =>
                       setEditingSpecId((prev) =>
                         prev === row.id ? null : row.id,
@@ -1916,6 +1932,8 @@ interface FacilityCardProps {
   onResetPlacement: () => void;
   /** 회전 자동 복귀 — 핸들 dblclick 또는 카드 ↺ */
   onResetRotation: () => void;
+  /** 동 이름(buld_nm) 직접 수정 — ✎ 클릭 → 인라인 input */
+  onRename: (newName: string) => void;
   onToggleEditSpec: () => void;
   /** 지도/카드 양방향 동 선택 강조 */
   isSelected?: boolean;
@@ -1938,6 +1956,7 @@ function FacilityCard({
   onPlacementChange,
   onResetPlacement,
   onResetRotation,
+  onRename,
   onToggleEditSpec,
   isSelected,
   onSelect,
@@ -1959,7 +1978,6 @@ function FacilityCard({
     isCustomRotation,
   } = row;
   const py_round = Math.round(py);
-  const isUserAdded = b.source === "user_added";
   const isCustomized = isCustomSpec || isCustomPlacement || isCustomRotation;
   // 직사각형 패널은 180° 대칭이라 표시는 0~180 정규화 (200° → 20°).
   // 핸들 좌표는 0~360 그대로 두어 사용자가 끈 위치에 머물게 함.
@@ -2026,13 +2044,12 @@ function FacilityCard({
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <div className="flex items-center gap-1 min-w-0">
           <span className="text-xs text-gray-700 truncate">
-            <b>{b.buld_nm || `${index}동`}</b>
+            <BuildingNameEdit
+              value={b.buld_nm || `${index}동`}
+              onChange={onRename}
+              className="font-bold"
+            />
           </span>
-          {isUserAdded && (
-            <span className="text-[9px] px-1 py-px bg-emerald-100 text-emerald-700 rounded shrink-0">
-              사용자추가
-            </span>
-          )}
           {!isAutoKind && (
             <button
               onClick={onResetFacility}
@@ -2387,6 +2404,80 @@ function ModuleField({
       {children}
       {unit && <span className="text-gray-500 shrink-0">{unit}</span>}
     </div>
+  );
+}
+
+/**
+ * 동 이름 인라인 편집 — ✎ 클릭 → input → Enter/blur 로 확정.
+ * 기본값 = 자동 동 번호 (b.buld_nm). 견적서 PDF 까지 그대로 노출되니 자유 입력.
+ *
+ * Props:
+ *   - value: 현재 이름
+ *   - onChange: 새 이름 (trim 후 비어있으면 호출 안 됨 — 부모에서도 검증)
+ *   - className: 표시 모드의 텍스트 스타일 (편집 모드는 기본 input 스타일)
+ */
+function BuildingNameEdit({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (newName: string) => void;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  // 외부 value 변경 시 draft 동기화 (편집 중이 아닐 때만)
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  const commit = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onChange(trimmed);
+    else setDraft(value);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className="px-1 py-0 text-xs text-gray-900 bg-white border border-blue-400 rounded outline-none focus:ring-1 focus:ring-blue-200 max-w-[8rem]"
+      />
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0">
+      <span className={className}>{value}</span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="text-gray-400 hover:text-blue-600 text-[10px] leading-none px-1 py-0.5 rounded hover:bg-blue-50 shrink-0"
+        title="이름 수정"
+        aria-label="이름 수정"
+      >
+        ✎
+      </button>
+    </span>
   );
 }
 

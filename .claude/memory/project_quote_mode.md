@@ -37,7 +37,10 @@ type: project
 | 점 추가/삭제 (자동) | 우측 카드 [− 점 N +] stepper |
 | 점 정확히 삭제 | 흰 마커 더블클릭 |
 | 점 위치 수정 | 흰 마커 드래그 (RAF 폴링) |
-| 영역 전체 이동 | ✥ 핸들 드래그 (RAF 폴링) |
+| 영역 전체 이동 | 영역 내부 클릭 + 드래그 (마커 hit area 12px 우선) |
+| 영역 회전 | ◻ 주황 사각형 핸들 드래그 (오른쪽 16m, Shift=15° 스냅) |
+| 패널 회전 | ◯ 파랑 동그라미 핸들 드래그 (위쪽 16m, 선택된 영역만) |
+| 동 이름 편집 | 카드의 ✎ 클릭 → 인라인 input (Enter/Esc 확정) |
 
 **핵심 lib**: [web/lib/geometry/polygon-edit.ts](../../web/lib/geometry/polygon-edit.ts) — 헬퍼 7종 (테스트 40건).
 **UI**: [web/components/quote/QuoteMap.tsx](../../web/components/quote/QuoteMap.tsx), [QuoteModeClient.tsx](../../web/components/quote/QuoteModeClient.tsx).
@@ -70,6 +73,26 @@ type: project
 - 영역 추가 = 부지 중앙 15m × 15m 사각형 → 사용자 드래그로 조정
 - ＋ hover 마커는 깜빡임 이슈로 제거 (Q 폐기) → stepper 로 일원화
 - 모든 기능은 우측 카드에 통일 (좌측은 워크플로 뼈대만)
+
+### 회전 핸들 + 한 번 클릭 드래그 (2026-05-01 의뢰자 결정 + 함정)
+- 회전: 영역(◻ 주황 사각형, 오른쪽) + 패널(◯ 파랑 동그라미, 위쪽) 2개 별도 핸들
+  · 사선 건물 = 영역+패널 같이 회전이 가장 흔한 케이스 → 영역 핸들 우선 영업
+  · Shift = 15° 스냅, 영역 핸들은 dragend 시 사용자 둔 위치로 머무름 (offset ref 저장)
+- 비활성 영역도 한 번 클릭 + 드래그로 즉시 활성화 + 동작:
+  · `selectedBuildingId` 를 메인 effect deps 에서 빼고 별도 setMap 토글 effect 로 분리.
+  · `justDraggedRef` 는 dLat/dLng 0 케이스(=단순 클릭)에도 set — 카카오가 자동 발화하는
+    polygon click 이 토글로 들어가 활성화 풀리는 버그 회피
+- 동 이름 = 견적서까지 흘러감 → 기본값 `2동/3동...` (전체 갯수 +1) + ✎ 인라인 편집
+  · `사용자추가 N` 라벨은 폐기 (배지도 제거 — 이름이 이미 자유 변경 가능)
+
+### 회전 핸들 함정 (재발 방지)
+- 카카오 마커는 mousedown/click 이 div 핸들러보다 늦게 발화 → ref flag 로 못 막음.
+  → 클릭 픽셀 좌표 vs 마커 픽셀 좌표 비교(12~14px hit) 로 영역 평행이동 양보
+- 메인 effect 가 polygon 변화로 재실행되면 드래그 중인 핸들이 destroy → mousedown 세션 깨짐.
+  → 영역 회전 드래그 중에는 setBuildings 호출 X, in-place setPath 만. dragend 에 1회 박음.
+- 패널 회전 핸들은 0~360 으로 부모 state 저장 (사용자 끈 자리에 유지). 표시는 0~180 정규화.
+- 회전 0~180 정규화하면 핸들이 180° 점프해버림 (직사각형 패널은 대칭이지만 사용자 손은 아님)
+- effect 시그니처에 `panels.length > 0` (P/-) 포함해야 1단계→2단계 전환 시 패널 회전 핸들 생성됨
 
 ### 카카오 SDK 한계 우회
 - Polygon 자체 편집 기능 X → vertex 마다 별도 Marker (draggable)
