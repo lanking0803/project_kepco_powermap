@@ -16,6 +16,7 @@
 - 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
 - 🚀 [2차 착수 인덱스](project_phase2_kickoff.md) ⭐ — 700만 5개 항목 작업 분할 + 1순위=공매 통합(350만)
 - 🏛 [공매 통합 의도](project_auction_intent.md) ⭐ — 의뢰자 의도: "저가 매입 기회 발굴". 공매(캠코)만 진행, 경매는 의뢰자 포기(2026-04-26)
+- 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
 - [3차 개발 — 태양광설치여부+이격거리](project_phase3_proposal.md) ⭐ — 전국태양광허가 API + 법제처 조례 API + 도로현황 SHP 연계 가능 검증 완료. 400~550만/10~12주. 의뢰자 확답 대기 (2026-04-17)
 - ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
 - ⚠️ [태양광 허가 API 검증 결과](reference_solar_permit_api.md) — 검색 필터 미지원 (LCTN_LOTNO_ADDR/LATITUDE 등 전부 NODATA). 페이지네이션만 가능. Phase 3 시 12만건 DB 적재 후 by-pnu 신설 필요
