@@ -997,6 +997,7 @@ export default function MapClient({ isAdmin, email }: Props) {
               pnu={selectedPnu}
               onClose={closeParcelPanel}
               onSolarMarkers={setSolarMarkers}
+              onPnuChange={(pnu) => openParcelPanelByPnu(pnu)}
             />
           )}
 

@@ -27,11 +27,17 @@ interface Props {
   pnu: string;
   /** 동/리 표기 — 예: "장암면 지토리". 빈 값이면 "이" 로 폴백 ("이 일대"). */
   areaLabel: string;
-  /** 응답 받으면 좌표 보유 발전소 리스트를 부모에게 전달. unmount/탭이동 시 [] 호출됨. */
-  onMarkers: (markers: SolarMarker[]) => void;
+  /** @deprecated 자동 마커 표시 정책 폐기 (2026-04-30). 모달 행 클릭 → 지번 흐름으로 통합. 마커/타입/prop 일괄 정리는 마무리 단계. */
+  onMarkers?: (markers: SolarMarker[]) => void;
+  /**
+   * 모달 행 클릭 → 그 발전소의 PNU 로 지번 클릭 흐름 진입.
+   * 메인 지도(MapClient.openParcelPanelByPnu)는 전달, 견적 모드(QuoteModeClient)는 미전달
+   * → 견적 모드는 PNU 고정이라 행 클릭 비활성화.
+   */
+  onPnuClick?: (pnu: string) => void;
 }
 
-export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
+export default function SolarSection({ pnu, areaLabel, onPnuClick }: Props) {
   const [data, setData] = useState<SolarByPnuResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +53,6 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
       .then((r) => {
         if (controller.signal.aborted) return;
         setData(r);
-        onMarkers(r.sameDongMarkers);
       })
       .catch((err: unknown) => {
         if ((err as Error)?.name === "AbortError") return;
@@ -58,10 +63,7 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
       });
     return () => {
       controller.abort();
-      onMarkers([]); // 탭 이동/패널 닫힘 시 마커 정리
     };
-    // onMarkers 는 useCallback 으로 안정화 가정 (부모 책임). pnu 만 의존성에 둠.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pnu]);
 
   return (
@@ -128,15 +130,9 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
                       </button>
                     )}
                   </div>
-                  {data.sameDongMarkers.length > 0 ? (
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      ☀ 이 중 {data.sameDongMarkers.length}곳 위치 표시
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-gray-400 mt-0.5">
-                      ⚠ 좌표 정보 미제공으로 지도 표시 불가
-                    </div>
-                  )}
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    목록에서 발전소를 선택하면 해당 지번 정보를 볼 수 있어요
+                  </div>
                 </div>
               )}
             </>
@@ -149,6 +145,14 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
           areaLabel={areaLabel}
           rows={data.sameDong.rows}
           onClose={() => setListOpen(false)}
+          onPnuClick={
+            onPnuClick
+              ? (clickedPnu) => {
+                  setListOpen(false);
+                  onPnuClick(clickedPnu);
+                }
+              : undefined
+          }
         />
       )}
     </div>

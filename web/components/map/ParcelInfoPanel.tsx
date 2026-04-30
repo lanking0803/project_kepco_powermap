@@ -79,10 +79,16 @@ interface Props {
    */
   inQuoteMode?: boolean;
   /**
-   * 입지 탭 활성 시 SolarSection 이 응답에서 추출한 좌표 보유 발전소 리스트.
-   * 부모(MapClient) 가 KakaoMap 솔라 마커 prop 으로 전달. 탭 이동/패널 닫힘 시 [] 호출됨.
+   * @deprecated 자동 마커 표시 정책 폐기 (2026-04-30). 모달 행 클릭 → 지번 흐름으로 통합.
+   * 마커/타입/prop 일괄 정리는 마무리 단계.
    */
   onSolarMarkers: (markers: SolarMarker[]) => void;
+  /**
+   * 입지 탭의 발전소 목록에서 행 클릭 → 그 발전소 PNU 로 이 패널 자체를 갈아끼움.
+   * 메인 지도(MapClient): openParcelPanelByPnu 그대로 전달.
+   * 견적 모드(QuoteModeClient): PNU 고정이라 미전달 → 행 클릭 비활성화.
+   */
+  onPnuChange?: (pnu: string) => void;
 }
 
 
@@ -150,6 +156,7 @@ export default function ParcelInfoPanel({
   polygonCount,
   inQuoteMode,
   onSolarMarkers,
+  onPnuChange,
 }: Props) {
   // 마지막 본 탭 기억 — 진입 모드 무관 단일 정책 (분기 0).
   const [tab, setTabState] = useState<TabKey>(() => readLastTab());
@@ -301,6 +308,7 @@ export default function ParcelInfoPanel({
               pnu={pnu}
               areaLabel={[jibun.emd_nm, jibun.li_nm].filter(Boolean).join(" ")}
               onSolarMarkers={onSolarMarkers}
+              onPnuClick={onPnuChange}
             />
           )}
           {tab === "regulation" && <RegulationsCard pnu={pnu} />}
@@ -2229,10 +2237,12 @@ function LocationTab({
   pnu,
   areaLabel,
   onSolarMarkers,
+  onPnuClick,
 }: {
   pnu: string;
   areaLabel: string;
   onSolarMarkers: (markers: SolarMarker[]) => void;
+  onPnuClick?: (pnu: string) => void;
 }) {
   // 입지 = 지리적 / 주변 정보 (참고용). 인허가 가능성 자체는 RegulationTab.
   return (
@@ -2242,6 +2252,7 @@ function LocationTab({
         pnu={pnu}
         areaLabel={areaLabel}
         onMarkers={onSolarMarkers}
+        onPnuClick={onPnuClick}
       />
 
       {/* 향후 — 2차 개발 예정 항목 */}

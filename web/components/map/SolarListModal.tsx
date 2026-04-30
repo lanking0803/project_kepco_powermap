@@ -26,9 +26,16 @@ interface Props {
   areaLabel: string;
   rows: SameDongRow[];
   onClose: () => void;
+  /** 행 클릭 콜백 — 받지 않으면 행은 비활성(시각 동일, 클릭 X). 견적 모드에서는 PNU 고정이라 미전달. */
+  onPnuClick?: (pnu: string) => void;
 }
 
-export default function SolarListModal({ areaLabel, rows, onClose }: Props) {
+export default function SolarListModal({
+  areaLabel,
+  rows,
+  onClose,
+  onPnuClick,
+}: Props) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("kw");
   // Portal — ParcelInfoPanel 의 transform 부모에 갇히지 않도록 document.body 로 탈출.
@@ -137,7 +144,11 @@ export default function SolarListModal({ areaLabel, rows, onClose }: Props) {
           ) : (
             <div className="space-y-1.5">
               {filtered.map((row, i) => (
-                <SolarListRow key={`${row.pnu}-${i}`} row={row} />
+                <SolarListRow
+                  key={`${row.pnu}-${i}`}
+                  row={row}
+                  onPnuClick={onPnuClick}
+                />
               ))}
             </div>
           )}
@@ -153,15 +164,25 @@ export default function SolarListModal({ areaLabel, rows, onClose }: Props) {
   );
 }
 
-function SolarListRow({ row }: { row: SameDongRow }) {
+function SolarListRow({
+  row,
+  onPnuClick,
+}: {
+  row: SameDongRow;
+  onPnuClick?: (pnu: string) => void;
+}) {
   const hasCoord = row.lat != null && row.lng != null;
+  const clickable = !!onPnuClick;
+  const Tag = clickable ? "button" : "div";
   return (
-    <div
-      className={`border rounded px-2.5 py-1.5 ${
+    <Tag
+      type={clickable ? "button" : undefined}
+      onClick={clickable ? () => onPnuClick(row.pnu) : undefined}
+      className={`block w-full text-left border rounded px-2.5 py-1.5 transition-colors ${
         hasCoord
           ? "bg-emerald-50/50 border-emerald-200"
           : "bg-gray-50 border-gray-200"
-      }`}
+      } ${clickable ? "hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer" : ""}`}
     >
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-sm font-semibold text-gray-900 truncate">
@@ -196,7 +217,7 @@ function SolarListRow({ row }: { row: SameDongRow }) {
           </>
         )}
       </div>
-    </div>
+    </Tag>
   );
 }
 
