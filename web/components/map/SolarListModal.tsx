@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { SameDongRow } from "@/lib/api/solar-permits";
 
 type SortKey = "kw" | "permit" | "jibun";
@@ -30,6 +31,10 @@ interface Props {
 export default function SolarListModal({ areaLabel, rows, onClose }: Props) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("kw");
+  // Portal — ParcelInfoPanel 의 transform 부모에 갇히지 않도록 document.body 로 탈출.
+  // SSR 안전을 위해 mounted 후에만 렌더.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -70,7 +75,9 @@ export default function SolarListModal({ areaLabel, rows, onClose }: Props) {
     [rows],
   );
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 md:p-4">
       <div className="bg-white rounded-t-xl md:rounded-xl shadow-2xl w-full md:max-w-2xl h-[80dvh] md:h-auto md:max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
         {/* 헤더 */}
@@ -141,7 +148,8 @@ export default function SolarListModal({ areaLabel, rows, onClose }: Props) {
           전국태양광허가정보 (data.go.kr) · 매월 1일 갱신
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
