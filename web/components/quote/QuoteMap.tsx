@@ -140,10 +140,14 @@ function polygonTopAnchor(
  */
 const PARCEL_ZOOM_LEVEL = 1;
 
-/** 꼭지점 마커 SVG (작은 흰 동그라미 + 주황 테두리) — data URI 로 MarkerImage */
+/**
+ * 꼭지점 마커 SVG — 시각은 14×14 (변경 X), hit area 는 24×24 로 확대.
+ * 투명 패딩으로 클릭 인식 영역만 키워 "점 잡으려다 빗나가 영역 이동 트리거" 버그 회피.
+ * 24×24 안의 가운데 14×14 만 그리고, 나머지는 투명.
+ */
 const VERTEX_DOT_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">` +
-  `<circle cx="7" cy="7" r="5" fill="white" stroke="${BUILDING_FILL}" stroke-width="2.5"/>` +
+  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">` +
+  `<circle cx="12" cy="12" r="5" fill="white" stroke="${BUILDING_FILL}" stroke-width="2.5"/>` +
   `</svg>`;
 const VERTEX_DOT_URI =
   "data:image/svg+xml;base64," +
@@ -387,8 +391,8 @@ export default function QuoteMap({
 
     const dotImage = new window.kakao.maps.MarkerImage(
       VERTEX_DOT_URI,
-      new window.kakao.maps.Size(14, 14),
-      { offset: new window.kakao.maps.Point(7, 7) },
+      new window.kakao.maps.Size(24, 24),
+      { offset: new window.kakao.maps.Point(12, 12) },
     );
 
     // 영역 평행이동 — 지도 mousedown 1개로 모든 building 처리 (Polygon 자체는 mousedown 미지원).
@@ -942,6 +946,27 @@ export default function QuoteMap({
       if (!ll) return;
       const lat = ll.getLat();
       const lng = ll.getLng();
+      // 꼭지점 마커 hit area 와 겹치면 영역 이동 양보 (꼭지점 우선).
+      // 마커 SVG 24×24 이므로 클릭 좌표가 마커 중심에서 12px 이내면 마커 클릭으로 간주.
+      // 카카오 SDK 의 마커 dragstart 는 div mousedown 보다 늦게 발화되므로 ref flag
+      // 방식은 못 쓰고, 클릭 픽셀 좌표 직접 비교가 가장 안전.
+      const VERTEX_HIT_PX = 12;
+      const rect2 = mapRef.current?.getBoundingClientRect();
+      if (rect2) {
+        const clickX = e.clientX - rect2.left;
+        const clickY = e.clientY - rect2.top;
+        for (const m of vertexMarkersRef.current) {
+          const mPos = m.getPosition();
+          const mPt = projection.containerPointFromCoords(
+            new window.kakao.maps.LatLng(mPos.getLat(), mPos.getLng()),
+          );
+          const dx = clickX - mPt.x;
+          const dy = clickY - mPt.y;
+          if (dx * dx + dy * dy <= VERTEX_HIT_PX * VERTEX_HIT_PX) {
+            return; // 꼭지점 마커 영역 = 양보
+          }
+        }
+      }
       // 가장 위에 그린(나중에 추가된) 동을 우선 — 마지막부터 검사
       for (let i = dragHandlers.length - 1; i >= 0; i--) {
         const h = dragHandlers[i];
