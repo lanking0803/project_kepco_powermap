@@ -77,10 +77,6 @@ export default function SolarListModal({
     () => Math.round(rows.reduce((s, r) => s + (r.capacity_kw ?? 0), 0)),
     [rows],
   );
-  const withCoord = useMemo(
-    () => rows.filter((r) => r.lat != null && r.lng != null).length,
-    [rows],
-  );
 
   if (!mounted) return null;
 
@@ -98,11 +94,6 @@ export default function SolarListModal({
               <div className="text-[11px] text-gray-600 mt-0.5">
                 <b>{rows.length.toLocaleString()}</b>개 · 총{" "}
                 <b className="text-emerald-700">{totalKw.toLocaleString()}</b> kW
-                {withCoord < rows.length && (
-                  <span className="text-gray-400 ml-1">
-                    · 지도 표시 가능 {withCoord}개
-                  </span>
-                )}
               </div>
             </div>
             <button
@@ -171,18 +162,15 @@ function SolarListRow({
   row: SameDongRow;
   onPnuClick?: (pnu: string) => void;
 }) {
-  const hasCoord = row.lat != null && row.lng != null;
   const clickable = !!onPnuClick;
   const Tag = clickable ? "button" : "div";
   return (
     <Tag
       type={clickable ? "button" : undefined}
       onClick={clickable ? () => onPnuClick(row.pnu) : undefined}
-      className={`block w-full text-left border rounded px-2.5 py-1.5 transition-colors ${
-        hasCoord
-          ? "bg-emerald-50/50 border-emerald-200"
-          : "bg-gray-50 border-gray-200"
-      } ${clickable ? "hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer" : ""}`}
+      className={`block w-full text-left border rounded px-2.5 py-1.5 transition-colors bg-emerald-50/50 border-emerald-200 ${
+        clickable ? "hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer" : ""
+      }`}
     >
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-sm font-semibold text-gray-900 truncate">
@@ -210,12 +198,10 @@ function SolarListRow({
             <span>{formatPermitDate(row.permit_date)}</span>
           </>
         )}
-        {!hasCoord && (
-          <>
-            <span className="text-gray-300">·</span>
-            <span className="text-gray-400">⚠ 좌표 미제공</span>
-          </>
-        )}
+      </div>
+      {/* [DEBUG] 좌표 노출 — 추후 제거 예정. 외부 API 좌표 결측 패턴 분석용. */}
+      <div className="text-[10px] text-gray-400 mt-0.5 font-mono">
+        lat: {row.lat ?? "null"} · lng: {row.lng ?? "null"}
       </div>
     </Tag>
   );
