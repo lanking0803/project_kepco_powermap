@@ -142,8 +142,10 @@ export interface AppraisalRecord {
 
 export interface OnbidDetail extends OnbidListItem {
   // ── 사진/멀티미디어 ──
-  /** 물건 사진 URL 목록 (보통 3~9장) */
+  /** 물건 사진 URL — 원본(1.1MB) 갤러리 메인/라이트박스용 */
   photoUrls: string[];
+  /** 물건 사진 URL — 썸네일(7KB) 갤러리 12x12 칸용 (페이지 부담 ↓) */
+  photoThumbUrls: string[];
   /** 360도 사진 URL 목록 (있으면 멋진 시각 자료) */
   photo360Urls: string[];
   /** 영상 URL 목록 */

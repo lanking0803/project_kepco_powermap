@@ -303,8 +303,7 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
         )}
 
         <div className="text-[10px] text-gray-500 leading-snug px-0.5">
-          ※ 한 번에 최대 <b className="text-rose-700">{MAX_RESULT_LIMIT.toLocaleString()}건</b>까지 표시합니다.
-          전국 전체 매물은 약 3만건이므로 <b>시군구</b>까지 좁히는 걸 권장합니다.
+          ※ 전국 매물은 약 2만 건. <b>시군구</b>까지 좁히는 걸 권장합니다.
         </div>
         <div className="flex gap-2 pt-1">
           <button
@@ -337,22 +336,15 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
       <div className="flex-1 flex flex-col min-h-0">
         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between border-b border-gray-200 bg-gray-50">
           <span>결과</span>
-          <span className="tabular-nums">
-            {totalCount.toLocaleString()}건
-            {totalCountAll != null && totalCountAll > totalCount && (
-              <span className="text-gray-400 font-normal ml-1">
-                / 전체 {totalCountAll.toLocaleString()}
-              </span>
-            )}
-          </span>
+          <span className="tabular-nums">매물 {totalCount.toLocaleString()}건</span>
         </div>
-        {/* 한도 도달 안내 — 전체가 1,000건 초과 시 사용자에게 좁히도록 유도 */}
+        {/* 한도 도달 안내 — 캠코 응답이 1,000을 초과하면 일부 매물 누락 가능.
+            (캠코는 매물 1건당 회차별로 여러 row 응답 → 1,000 row cap 안에 들어가는 매물 일부만 dedup 후 표시) */}
         {totalCountAll != null && totalCountAll > MAX_RESULT_LIMIT && (
           <div className="px-3 py-2 text-[11px] text-amber-800 bg-amber-50 border-b border-amber-200 leading-snug">
-            ⚠️ 매물이 너무 많아 <b>{MAX_RESULT_LIMIT.toLocaleString()}건만 표시</b>합니다.
+            ⚠️ 결과가 너무 많아 일부 매물이 누락될 수 있습니다.
             <br />
-            시군구·읍면동·카테고리 등으로 조건을 좁혀주세요
-            <span className="text-gray-500"> (전체 {totalCountAll.toLocaleString()}건)</span>.
+            시군구·읍면동·카테고리로 좁혀주세요.
           </div>
         )}
         <div className="overflow-y-auto flex-1">

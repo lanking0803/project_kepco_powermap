@@ -135,7 +135,11 @@ export function enrichDetail(
   return {
     ...base,
     // 사진/멀티미디어
-    photoUrls: extractUrlList(rawDetail.potoUrlList),
+    // 사진 URL — 캠코는 기본 썸네일(7KB) 을 응답.
+    //   - photoUrls: downloadImageKind=THNL_NM 제거 → 원본(1.1MB) — 갤러리 메인/라이트박스용
+    //   - photoThumbUrls: 캠코 응답 그대로 → 썸네일(7KB) — 갤러리 12x12 칸용 (페이지 부담 ↓)
+    photoUrls: extractUrlList(rawDetail.potoUrlList).map(toFullsize),
+    photoThumbUrls: extractUrlList(rawDetail.potoUrlList),
     photo360Urls: extractUrlList(rawDetail.poto360DgrUrlList),
     videoUrls: extractUrlList(rawDetail.vdoUrlAdrList),
     locationMapUrls: extractPipeList(rawDetail.lmapUrlAdrList),
@@ -177,6 +181,17 @@ function extractUrlList(
     return inner.map((x) => (x?.urlAdr ?? "").trim()).filter(Boolean);
   }
   return [(inner.urlAdr ?? "").trim()].filter(Boolean);
+}
+
+/**
+ * 캠코 사진 URL 의 downloadImageKind=THNL_NM 파라미터 제거 = 원본 사진 응답.
+ * 실측 (2026-04-30, 도동 246-7):
+ *   - downloadImageKind=THNL_NM → 7 KB 썸네일 (영업 판단 어려움)
+ *   - 파라미터 제거 → 1.1 MB 원본 (158배 큼, 화질 또렷)
+ * 같은 atchFileLstNo 면 응답 동일하므로 단순 파라미터 제거로 충분.
+ */
+function toFullsize(url: string): string {
+  return url.replace(/[?&]downloadImageKind=THNL_NM\b/g, "");
 }
 
 /** "url1|url2|url3" 같은 파이프 구분 문자열 → 배열 */
