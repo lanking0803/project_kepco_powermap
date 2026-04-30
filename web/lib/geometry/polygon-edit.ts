@@ -133,6 +133,44 @@ export function translatePolygon(
   );
 }
 
+/**
+ * polygon 의 모든 좌표를 pivot 기준 deg 만큼 회전 (시계방향).
+ *
+ * 사용처: 영역 회전 핸들 ◻ 드래그 → 외곽 폴리곤 전체 회전.
+ *   영역이 돌면 grid 알고리즘이 새 영역 안에 패널을 다시 채움 → 패널도 따라옴.
+ *
+ * 평면 근사 — 한국 위도 cos 보정. 영역 크기 < 수백 m 라 오차 무시 수준.
+ */
+export function rotatePolygon(
+  polygon: Position[][],
+  pivot: { lat: number; lng: number },
+  deg: number,
+): Position[][] {
+  if (deg === 0) return polygon;
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const cosLat = Math.cos((pivot.lat * Math.PI) / 180);
+  // 시계방향 회전 → 화면 좌표(y 아래로 +) 가 아닌 지리 좌표(lat 위로 +) 기준이라
+  // 패널 회전과 일관성을 맞추려면 시계방향 = atan2 의 -방향.
+  // 회전 행렬 (시계방향): x' = x*cos + y*sin,  y' = -x*sin + y*cos
+  return polygon.map((ring) =>
+    ring.map(([lng, lat]) => {
+      // 위경도 → 미터 단위 평면 좌표 (pivot 기준 상대)
+      const dxM = (lng - pivot.lng) * 111_320 * cosLat;
+      const dyM = (lat - pivot.lat) * 111_320;
+      // 시계방향 회전
+      const rxM = dxM * cos + dyM * sin;
+      const ryM = -dxM * sin + dyM * cos;
+      // 다시 위경도
+      return [
+        pivot.lng + rxM / (111_320 * cosLat),
+        pivot.lat + ryM / 111_320,
+      ] as Position;
+    }),
+  );
+}
+
 // ───────────────────────────────────────────
 // 점 추가 / 삭제
 // ───────────────────────────────────────────

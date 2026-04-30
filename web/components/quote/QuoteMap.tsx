@@ -31,6 +31,7 @@ import {
   polygonCenter,
   toPyeong,
   translatePolygon,
+  rotatePolygon,
 } from "@/lib/geometry/polygon-edit";
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JS_KEY || "";
@@ -175,6 +176,20 @@ const ROTATE_HANDLE_CUSTOM_URI =
   (typeof window === "undefined" ? "" : btoa(rotateHandleSvg(false)));
 
 /**
+ * 영역 회전 핸들 SVG — 주황 사각형(둥근 모서리) + 회전 화살표.
+ * 패널 회전 핸들(◯ 파랑/회색) 과 명확히 구분되는 모양/색상.
+ */
+const AREA_ROTATE_HANDLE_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">` +
+  `<rect x="3" y="3" width="16" height="16" rx="2" fill="white" stroke="${BUILDING_FILL}" stroke-width="2.5"/>` +
+  `<path d="M 11 6.5 A 4.5 4.5 0 1 1 6.5 11" fill="none" stroke="${BUILDING_FILL}" stroke-width="1.6" stroke-linecap="round"/>` +
+  `<path d="M 11 5 L 11 8 L 8.2 6.5 Z" fill="${BUILDING_FILL}"/>` +
+  `</svg>`;
+const AREA_ROTATE_HANDLE_URI =
+  "data:image/svg+xml;base64," +
+  (typeof window === "undefined" ? "" : btoa(AREA_ROTATE_HANDLE_SVG));
+
+/**
  * 회전 핸들 위치 — 영역 중심에서 정북 기준 시계방향 deg° 회전한 점.
  * deg=0 → 정북, deg=90 → 정동.
  * 회전각이 적용된 패널 방향과 동일하게 핸들도 따라가야 자연스러움.
@@ -244,6 +259,22 @@ export default function QuoteMap({
   const rotateLineRef = useRef<any[]>([]);
   /** id → 회전 핸들 객체 매핑 — rotation/panels 변경 시 in-place 위치 갱신 */
   const rotateHandleMapRef = useRef<Map<string, { marker: any; line: any; centerLat: number; centerLng: number }>>(
+    new Map(),
+  );
+  /** id → 영역 회전 핸들 매핑 — selected 변경 시 setMap 토글 + 평행이동 시 같이 옮기기 */
+  const areaRotateHandleMapRef = useRef<Map<string, { marker: any; line: any; centerLat: number; centerLng: number }>>(
+    new Map(),
+  );
+  /** 영역 회전 핸들 마커 + 점선 (cleanup 용 평탄 배열) */
+  const areaRotateHandleRef = useRef<any[]>([]);
+  const areaRotateLineRef = useRef<any[]>([]);
+  /**
+   * id → 사용자가 영역 회전 핸들을 마지막으로 놓은 위치 (영역 중심 기준 dLng/dLat).
+   * 영역 회전 dragend → 메인 effect 재실행 → 핸들 destroy/recreate. 이때 기본 위치
+   * (bbox maxLng) 가 아니라 사용자가 둔 위치로 핸들이 그려져야 자연스러움.
+   * 평행이동/회전 시 영역 중심도 같이 움직이므로 상대좌표(dLng/dLat) 로 저장.
+   */
+  const areaRotateHandleOffsetRef = useRef<Map<string, { dLng: number; dLat: number }>>(
     new Map(),
   );
   /** id → 패널 폴리곤 배열 매핑 — rotation/panels 변경 시 destroy 후 재생성 */
@@ -363,7 +394,11 @@ export default function QuoteMap({
       buildings
         .map(
           (b) =>
+            // hasPanels 여부 = 1단계→2단계 전환 시 패널 회전 핸들 생성을 위해 시그니처에 포함.
+            // (panel 좌표 자체는 in-place effect 가 처리하므로 갯수만 반영)
             `${b.id}|${b.area_m2.toFixed(3)}|${b.polygon[0]?.length ?? 0}|${
+              (b.panels?.length ?? 0) > 0 ? "P" : "-"
+            }|${
               b.polygon[0]
                 ?.map((p) => `${p[0].toFixed(7)},${p[1].toFixed(7)}`)
                 .join(";") ?? ""
@@ -394,6 +429,11 @@ export default function QuoteMap({
     rotateLineRef.current.forEach((l) => l.setMap(null));
     rotateLineRef.current = [];
     rotateHandleMapRef.current.clear();
+    areaRotateHandleRef.current.forEach((m) => m.setMap(null));
+    areaRotateHandleRef.current = [];
+    areaRotateLineRef.current.forEach((l) => l.setMap(null));
+    areaRotateLineRef.current = [];
+    areaRotateHandleMapRef.current.clear();
 
     const dotImage = new window.kakao.maps.MarkerImage(
       VERTEX_DOT_URI,
@@ -572,7 +612,7 @@ export default function QuoteMap({
 
       // 면적 라벨 (CustomOverlay) — 영역 위쪽 외부 (패널 가리지 않도록).
       // 평행이동 시 dragEffectivePos 기준이라 위치 무관.
-      const labelAnchor = polygonTopAnchor(building.polygon, 8);
+      const labelAnchor = polygonTopAnchor(building.polygon, 5);
       let labelOverlay: any = null;
       if (labelAnchor) {
         const labelEl = document.createElement("div");
@@ -798,6 +838,323 @@ export default function QuoteMap({
         });
       }
 
+      // ── 영역 회전 핸들 ◻ — 패널 회전 ◯ 와 별도 +
+      //   영역 외곽 오른쪽 16m 위치에 사각형 핸들. 드래그하면 영역 폴리곤 자체가
+      //   영역 중심 기준으로 회전 (안의 패널은 새 영역 안에 fillPanelGrid 가 다시 깔림).
+      //   인쇄 모드 X — 1단계(영역 그리기) 부터 사용 가능 (패널 유무 무관).
+      //   모든 영역에 항상 생성하되 별도 effect 가 selected 영역에만 보이게 토글.
+      if (!printMode && onBuildingChange) {
+        const center = polygonCenter(building.polygon);
+        if (center) {
+          // 영역 외곽 오른쪽 anchor 계산 — bbox maxLng 기준 + 16m 동쪽
+          let maxLng = -Infinity;
+          let midLat = center.lat;
+          {
+            const ring = building.polygon[0];
+            if (ring && ring.length > 0) {
+              let sumLat = 0;
+              let count = 0;
+              for (const [lng, lat] of ring) {
+                if (lng > maxLng) maxLng = lng;
+                sumLat += lat;
+                count++;
+              }
+              if (count > 0) midLat = sumLat / count;
+            }
+          }
+          if (Number.isFinite(maxLng)) {
+            const cosLat = Math.cos((midLat * Math.PI) / 180);
+            // 사용자가 이전에 핸들을 직접 회전시켜 놓은 적이 있으면 그 offset 사용.
+            // 없으면 기본 = 영역 동쪽 16m (오른쪽 가운데).
+            const savedOffset = areaRotateHandleOffsetRef.current.get(building.id);
+            const handleLng = savedOffset
+              ? center.lng + savedOffset.dLng
+              : maxLng + 16 / (111_320 * cosLat);
+            const handleLat = savedOffset
+              ? center.lat + savedOffset.dLat
+              : midLat;
+            const areaImage = new window.kakao.maps.MarkerImage(
+              AREA_ROTATE_HANDLE_URI,
+              new window.kakao.maps.Size(22, 22),
+              { offset: new window.kakao.maps.Point(11, 11) },
+            );
+            const areaHandleMarker = new window.kakao.maps.Marker({
+              map,
+              position: new window.kakao.maps.LatLng(handleLat, handleLng),
+              image: areaImage,
+              draggable: true,
+              zIndex: 1100,
+              title:
+                "드래그 = 영역 + 패널 함께 회전 / Shift+드래그 = 15° 스냅",
+            });
+            const areaLine = new window.kakao.maps.Polyline({
+              map,
+              path: [
+                new window.kakao.maps.LatLng(center.lat, center.lng),
+                new window.kakao.maps.LatLng(handleLat, handleLng),
+              ],
+              strokeWeight: 2,
+              strokeColor: BUILDING_FILL,
+              strokeOpacity: 0.7,
+              strokeStyle: "shortdash",
+              zIndex: 1099,
+            });
+            areaRotateHandleRef.current.push(areaHandleMarker);
+            areaRotateLineRef.current.push(areaLine);
+            areaRotateHandleMapRef.current.set(building.id, {
+              marker: areaHandleMarker,
+              line: areaLine,
+              centerLat: center.lat,
+              centerLng: center.lng,
+            });
+
+            const capturedId2 = building.id;
+            // 드래그 시작 시점의 polygon 스냅샷 — 매 프레임 이걸 회전한 새 polygon 으로 emit.
+            // (누적 회전 X — 시작 → 현재 사이의 절대 각도만 적용)
+            let polygonSnapshot: Position[][] = building.polygon;
+            let centerSnapshot = { lat: center.lat, lng: center.lng };
+            // 시작 시 마우스 → 핸들 사이 각도 (이걸 0 점으로 삼고, 현재 마우스 각도 - 시작 각도 = 회전 Δ)
+            let startAngle = 0;
+            let raf2: number | null = null;
+            let shiftHeld2 = false;
+            const onShift2Down = (ev: KeyboardEvent) => {
+              if (ev.key === "Shift") shiftHeld2 = true;
+            };
+            const onShift2Up = (ev: KeyboardEvent) => {
+              if (ev.key === "Shift") shiftHeld2 = false;
+            };
+
+            // 드래그 중에는 영역 폴리곤 + 패널 폴리곤을 in-place 회전(kakao setPath).
+            // 부모 setBuildings 호출은 dragend 1회만 — 매 프레임 호출하면 메인 effect
+            // 재실행으로 사용자가 잡고 있는 핸들 마커가 destroy 됨.
+            let panelPathSnaps: Array<{ poly: any; path: Position[] }> = [];
+            let ringPathSnaps: Array<{ poly: any; path: Position[] }> = [];
+            // 꼭지점 마커들 — 이 영역에 속한 마커만 (시작 시점 좌표로)
+            let vertexMarkerSnaps: Array<{ marker: any; lng: number; lat: number }> = [];
+            // 패널 회전 핸들 ◯ + 점선 — 시작 시점 위치
+            let panelHandleSnap: {
+              marker: any;
+              line: any;
+              lng: number;
+              lat: number;
+            } | null = null;
+
+            window.kakao.maps.event.addListener(
+              areaHandleMarker,
+              "dragstart",
+              () => {
+                onSelectRef.current?.(capturedId2, true);
+                (areaHandleMarker as any).__dragging = true;
+                window.addEventListener("keydown", onShift2Down);
+                window.addEventListener("keyup", onShift2Up);
+                // 시작 시점 polygon + center 스냅샷
+                const cur = buildingsRef.current.find(
+                  (b) => b.id === capturedId2,
+                );
+                if (cur) {
+                  polygonSnapshot = cur.polygon;
+                  const c = polygonCenter(cur.polygon);
+                  if (c) centerSnapshot = c;
+                }
+                // 영역 ring polys + 패널 polys path 스냅샷 (in-place 회전용)
+                const ringPolyList = buildingPolyMapRef.current.get(capturedId2)
+                  ? [buildingPolyMapRef.current.get(capturedId2)]
+                  : [];
+                ringPathSnaps = ringPolyList
+                  .filter(Boolean)
+                  .map((p) => ({
+                    poly: p,
+                    path: Array.from(p.getPath() as any[]).map((pt: any) => [
+                      pt.getLng(),
+                      pt.getLat(),
+                    ]),
+                  }));
+                const panels =
+                  panelPolyMapRef.current.get(capturedId2) ?? [];
+                panelPathSnaps = panels.map((p) => ({
+                  poly: p,
+                  path: Array.from(p.getPath() as any[]).map((pt: any) => [
+                    pt.getLng(),
+                    pt.getLat(),
+                  ]),
+                }));
+                // 꼭지점 마커 — 이 영역에 속한 것만 (현재 위치가 영역 ring 내 어느 좌표에 일치)
+                if (cur) {
+                  const ring = cur.polygon[0] ?? [];
+                  vertexMarkerSnaps = vertexMarkersRef.current
+                    .map((m) => {
+                      const p = m.getPosition();
+                      const mLat = p.getLat();
+                      const mLng = p.getLng();
+                      const belongs = ring.some(
+                        ([rl, rt]) =>
+                          Math.abs(rt - mLat) < 1e-9 && Math.abs(rl - mLng) < 1e-9,
+                      );
+                      return belongs
+                        ? { marker: m, lng: mLng, lat: mLat }
+                        : null;
+                    })
+                    .filter(
+                      (x): x is { marker: any; lng: number; lat: number } =>
+                        x !== null,
+                    );
+                }
+                // 패널 회전 핸들 ◯ + 점선
+                const panelH = rotateHandleMapRef.current.get(capturedId2);
+                if (panelH) {
+                  const p = panelH.marker.getPosition();
+                  panelHandleSnap = {
+                    marker: panelH.marker,
+                    line: panelH.line,
+                    lng: p.getLng(),
+                    lat: p.getLat(),
+                  };
+                } else {
+                  panelHandleSnap = null;
+                }
+                // 핸들 시작 위치 → 시작 각도
+                const startPos = areaHandleMarker.getPosition();
+                startAngle = bearingDeg(
+                  centerSnapshot.lat,
+                  centerSnapshot.lng,
+                  startPos.getLat(),
+                  startPos.getLng(),
+                );
+                const tick = () => {
+                  const pos = areaHandleMarker.getPosition();
+                  const cur2 = bearingDeg(
+                    centerSnapshot.lat,
+                    centerSnapshot.lng,
+                    pos.getLat(),
+                    pos.getLng(),
+                  );
+                  let delta = cur2 - startAngle;
+                  if (shiftHeld2) {
+                    delta = Math.round(delta / 15) * 15;
+                  } else {
+                    delta = Math.round(delta);
+                  }
+                  // in-place 회전 — 영역 ring + 안의 패널 polys 를 같은 delta 로 돌림
+                  const rad = (delta * Math.PI) / 180;
+                  const cosR = Math.cos(rad);
+                  const sinR = Math.sin(rad);
+                  const cosLat = Math.cos(
+                    (centerSnapshot.lat * Math.PI) / 180,
+                  );
+                  const rotPt = (lng: number, lat: number) => {
+                    const dxM = (lng - centerSnapshot.lng) * 111_320 * cosLat;
+                    const dyM = (lat - centerSnapshot.lat) * 111_320;
+                    const rxM = dxM * cosR + dyM * sinR;
+                    const ryM = -dxM * sinR + dyM * cosR;
+                    return new window.kakao.maps.LatLng(
+                      centerSnapshot.lat + ryM / 111_320,
+                      centerSnapshot.lng + rxM / (111_320 * cosLat),
+                    );
+                  };
+                  for (const rs of ringPathSnaps) {
+                    rs.poly.setPath(
+                      rs.path.map(([lng, lat]) => rotPt(lng, lat)),
+                    );
+                  }
+                  for (const ps of panelPathSnaps) {
+                    ps.poly.setPath(
+                      ps.path.map(([lng, lat]) => rotPt(lng, lat)),
+                    );
+                  }
+                  // 꼭지점 마커들 — 영역과 함께 회전
+                  for (const vs of vertexMarkerSnaps) {
+                    vs.marker.setPosition(rotPt(vs.lng, vs.lat));
+                  }
+                  // 패널 회전 핸들 ◯ + 그 점선 — 같이 회전
+                  if (panelHandleSnap) {
+                    const newP = rotPt(panelHandleSnap.lng, panelHandleSnap.lat);
+                    panelHandleSnap.marker.setPosition(newP);
+                    panelHandleSnap.line.setPath([
+                      new window.kakao.maps.LatLng(
+                        centerSnapshot.lat,
+                        centerSnapshot.lng,
+                      ),
+                      newP,
+                    ]);
+                  }
+                  // 영역 회전 핸들 ◻ 의 점선 — 영역 중심 → 사용자가 잡고 있는 마커 현위치
+                  const ahPos = areaHandleMarker.getPosition();
+                  areaLine.setPath([
+                    new window.kakao.maps.LatLng(
+                      centerSnapshot.lat,
+                      centerSnapshot.lng,
+                    ),
+                    new window.kakao.maps.LatLng(ahPos.getLat(), ahPos.getLng()),
+                  ]);
+                  raf2 = requestAnimationFrame(tick);
+                };
+                raf2 = requestAnimationFrame(tick);
+              },
+            );
+
+            window.kakao.maps.event.addListener(
+              areaHandleMarker,
+              "dragend",
+              () => {
+                if (raf2 !== null) {
+                  cancelAnimationFrame(raf2);
+                  raf2 = null;
+                }
+                window.removeEventListener("keydown", onShift2Down);
+                window.removeEventListener("keyup", onShift2Up);
+                (areaHandleMarker as any).__dragging = false;
+                // 마지막 한 번 더 sync
+                const pos = areaHandleMarker.getPosition();
+                const cur2 = bearingDeg(
+                  centerSnapshot.lat,
+                  centerSnapshot.lng,
+                  pos.getLat(),
+                  pos.getLng(),
+                );
+                let delta = cur2 - startAngle;
+                if (shiftHeld2) {
+                  delta = Math.round(delta / 15) * 15;
+                } else {
+                  delta = Math.round(delta);
+                }
+                if (delta !== 0) {
+                  // 부모 state 1회 갱신 → useMemo 재실행 → 패널 격자 새 좌표로 다시 깔림.
+                  // (드래그 중엔 in-place setPath 로 시각만 회전, 실제 polygon 은 여기서 박힘)
+                  const rotated = rotatePolygon(
+                    polygonSnapshot,
+                    centerSnapshot,
+                    delta,
+                  );
+                  // 새 영역 중심 + 사용자가 끈 핸들 위치 = 새 영역 중심 기준 offset 저장.
+                  // 메인 effect 가 재실행되어 핸들 재생성될 때 이 offset 으로 그림.
+                  const newCenter = polygonCenter(rotated);
+                  if (newCenter) {
+                    const handlePos2 = areaHandleMarker.getPosition();
+                    areaRotateHandleOffsetRef.current.set(capturedId2, {
+                      dLng: handlePos2.getLng() - newCenter.lng,
+                      dLat: handlePos2.getLat() - newCenter.lat,
+                    });
+                  }
+                  onChangeRef.current?.(
+                    capturedId2,
+                    rotated,
+                    calcAreaM2(rotated),
+                  );
+                }
+              },
+            );
+
+            window.kakao.maps.event.addListener(
+              areaHandleMarker,
+              "click",
+              () => {
+                onSelectRef.current?.(capturedId2);
+              },
+            );
+          }
+        }
+      }
+
       // 3단계 패널 폴리곤 — 격자 알고리즘 결과 N개. 영역 위에 빨강 채움.
       // zIndex 800 = 영역 폴리곤(기본) 위, 라벨/마커(>=999) 아래.
       // 패널 클릭도 부모 동 선택으로 위임 (패널이 영역 클릭을 가리는 문제 우회).
@@ -850,6 +1207,8 @@ export default function QuoteMap({
       vertexSnapshots: Array<[number, number] | null>;
       labelStart: { lat: number; lng: number } | null;
       handleStart: { marker: any; line: any; lat: number; lng: number; centerLat: number; centerLng: number } | null;
+      /** 영역 회전 핸들 ◻ 도 같이 평행이동 */
+      areaHandleStart: { marker: any; line: any; lat: number; lng: number; centerLat: number; centerLng: number } | null;
       /** 패널 폴리곤 — 평행이동 시 같이 옮길 수 있도록 path 스냅샷 (poly 별 LatLng[]) */
       panelSnapshots: Array<{ poly: any; path: any[] }>;
       lastLat: number;
@@ -935,6 +1294,20 @@ export default function QuoteMap({
           new window.kakao.maps.LatLng(hs.lat + dLat, hs.lng + dLng),
         ]);
       }
+      // 영역 회전 핸들도 같이 평행이동
+      const ahs = active.areaHandleStart;
+      if (ahs) {
+        ahs.marker.setPosition(
+          new window.kakao.maps.LatLng(ahs.lat + dLat, ahs.lng + dLng),
+        );
+        ahs.line.setPath([
+          new window.kakao.maps.LatLng(
+            ahs.centerLat + dLat,
+            ahs.centerLng + dLng,
+          ),
+          new window.kakao.maps.LatLng(ahs.lat + dLat, ahs.lng + dLng),
+        ]);
+      }
       // 패널 폴리곤도 같이 평행이동 — 스냅샷 path 에 dLat/dLng 적용해서 setPath
       for (const ps of active.panelSnapshots) {
         ps.poly.setPath(
@@ -958,11 +1331,12 @@ export default function QuoteMap({
       map.setDraggable(true);
       const dLat = a.lastLat - a.startLat;
       const dLng = a.lastLng - a.startLng;
-      // 거의 안 움직였으면 클릭으로 간주 — state 갱신 skip (polygon click 이 별도 발화)
-      if (Math.abs(dLat) < 1e-7 && Math.abs(dLng) < 1e-7) return;
-      // 의미 있는 드래그 발생 → 직후 폴리곤 click 발화로 활성화가 토글되지 않도록
-      // 플래그 set. polygon click 핸들러가 보고 1회 무시.
+      // mousedown 시점에 onSelect(force=true) 로 활성화는 이미 됨. 직후 카카오 SDK 가
+      // polygon click 발화 → force 없는 onSelect → 토글로 활성화가 풀려버리는 것을 방지.
+      // 안 움직였든 끌었든 항상 다음 click 1회 무시.
       justDraggedRef.current = true;
+      // 거의 안 움직였으면 클릭으로 간주 — state 갱신 skip
+      if (Math.abs(dLat) < 1e-7 && Math.abs(dLng) < 1e-7) return;
       const target = buildingsRef.current.find((b) => b.id === a.handler.id);
       if (!target) return;
       const newPolygon = translatePolygon(target.polygon, dLng, dLat);
@@ -998,7 +1372,7 @@ export default function QuoteMap({
             return; // 꼭지점 = 양보
           }
         }
-        // 회전 핸들 — 화면에 보이는(setMap !== null) 핸들만 검사
+        // 패널 회전 핸들 ◯ — 화면에 보이는(setMap !== null) 핸들만 검사
         for (const entry of rotateHandleMapRef.current.values()) {
           if (!entry.marker.getMap()) continue; // 숨겨진 핸들 무시
           const mPos = entry.marker.getPosition();
@@ -1008,7 +1382,20 @@ export default function QuoteMap({
           const dx = clickX - mPt.x;
           const dy = clickY - mPt.y;
           if (dx * dx + dy * dy <= ROTATE_HIT_PX * ROTATE_HIT_PX) {
-            return; // 회전 핸들 = 양보
+            return; // 패널 회전 핸들 = 양보
+          }
+        }
+        // 영역 회전 핸들 ◻ — 동일 처리
+        for (const entry of areaRotateHandleMapRef.current.values()) {
+          if (!entry.marker.getMap()) continue;
+          const mPos = entry.marker.getPosition();
+          const mPt = projection.containerPointFromCoords(
+            new window.kakao.maps.LatLng(mPos.getLat(), mPos.getLng()),
+          );
+          const dx = clickX - mPt.x;
+          const dy = clickY - mPt.y;
+          if (dx * dx + dy * dy <= ROTATE_HIT_PX * ROTATE_HIT_PX) {
+            return; // 영역 회전 핸들 = 양보
           }
         }
       }
@@ -1049,6 +1436,18 @@ export default function QuoteMap({
               centerLng: rh.centerLng,
             }
           : null;
+        // 영역 회전 핸들 ◻
+        const arh = areaRotateHandleMapRef.current.get(h.id);
+        const areaHandleStart = arh
+          ? {
+              marker: arh.marker,
+              line: arh.line,
+              lat: arh.marker.getPosition().getLat(),
+              lng: arh.marker.getPosition().getLng(),
+              centerLat: arh.centerLat,
+              centerLng: arh.centerLng,
+            }
+          : null;
         // 패널 폴리곤 path 스냅샷 — 이 동에 속한 패널만
         const panels = panelPolyMapRef.current.get(h.id) ?? [];
         const panelSnapshots = panels.map((poly) => ({
@@ -1067,6 +1466,7 @@ export default function QuoteMap({
           vertexSnapshots: vertexSnaps,
           labelStart,
           handleStart,
+          areaHandleStart,
           panelSnapshots,
         };
         map.setDraggable(false);
@@ -1238,6 +1638,11 @@ export default function QuoteMap({
       entry.marker.setMap(visible ? map : null);
       entry.line.setMap(visible ? map : null);
     }
+    for (const [id, entry] of areaRotateHandleMapRef.current.entries()) {
+      const visible = id === selectedBuildingId;
+      entry.marker.setMap(visible ? map : null);
+      entry.line.setMap(visible ? map : null);
+    }
   }, [loaded, selectedBuildingId, buildings]);
 
   // 클린업
@@ -1250,6 +1655,8 @@ export default function QuoteMap({
       panelPolyRef.current.forEach((p) => p.setMap(null));
       rotateHandleRef.current.forEach((m) => m.setMap(null));
       rotateLineRef.current.forEach((l) => l.setMap(null));
+      areaRotateHandleRef.current.forEach((m) => m.setMap(null));
+      areaRotateLineRef.current.forEach((l) => l.setMap(null));
     };
   }, []);
 

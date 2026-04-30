@@ -42,6 +42,7 @@ import {
   removeVertex,
   findLongestEdge,
   findFlattestVertex,
+  rotatePolygon,
 } from "@/lib/geometry/polygon-edit";
 import {
   FACILITY_KINDS,
