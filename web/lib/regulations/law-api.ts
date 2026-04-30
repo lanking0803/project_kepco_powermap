@@ -59,8 +59,11 @@ export async function searchOrdinancesByQuery(
   query: string,
   display = 50,
 ): Promise<LawOrdinance[]> {
+  // 진단 로그 (배포 환경 디버깅용 — sunlap.kr 조례 빈배열 사례 2026-04-30)
+  const region = process.env.VERCEL_REGION ?? "local";
+  const ocLen = LAW_OC.length;
   if (!LAW_OC) {
-    console.error("[Law API] LAW_OC 미설정");
+    console.error(`[Law API] LAW_OC 미설정 region=${region}`);
     return [];
   }
   const cleaned = (query || "").trim();
@@ -82,6 +85,7 @@ export async function searchOrdinancesByQuery(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const startedAt = Date.now();
 
   try {
     const res = await fetch(`${SEARCH_URL}?${params.toString()}`, {
@@ -89,22 +93,37 @@ export async function searchOrdinancesByQuery(
       cache: "no-store",
     });
     clearTimeout(timer);
+    const elapsed = Date.now() - startedAt;
     if (!res.ok) {
-      console.error(`[Law API] HTTP ${res.status} (${cleaned})`);
+      const bodyPreview = await res.text().then((t) => t.slice(0, 300));
+      console.error(
+        `[Law API] HTTP ${res.status} region=${region} ocLen=${ocLen} q="${cleaned}" elapsed=${elapsed}ms body="${bodyPreview}"`,
+      );
       return [];
     }
     const xml = await res.text();
     const rows = parseSearchXml(xml);
+    // 본문 프리뷰 — 정상 응답이지만 "사용자 정보 검증 실패" 같은 평문일 가능성 진단
+    if (rows.length === 0) {
+      console.error(
+        `[Law API] 0 rows region=${region} ocLen=${ocLen} q="${cleaned}" elapsed=${elapsed}ms xmlPreview="${xml.slice(0, 300)}"`,
+      );
+    }
     queryCache.set(cleaned, {
       rows,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
     return rows;
   } catch (err) {
+    const elapsed = Date.now() - startedAt;
     if ((err as Error).name === "AbortError") {
-      console.error(`[Law API] 타임아웃 ${TIMEOUT_MS}ms (${cleaned})`);
+      console.error(
+        `[Law API] 타임아웃 ${TIMEOUT_MS}ms region=${region} q="${cleaned}" elapsed=${elapsed}ms`,
+      );
     } else {
-      console.error(`[Law API] 호출 실패 (${cleaned}):`, err);
+      console.error(
+        `[Law API] 호출 실패 region=${region} q="${cleaned}" elapsed=${elapsed}ms err=${(err as Error).name}:${(err as Error).message}`,
+      );
     }
     return [];
   } finally {
