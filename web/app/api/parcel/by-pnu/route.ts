@@ -18,9 +18,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { getParcelByPnu } from "@/lib/vworld/parcel";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
-// VWorld 는 한국 외 IP 차단. Vercel 기본 region(iad1) → fetch failed 발생.
-export const preferredRegion = "icn1";
-
 export const meta: EndpointMeta = {
   source: "VWorld WFS (fes:Filter PropertyIsEqualTo, 1:1 매칭, 실측 ~40ms)",
   cache: "private, s-maxage=86400, max-age=3600",

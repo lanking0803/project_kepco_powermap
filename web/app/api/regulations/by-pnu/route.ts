@@ -25,9 +25,6 @@ import { searchOrdinancesByQuery } from "@/lib/regulations/law-api";
 import { classifyRegionForRegulation } from "@/lib/regulations/region";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
-// VWorld 는 한국 외 IP 차단. Vercel 기본 region(iad1) → fetch failed 발생.
-export const preferredRegion = "icn1";
-
 export const meta: EndpointMeta = {
   source: "법제처 OPEN API (자치법규 검색, 광역+기초 2회 호출)",
   cache: "private, s-maxage=86400, max-age=3600",
