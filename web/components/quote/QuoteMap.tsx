@@ -248,6 +248,12 @@ export default function QuoteMap({
   );
   /** id → 패널 폴리곤 배열 매핑 — rotation/panels 변경 시 destroy 후 재생성 */
   const panelPolyMapRef = useRef<Map<string, any[]>>(new Map());
+  /**
+   * 방금 영역 평행이동이 끝났는지 플래그.
+   * 영역 드래그 후 mouseup 시 카카오 SDK 가 폴리곤 click 도 발화 → 활성화 토글로
+   * 풀려버리는 버그 방지. true 면 다음 click 1회 무시.
+   */
+  const justDraggedRef = useRef(false);
 
   // dragend / dblclick 콜백 안에서 최신 buildings/onChange 참조 — closure 꼬임 방지.
   // ref 갱신은 effect 안에서 (render 중 ref.current 변경은 React 19에서 anti-pattern).
@@ -347,10 +353,12 @@ export default function QuoteMap({
   /**
    * 건물 effect 재실행 트리거 시그니처.
    * 회전 핸들 드래그 = rotation 만 매 프레임 변경 → 시그니처 동일 → effect 재실행 X.
-   * (그래야 드래그 중인 핸들 마커가 destroy 안 됨.)
-   * 영역 추가/삭제/꼭지점 변경/시설 변경 등 "구조" 변화일 때만 effect 재실행.
+   * 사용자 mousedown → 활성화(selectedBuildingId 변경) 동안에도 effect 재실행 X
+   * (그래야 비활성 영역 첫 클릭+드래그 시 같은 mousedown 세션이 안 끊김).
+   * 영역 추가/삭제/꼭지점 변경 등 "구조" 변화일 때만 effect 재실행.
+   * selectedBuildingId, rotation, panels 변경은 별도 effect 들이 in-place 처리.
    */
-  const buildingsStructureKey = useMemo(
+  const buildingsEffectKey = useMemo(
     () =>
       buildings
         .map(
@@ -364,8 +372,6 @@ export default function QuoteMap({
         .join("##"),
     [buildings],
   );
-  // 선택 변경 시에도 핸들 표시 영역이 바뀌어야 하므로 effect 재실행 트리거
-  const buildingsEffectKey = `${buildingsStructureKey}@${selectedBuildingId ?? ""}`;
 
   // 건물 폴리곤 + 꼭지점 마커 + 면적 라벨
   useEffect(() => {
@@ -429,6 +435,11 @@ export default function QuoteMap({
         if (!printMode) {
           const clickedId = building.id;
           window.kakao.maps.event.addListener(poly, "click", () => {
+            // 영역 평행이동 직후 click = 카카오 SDK 가 자동 발화 → 활성화 토글 방지
+            if (justDraggedRef.current) {
+              justDraggedRef.current = false;
+              return;
+            }
             onSelectRef.current?.(clickedId);
           });
         }
@@ -623,14 +634,12 @@ export default function QuoteMap({
         if (typeof setter === "function") setter(labelOverlay);
       }
 
-      // 회전 핸들 — 패널이 있을 때만(2단계 이상) + 인쇄 모드 X + **선택된 영역에만**.
-      // 모든 영역에 띄우면 가독성이 떨어진다는 의뢰자 결정 (2026-04-30).
-      // 영역 중심에서 정북 기준 시계방향 rotation° 위치에 ◯ 마커.
-      // 드래그 = 실시간 회전 / Shift = 15° 스냅 / 더블클릭 = 자동 복귀.
-      const isThisSelected = selectedBuildingId === building.id;
+      // 회전 핸들 — 패널이 있을 때만(2단계 이상) + 인쇄 모드 X.
+      // 모든 영역에 항상 생성하되, **선택되지 않은 영역의 핸들은 별도 effect 가 hide.**
+      // (메인 effect 가 selectedBuildingId 에 의존하면 첫 클릭 + 드래그 세션이
+      //  effect 재실행으로 끊긴다 — 의뢰자 보고 사례 2026-04-30)
       if (
         !printMode &&
-        isThisSelected &&
         building.panels &&
         building.panels.length > 0 &&
         onRotationChangeRef.current
@@ -813,6 +822,10 @@ export default function QuoteMap({
           });
           if (!printMode) {
             window.kakao.maps.event.addListener(panelPoly, "click", () => {
+              if (justDraggedRef.current) {
+                justDraggedRef.current = false;
+                return;
+              }
               onSelectRef.current?.(clickedId);
             });
           }
@@ -837,6 +850,8 @@ export default function QuoteMap({
       vertexSnapshots: Array<[number, number] | null>;
       labelStart: { lat: number; lng: number } | null;
       handleStart: { marker: any; line: any; lat: number; lng: number; centerLat: number; centerLng: number } | null;
+      /** 패널 폴리곤 — 평행이동 시 같이 옮길 수 있도록 path 스냅샷 (poly 별 LatLng[]) */
+      panelSnapshots: Array<{ poly: any; path: any[] }>;
       lastLat: number;
       lastLng: number;
     } | null = null;
@@ -920,6 +935,18 @@ export default function QuoteMap({
           new window.kakao.maps.LatLng(hs.lat + dLat, hs.lng + dLng),
         ]);
       }
+      // 패널 폴리곤도 같이 평행이동 — 스냅샷 path 에 dLat/dLng 적용해서 setPath
+      for (const ps of active.panelSnapshots) {
+        ps.poly.setPath(
+          ps.path.map(
+            (pt: any) =>
+              new window.kakao.maps.LatLng(
+                pt.getLat() + dLat,
+                pt.getLng() + dLng,
+              ),
+          ),
+        );
+      }
     };
 
     const onDocMouseUp = () => {
@@ -933,6 +960,9 @@ export default function QuoteMap({
       const dLng = a.lastLng - a.startLng;
       // 거의 안 움직였으면 클릭으로 간주 — state 갱신 skip (polygon click 이 별도 발화)
       if (Math.abs(dLat) < 1e-7 && Math.abs(dLng) < 1e-7) return;
+      // 의미 있는 드래그 발생 → 직후 폴리곤 click 발화로 활성화가 토글되지 않도록
+      // 플래그 set. polygon click 핸들러가 보고 1회 무시.
+      justDraggedRef.current = true;
       const target = buildingsRef.current.find((b) => b.id === a.handler.id);
       if (!target) return;
       const newPolygon = translatePolygon(target.polygon, dLng, dLat);
@@ -946,15 +976,17 @@ export default function QuoteMap({
       if (!ll) return;
       const lat = ll.getLat();
       const lng = ll.getLng();
-      // 꼭지점 마커 hit area 와 겹치면 영역 이동 양보 (꼭지점 우선).
-      // 마커 SVG 24×24 이므로 클릭 좌표가 마커 중심에서 12px 이내면 마커 클릭으로 간주.
-      // 카카오 SDK 의 마커 dragstart 는 div mousedown 보다 늦게 발화되므로 ref flag
-      // 방식은 못 쓰고, 클릭 픽셀 좌표 직접 비교가 가장 안전.
+      // 꼭지점/회전 핸들 마커 hit area 와 겹치면 영역 이동 양보 (마커 우선).
+      // 카카오 SDK 의 마커 dragstart 는 div mousedown 보다 늦게 발화되므로
+      // ref flag 방식은 못 쓰고, 클릭 픽셀 좌표 직접 비교가 가장 안전.
+      // 꼭지점 = 24×24 (12px 반경), 회전 핸들 = 28×28 (14px 반경, 약간 더 큼).
       const VERTEX_HIT_PX = 12;
+      const ROTATE_HIT_PX = 14;
       const rect2 = mapRef.current?.getBoundingClientRect();
       if (rect2) {
         const clickX = e.clientX - rect2.left;
         const clickY = e.clientY - rect2.top;
+        // 꼭지점 마커
         for (const m of vertexMarkersRef.current) {
           const mPos = m.getPosition();
           const mPt = projection.containerPointFromCoords(
@@ -963,7 +995,20 @@ export default function QuoteMap({
           const dx = clickX - mPt.x;
           const dy = clickY - mPt.y;
           if (dx * dx + dy * dy <= VERTEX_HIT_PX * VERTEX_HIT_PX) {
-            return; // 꼭지점 마커 영역 = 양보
+            return; // 꼭지점 = 양보
+          }
+        }
+        // 회전 핸들 — 화면에 보이는(setMap !== null) 핸들만 검사
+        for (const entry of rotateHandleMapRef.current.values()) {
+          if (!entry.marker.getMap()) continue; // 숨겨진 핸들 무시
+          const mPos = entry.marker.getPosition();
+          const mPt = projection.containerPointFromCoords(
+            new window.kakao.maps.LatLng(mPos.getLat(), mPos.getLng()),
+          );
+          const dx = clickX - mPt.x;
+          const dy = clickY - mPt.y;
+          if (dx * dx + dy * dy <= ROTATE_HIT_PX * ROTATE_HIT_PX) {
+            return; // 회전 핸들 = 양보
           }
         }
       }
@@ -1004,6 +1049,12 @@ export default function QuoteMap({
               centerLng: rh.centerLng,
             }
           : null;
+        // 패널 폴리곤 path 스냅샷 — 이 동에 속한 패널만
+        const panels = panelPolyMapRef.current.get(h.id) ?? [];
+        const panelSnapshots = panels.map((poly) => ({
+          poly,
+          path: Array.from(poly.getPath() as any[]),
+        }));
         active = {
           handler: h,
           startLat: lat,
@@ -1016,6 +1067,7 @@ export default function QuoteMap({
           vertexSnapshots: vertexSnaps,
           labelStart,
           handleStart,
+          panelSnapshots,
         };
         map.setDraggable(false);
         e.preventDefault();
@@ -1079,6 +1131,10 @@ export default function QuoteMap({
           });
           if (!printMode) {
             window.kakao.maps.event.addListener(panelPoly, "click", () => {
+              if (justDraggedRef.current) {
+                justDraggedRef.current = false;
+                return;
+              }
               onSelectRef.current?.(clickedId);
             });
           }
@@ -1171,6 +1227,18 @@ export default function QuoteMap({
       });
     }
   }, [selectedBuildingId, buildings]);
+
+  // 회전 핸들 표시 토글 — selectedBuildingId 변경 시 setMap 만 호출 (재생성 X).
+  // 핸들/라인 객체는 메인 effect 가 모든 영역에 항상 생성. 여기선 보이기/숨기기만.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!loaded || !map) return;
+    for (const [id, entry] of rotateHandleMapRef.current.entries()) {
+      const visible = id === selectedBuildingId;
+      entry.marker.setMap(visible ? map : null);
+      entry.line.setMap(visible ? map : null);
+    }
+  }, [loaded, selectedBuildingId, buildings]);
 
   // 클린업
   useEffect(() => {
