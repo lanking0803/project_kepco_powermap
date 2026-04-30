@@ -24,6 +24,13 @@ export interface SolarPermitRow {
   lng: number | null;
 }
 
+/** 같은 동/리(BJD) 안 발전소 1건 — 목록 모달용. SolarPermitRow + pnu/jibun. */
+export interface SameDongRow extends SolarPermitRow {
+  pnu: string;
+  /** "821" / "821-3" / "산 87-4" — 사람이 읽을 본번-부번 */
+  jibun: string;
+}
+
 export interface SolarMarker {
   lat: number;
   lng: number;
@@ -36,7 +43,7 @@ export interface SolarMarker {
 
 export interface SolarByPnuResult {
   samePnu: SolarPermitRow[];
-  sameDong: { count: number; totalKw: number };
+  sameDong: { count: number; totalKw: number; rows: SameDongRow[] };
   sameDongMarkers: SolarMarker[];
 }
 
@@ -45,7 +52,7 @@ interface SolarByPnuApiResponse {
   pnu?: string;
   bjd_code?: string;
   same_pnu?: SolarPermitRow[];
-  same_dong?: { count: number; total_kw: number };
+  same_dong?: { count: number; total_kw: number; rows?: SameDongRow[] };
   same_dong_markers?: SolarMarker[];
   error?: string;
 }
@@ -76,6 +83,7 @@ export async function fetchSolarByPnu(
     sameDong: {
       count: data.same_dong?.count ?? 0,
       totalKw: data.same_dong?.total_kw ?? 0,
+      rows: data.same_dong?.rows ?? [],
     },
     sameDongMarkers: data.same_dong_markers ?? [],
   };

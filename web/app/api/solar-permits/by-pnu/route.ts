@@ -7,7 +7,10 @@
  *   {
  *     ok, pnu, bjd_code,
  *     same_pnu: SolarPermitRow[],                                                   // 정확 매칭
- *     same_dong: { count, total_kw },                                               // 동/리 집계
+ *     same_dong: {
+ *       count, total_kw,
+ *       rows: [{ pnu, jibun, facility_name, capacity_kw, operating_status, permit_date, lat, lng }]
+ *     },                                                                            // 동/리 집계 + 전체 목록
  *     same_dong_markers: [{ lat, lng, pnu, jibun, name, kw }]                       // 좌표 보유 행만
  *   }
  *
@@ -77,7 +80,7 @@ export const meta: EndpointMeta = {
     },
   ],
   outputSchema:
-    "{ ok, pnu, bjd_code, same_pnu, same_dong: { count, total_kw }, same_dong_markers: { lat, lng, pnu, jibun, name, kw }[] }",
+    "{ ok, pnu, bjd_code, same_pnu, same_dong: { count, total_kw, rows: SameDongRow[] }, same_dong_markers: { lat, lng, pnu, jibun, name, kw }[] }",
   externalDeps: [],
   notes:
     "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). same_dong_markers 는 외부 API 좌표 결측 (~53%) 제외한 행만 — count 보다 작은 게 정상.",
@@ -162,21 +165,33 @@ export async function GET(request: NextRequest) {
       lng: r.lng,
     }));
 
-  // same_dong — 그 BJD 전체 합산
+  // same_dong — 그 BJD 전체 합산 + 목록 (용량 내림차순)
   const sameDongCount = rows.length;
   const sameDongTotal = rows.reduce(
     (s, r) => s + (Number(r.capacity_kw) || 0),
     0,
   );
+  const sameDongRows = [...rows]
+    .sort((a, b) => (b.capacity_kw ?? 0) - (a.capacity_kw ?? 0))
+    .map((r) => ({
+      pnu: r.pnu,
+      jibun: pnuToJibun(r.pnu),
+      facility_name: r.facility_name,
+      capacity_kw: r.capacity_kw,
+      operating_status: r.operating_status,
+      permit_date: r.permit_date,
+      lat: r.lat,
+      lng: r.lng,
+    }));
 
-  // same_dong_markers — 좌표 보유 행만 (외부 API 가 좌표 ~47% 만 채움)
-  const sameDongMarkers: SolarMarker[] = rows
+  // same_dong_markers — 좌표 보유 행만 (외부 API 가 동네별로 0~100% 편차)
+  const sameDongMarkers: SolarMarker[] = sameDongRows
     .filter((r) => r.lat != null && r.lng != null)
     .map((r) => ({
       lat: r.lat as number,
       lng: r.lng as number,
       pnu: r.pnu,
-      jibun: pnuToJibun(r.pnu),
+      jibun: r.jibun,
       name: r.facility_name,
       kw: r.capacity_kw,
     }));
@@ -190,6 +205,7 @@ export async function GET(request: NextRequest) {
       same_dong: {
         count: sameDongCount,
         total_kw: Math.round(sameDongTotal),
+        rows: sameDongRows,
       },
       same_dong_markers: sameDongMarkers,
     },
@@ -206,7 +222,7 @@ function emptyResponse(pnu: string, bjd_code: string) {
       pnu,
       bjd_code,
       same_pnu: [],
-      same_dong: { count: 0, total_kw: 0 },
+      same_dong: { count: 0, total_kw: 0, rows: [] },
       same_dong_markers: [],
     },
     {

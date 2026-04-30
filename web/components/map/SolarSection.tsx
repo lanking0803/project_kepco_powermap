@@ -21,6 +21,7 @@ import {
   type SolarMarker,
   type SolarPermitRow,
 } from "@/lib/api/solar-permits";
+import SolarListModal from "./SolarListModal";
 
 interface Props {
   pnu: string;
@@ -34,6 +35,7 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
   const [data, setData] = useState<SolarByPnuResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
 
   useEffect(() => {
     if (!pnu) return;
@@ -109,16 +111,30 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
                   <div className="text-[11px] font-semibold text-gray-700 mb-1">
                     ◇ {areaLabel || "이"} 일대
                   </div>
-                  <div className="text-sm text-gray-900">
-                    발전소 <b>{data.sameDong.count.toLocaleString()}</b>개 · 총{" "}
-                    <b className="text-emerald-700">
-                      {data.sameDong.totalKw.toLocaleString()}
-                    </b>{" "}
-                    kW
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm text-gray-900">
+                      발전소 <b>{data.sameDong.count.toLocaleString()}</b>개 · 총{" "}
+                      <b className="text-emerald-700">
+                        {data.sameDong.totalKw.toLocaleString()}
+                      </b>{" "}
+                      kW
+                    </div>
+                    {data.sameDong.rows.length > 0 && (
+                      <button
+                        onClick={() => setListOpen(true)}
+                        className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:underline shrink-0"
+                      >
+                        목록 보기 →
+                      </button>
+                    )}
                   </div>
-                  {data.sameDongMarkers.length > 0 && (
+                  {data.sameDongMarkers.length > 0 ? (
                     <div className="text-[11px] text-gray-500 mt-0.5">
                       ☀ 이 중 {data.sameDongMarkers.length}곳 위치 표시
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-gray-400 mt-0.5">
+                      ⚠ 좌표 정보 미제공으로 지도 표시 불가
                     </div>
                   )}
                 </div>
@@ -126,6 +142,14 @@ export default function SolarSection({ pnu, areaLabel, onMarkers }: Props) {
             </>
           )}
         </div>
+      )}
+
+      {listOpen && data && (
+        <SolarListModal
+          areaLabel={areaLabel}
+          rows={data.sameDong.rows}
+          onClose={() => setListOpen(false)}
+        />
       )}
     </div>
   );
