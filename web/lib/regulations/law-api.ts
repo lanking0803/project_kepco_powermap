@@ -96,7 +96,7 @@ export async function searchOrdinancesByQuery(
       headers: {
         Referer: "https://sunlap.kr/",
         Origin: "https://sunlap.kr",
-        "User-Agent": "Mozilla/5.0 (sunlap.kr 견적 모드)",
+        "User-Agent": "Mozilla/5.0 (sunlap.kr quote-mode)",
       },
     });
     clearTimeout(timer);
