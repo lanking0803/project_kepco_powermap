@@ -8,7 +8,7 @@
  *
  * 사용처:
  *   - MapClient: openVillagePanelOnMarkerClick 안에서 /api/capa/by-bjd 응답 enrich
- *   - Sidebar  : /api/search 응답 ji 결과 enrich (검색 ji 클릭 흐름 호환)
+ *   - Sidebar  : /api/search 응답 ji 결과 enrich (042 search_jibun 응답에도 동일 적용)
  */
 import type { KepcoDataRow, MapSummaryRow } from "@/lib/types";
 

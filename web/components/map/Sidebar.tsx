@@ -74,10 +74,40 @@ interface SearchState {
   error: string | null;
   ri: SearchRiResult[];
   ji: KepcoDataRow[];
-  jiFallback: boolean;
-  parsed: { keywords: string[]; lotNo: number | null } | null;
+  // /api/search 응답의 parsed (042). 폴백 제거 — jiFallback 필드 없음.
+  parsed: {
+    addrNormalized: string;
+    lotMain: number | null;
+    lotSub: number | null;
+    jibunInvalid: boolean;
+  } | null;
 }
-const EMPTY_SEARCH: SearchState = { loading: false, error: null, ri: [], ji: [], jiFallback: false, parsed: null };
+const EMPTY_SEARCH: SearchState = { loading: false, error: null, ri: [], ji: [], parsed: null };
+
+// 히스토리 1행 — 한글칸 + 지번칸 한 쌍으로 저장.
+// 042 이전엔 단일 문자열 저장이었는데, 입력 분리 후엔 두 칸 복원이 필요.
+interface HistoryItem {
+  addr: string;
+  jibun: string;
+}
+
+function getHistoryItems(): HistoryItem[] {
+  const raw = getHistory();
+  return raw
+    .map((s) => {
+      try {
+        const o = JSON.parse(s);
+        if (o && typeof o.addr === "string" && typeof o.jibun === "string") return o as HistoryItem;
+      } catch {
+        // 042 이전 저장값 (단순 문자열) — 한글칸으로 마이그레이션
+      }
+      return { addr: s, jibun: "" };
+    });
+}
+function addHistoryItem(item: HistoryItem) {
+  if (!item.addr.trim() && !item.jibun.trim()) return;
+  addHistory(JSON.stringify(item));
+}
 
 export default function Sidebar({
   isAdmin,
@@ -121,34 +151,41 @@ export default function Sidebar({
     localStorage.setItem("kepco_guide_dismissed", "1");
   };
 
-  // ── 검색 상태 ──
-  const [query, setQuery] = useState("");
+  // ── 검색 상태 (042: addr/jibun 분리) ──
+  const [addrInput, setAddrInput] = useState("");
+  const [jibunInput, setJibunInput] = useState("");
   const [searchState, setSearchState] = useState<SearchState>(EMPTY_SEARCH);
   const [searchTab, setSearchTab] = useState<"ri" | "ji">("ri");
   const [searchRegion, setSearchRegion] = useState<RegionSelection>(EMPTY_REGION);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const addrInputRef = useRef<HTMLInputElement>(null);
 
-  const doSearch = useCallback(async (q: string) => {
-    if (!q) return;
-    addHistory(q);
-    setHistory(getHistory());
+  const doSearch = useCallback(async (addr: string, jibun: string) => {
+    const a = addr.trim();
+    const j = jibun.trim();
+    if (!a && !j) return;
+
+    addHistoryItem({ addr: a, jibun: j });
     setHistoryOpen(false);
     setSearchState({ ...EMPTY_SEARCH, loading: true });
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-      if (!res.ok) throw new Error("검색이 잘 안 돼요. 잠시 후 다시 시도해 주세요.");
+      const params = new URLSearchParams();
+      if (a) params.set("addr", a);
+      if (j) params.set("jibun", j);
+      const res = await fetch(`/api/search?${params.toString()}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(data.error || "검색이 잘 안 돼요. 잠시 후 다시 시도해 주세요.");
+      }
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "검색이 잘 안 돼요.");
       const ri = (data.ri ?? []) as SearchRiResult[];
       // ji 응답 (KepcoDataRow[]) 은 주소 필드 없음 → 클라이언트 enrichment 로 합성.
-      // 검색 클릭 (handleSearchResultPick.ji) + RegionFilter + SearchResultList 가
-      // row.addr_do/li/geocode_address/lat/lng 시멘틱으로 작성돼 있어 필수.
       const jiRaw = (data.ji ?? []) as KepcoDataRow[];
       const ji = enrichKepcoCapaRowsWithVillageInfo(jiRaw, totalRows);
-      setSearchState({ loading: false, error: null, ri, ji, jiFallback: data.jiFallback ?? false, parsed: data.parsed ?? null });
-      setSearchTab(data.parsed?.lotNo != null ? "ji" : "ri");
+      setSearchState({ loading: false, error: null, ri, ji, parsed: data.parsed ?? null });
+      // 본번이 들어왔으면 ji 탭, 아니면 ri 탭
+      setSearchTab(data.parsed?.lotMain != null ? "ji" : "ri");
       setSearchRegion(EMPTY_REGION);
 
       // 검색 결과 마을을 지도에 표시
@@ -156,13 +193,15 @@ export default function Sidebar({
       ri.forEach((r) => r.geocode_address && addrs.add(r.geocode_address));
       ji.forEach((r) => r.geocode_address && addrs.add(r.geocode_address));
       if (addrs.size > 0) onMapFilter?.(addrs, "search");
-    } catch (err: any) {
-      setSearchState({ ...EMPTY_SEARCH, error: String(err?.message || err) });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSearchState({ ...EMPTY_SEARCH, error: msg });
     }
   }, [onMapFilter, totalRows]);
 
   const handleClear = () => {
-    setQuery("");
+    setAddrInput("");
+    setJibunInput("");
     setSearchState(EMPTY_SEARCH);
     setSearchRegion(EMPTY_REGION);
     onClearMapFilter?.();
@@ -338,26 +377,32 @@ export default function Sidebar({
         <div className="flex-1 overflow-y-auto min-h-0">
           {activeTab === "search" && (
             <div className="flex flex-col h-full">
-              {/* 검색 입력 */}
+              {/* 검색 입력 (042: 한글 + 지번 분리) */}
               <div className="px-3 py-2.5 border-b border-gray-100 relative">
                 <div className="flex items-center gap-2">
+                  {/* 한글 주소칸 */}
                   <div className="flex-1 min-w-0 flex items-center gap-1.5 bg-gray-50 border border-gray-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100 rounded-lg px-3 py-2">
                     <span className="text-sm text-gray-400 flex-shrink-0">🔍</span>
                     <input
-                      ref={inputRef}
+                      ref={addrInputRef}
                       type="text"
-                      value={query}
+                      value={addrInput}
                       onChange={(e) => {
-                        setQuery(e.target.value);
+                        setAddrInput(e.target.value);
                         setHistoryOpen(true);
                       }}
-                      onKeyDown={(e) => { if (e.key === "Enter") { setHistoryOpen(false); doSearch(query.trim()); } }}
-                      onClick={() => { if (!query.trim()) setHistoryOpen(true); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setHistoryOpen(false);
+                          doSearch(addrInput, jibunInput);
+                        }
+                      }}
+                      onClick={() => { if (!addrInput.trim() && !jibunInput.trim()) setHistoryOpen(true); }}
                       onBlur={() => setTimeout(() => setHistoryOpen(false), 150)}
-                      placeholder="주소·지번 검색"
+                      placeholder="시·도 시·군 동·리"
                       className="flex-1 min-w-0 text-sm text-gray-900 placeholder:text-gray-400 bg-transparent outline-none"
                     />
-                    {query && (
+                    {(addrInput || jibunInput) && (
                       <button type="button" onClick={handleClear} className="p-1 text-gray-400 hover:text-gray-600 active:text-gray-800 flex-shrink-0">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd"/>
@@ -365,40 +410,73 @@ export default function Sidebar({
                       </button>
                     )}
                   </div>
+                  {/* 지번칸 — 본번-부번. 정규식 검증은 서버에서 (jibunInvalid) */}
+                  <input
+                    type="text"
+                    value={jibunInput}
+                    onChange={(e) => setJibunInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setHistoryOpen(false);
+                        doSearch(addrInput, jibunInput);
+                      }
+                    }}
+                    placeholder="29-4"
+                    inputMode="text"
+                    className="w-20 text-sm text-gray-900 placeholder:text-gray-400 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100 rounded-lg px-2 py-2 outline-none"
+                  />
                   <button
                     type="button"
-                    onClick={() => doSearch(query.trim())}
-                    disabled={!query.trim() || searchState.loading}
+                    onClick={() => doSearch(addrInput, jibunInput)}
+                    disabled={(!addrInput.trim() && !jibunInput.trim()) || searchState.loading}
                     className="text-xs px-3 py-2.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex-shrink-0"
                   >
                     검색
                   </button>
                 </div>
 
-                {/* 히스토리 드롭다운 */}
+                {/* 히스토리 드롭다운 (한 쌍 = addr|jibun) */}
                 {(() => {
                   if (!historyOpen) return null;
-                  const all = getHistory();
-                  const filtered = query.trim() ? all.filter((h) => h.includes(query.trim())) : all;
+                  const all = getHistoryItems();
+                  const q = (addrInput + " " + jibunInput).trim();
+                  const filtered = q
+                    ? all.filter((h) => (h.addr + " " + h.jibun).includes(q))
+                    : all;
                   if (filtered.length === 0) return null;
                   return (
                     <div className="absolute left-3 right-3 top-full mt-0.5 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-20">
                       <div className="px-3 py-1 text-[10px] text-gray-400 font-semibold border-b border-gray-100">최근 검색</div>
-                      {filtered.map((h) => (
-                        <div key={h} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-50 cursor-pointer group">
-                          <span className="text-gray-300 text-[10px]">🕐</span>
-                          <button
-                            type="button"
-                            className="flex-1 text-left text-xs text-gray-700 truncate"
-                            onMouseDown={(e) => { e.preventDefault(); setQuery(h); doSearch(h); }}
-                          >{h}</button>
-                          <button
-                            type="button"
-                            className="text-gray-400 hover:text-red-400 active:text-red-500 text-xs p-1 -m-1"
-                            onMouseDown={(e) => { e.preventDefault(); removeHistory(h); setHistory(getHistory()); }}
-                          >✕</button>
-                        </div>
-                      ))}
+                      {filtered.map((h, i) => {
+                        const key = JSON.stringify(h) + "@" + i;
+                        const display = [h.addr, h.jibun].filter(Boolean).join(" · ");
+                        return (
+                          <div key={key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-50 cursor-pointer group">
+                            <span className="text-gray-300 text-[10px]">🕐</span>
+                            <button
+                              type="button"
+                              className="flex-1 text-left text-xs text-gray-700 truncate"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setAddrInput(h.addr);
+                                setJibunInput(h.jibun);
+                                doSearch(h.addr, h.jibun);
+                              }}
+                            >{display}</button>
+                            <button
+                              type="button"
+                              className="text-gray-400 hover:text-red-400 active:text-red-500 text-xs p-1 -m-1"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                removeHistory(JSON.stringify(h));
+                                // 리렌더 트리거 — historyOpen 을 잠시 false 후 즉시 true
+                                setHistoryOpen(false);
+                                setTimeout(() => setHistoryOpen(true), 0);
+                              }}
+                            >✕</button>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })()}
@@ -452,12 +530,7 @@ export default function Sidebar({
                               );
                             })}
                           </div>
-                          {/* 폴백 안내 */}
-                          {searchTab === "ji" && searchState.jiFallback && searchState.parsed?.lotNo != null && searchState.ji.length > 0 && (
-                            <div className="bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-[11px] text-amber-800">
-                              💡 <b>{searchState.parsed.lotNo}번지</b>가 없어 가장 가까운 지번을 보여드려요.
-                            </div>
-                          )}
+                          {/* 042: 폴백 제거 — 본번 매칭 0건이면 SearchResultList 의 빈 상태 안내가 그대로 노출됨 */}
                           <SearchResultList
                             mode={searchTab}
                             ri={filteredRi}

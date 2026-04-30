@@ -990,25 +990,32 @@ export const MANIFEST: GeneratedManifest = {
         {
           "method": "GET",
           "meta": {
-            "source": "DB (lib/search/searchKepco — kepco_capa + bjd_master 조합)",
+            "source": "DB (lib/search/searchKepco — search_address RPC + kepco_capa 직접 쿼리, 042)",
             "cache": "no-store",
             "auth": "user",
             "inputs": [
               {
-                "name": "q",
+                "name": "addr",
                 "type": "string",
-                "required": true,
-                "sample": "용구리",
-                "description": "자유 텍스트. 마을명/지번/주소 키워드 + 숫자 조합 가능 (예: '용구리 100')"
+                "required": false,
+                "sample": "충남 부여군 장암면 지토리",
+                "description": "한글 행정구역. 시/도 약어(충남/경남 등) 자동 치환. 정규화 후 LIKE 매칭."
+              },
+              {
+                "name": "jibun",
+                "type": "string",
+                "required": false,
+                "sample": "29-4",
+                "description": "본번-부번. '29' 또는 '29-4' 형식. 잘못된 형식이면 jibunInvalid:true."
               }
             ],
-            "outputSchema": "{ ok, ri: SearchRiResult[], ji: KepcoDataRow[], jiFallback: boolean, parsed: { keywords: string[], lotNo: number | null } }",
+            "outputSchema": "{ ok, ri: SearchRiResult[], ji: KepcoDataRow[], parsed: { addrNormalized, lotMain, lotSub, jibunInvalid } }",
             "externalDeps": [
               "supabase"
             ],
-            "notes": "parsed.keywords 비어있고 lotNo 도 없으면 DB 호출 없이 빈 결과 반환 (효율). ji 응답은 raw — 클라이언트(Sidebar)가 enrichment 후 사용."
+            "notes": "ri 는 1단계 후보 중 kepco_capa 데이터 있는 마을만(cnt>0). ji 는 ri 1건 + lotMain 있을 때만. 폴백 없음."
           },
-          "metaLine": 19,
+          "metaLine": 38,
           "metaExportName": "meta"
         }
       ]
@@ -1071,11 +1078,11 @@ export const MANIFEST: GeneratedManifest = {
                 "description": "매물 PNU 19자리 숫자 (시도2+시군구3+읍면동3+산구분1+본번4+부번4)"
               }
             ],
-            "outputSchema": "{ ok, pnu, bjd_code, same_pnu, same_dong: { count, total_kw }, same_dong_markers: { lat, lng, pnu, jibun, name, kw }[] }",
+            "outputSchema": "{ ok, pnu, bjd_code, same_pnu, same_dong: { count, total_kw, rows: SameDongRow[] }, same_dong_markers: { lat, lng, pnu, jibun, name, kw }[] }",
             "externalDeps": [],
             "notes": "Public bucket → Smart CDN (Fastly) 자동. BJD JSON 미존재 = 그 동에 발전소 0건 (정상). same_dong_markers 는 외부 API 좌표 결측 (~53%) 제외한 행만 — count 보다 작은 게 정상."
           },
-          "metaLine": 65,
+          "metaLine": 68,
           "metaExportName": "meta"
         }
       ]
