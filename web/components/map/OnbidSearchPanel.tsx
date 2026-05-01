@@ -455,70 +455,76 @@ function ResultCard({
   item: OnbidListItem;
   onClick: () => void;
 }) {
+  // 목록 카드 — 캠코 응답 단일 row 의 100% 정확한 정보만 표시.
+  // 표시 X: 회차 추정, 할인율, "최저입찰가" (응답 row 가 어느 회차인지 알 수 없음 → 거짓 위험).
+  // 표시 O: 감정가(절대값), 유찰 횟수, 면적, 카테고리, 위치, 재산유형.
+  // 회차/현재가/할인율은 매물 클릭 후 상세 팝업에서 동단위 호출로 정확히 분석.
   const apslMan = Math.round(item.apslEvlAmt / 10000);
-  const lowstMan = Math.round(item.lowstBidPrc / 10000);
-  const discountPct = Math.round(item.discountRatio * 100);
   const jibun = jibunFromPnu(item.ltnoPnu) ?? "—";
-  // 목록 카드는 single-row 정보만 사용 (D-day, 가격, 할인%, 유찰N회) — 모두 row 1건만으로 정확.
-  // 회차 정보(roundTotal/roundCurrent/minRoundPrice)는 동단위 호출이 아니라 시도 단위 호출이라
-  // numOfRows=1000 cap 안에서 같은 매물 회차 row 일부만 받기 때문에 부정확 → 표시 X.
-  // 정확한 회차 정보는 매물 클릭 후 상세 팝업(ParcelInfoPanel [공매] 탭)에서 표시.
+
+  // 면적 표시: 토지/건물 중 큰 쪽 우선. 둘 다 없으면 생략.
+  const areaText = (() => {
+    const land = item.landSqms;
+    const bld = item.bldSqms;
+    if (bld != null && bld > 0 && (land == null || bld >= land)) {
+      return `건물 ${Math.round(bld).toLocaleString()}㎡`;
+    }
+    if (land != null && land > 0) {
+      return `토지 ${Math.round(land).toLocaleString()}㎡`;
+    }
+    return null;
+  })();
+
   return (
-    <div
-      className={`w-full px-3 py-2 border-b border-gray-200 transition-colors ${
-        item.isUrgent ? "bg-rose-50/60" : "bg-white"
-      } hover:bg-rose-50`}
-    >
+    <div className="w-full px-3 py-2.5 border-b border-gray-200 transition-colors bg-white hover:bg-rose-50">
       <div className="flex items-stretch gap-2">
-        {/* 좌측 본문 — 카드 클릭으로 ParcelInfoPanel 매물 PNU 흐름 */}
+        {/* 좌측 본문 */}
         <button
           type="button"
           onClick={onClick}
           className="flex-1 min-w-0 text-left active:opacity-70"
         >
-          <div className="flex items-center gap-1.5 mb-0.5">
-            {item.isUrgent ? (
-              <span className="text-[9px] px-1 py-px bg-rose-600 text-white rounded font-bold animate-pulse">
-                D-{item.daysLeft}
-              </span>
-            ) : item.daysLeft >= 0 ? (
-              <span className="text-[9px] px-1 py-px bg-gray-100 text-gray-600 rounded">
-                D-{item.daysLeft}
-              </span>
-            ) : (
-              <span className="text-[9px] px-1 py-px bg-gray-300 text-gray-700 rounded">
-                마감
-              </span>
-            )}
+          {/* 1줄: 카테고리 배지 + 재산유형 + 위치 */}
+          <div className="flex items-center gap-1.5 mb-1">
             {item.ourCategory && (
-              <span className="text-[9px] px-1 py-px bg-blue-50 text-blue-700 rounded">
+              <span className="text-[10px] font-semibold px-1.5 py-px bg-rose-50 text-rose-700 rounded">
                 {OUR_CATEGORY_LABEL[item.ourCategory]}
               </span>
             )}
-            <span className="text-[9px] text-gray-400 ml-auto">
+            <span className="text-[10px] text-gray-500">{item.cltrUsgSclsCtgrNm}</span>
+            <span className="text-[10px] text-gray-300">·</span>
+            <span className="text-[10px] text-gray-500">{item.prptDivNm}</span>
+            <span className="text-[10px] text-gray-400 ml-auto">
               {item.lctnSdnm} {item.lctnSggnm}
             </span>
           </div>
-          <div className="text-[11px] text-gray-900 font-semibold leading-tight mb-1 truncate">
+
+          {/* 2줄: 매물명 */}
+          <div className="text-[12px] text-gray-900 font-semibold leading-tight mb-1.5 truncate">
             {item.onbidCltrNm}
           </div>
-          <div className="flex items-center gap-2 text-[10px]">
-            <span className="text-gray-400 line-through tabular-nums">
-              {apslMan.toLocaleString()}만
+
+          {/* 3줄: 감정가 (큰 글씨, 절대값) */}
+          <div className="flex items-baseline gap-1.5 mb-1">
+            <span className="text-[10px] text-gray-500">감정가</span>
+            <span className="text-[14px] font-bold text-gray-900 tabular-nums leading-none">
+              {apslMan.toLocaleString()}만원
             </span>
-            <span className="text-rose-700 font-bold tabular-nums">
-              → {lowstMan.toLocaleString()}만
-            </span>
-            <span className="text-emerald-600 font-semibold">
-              {discountPct}% ↓
-            </span>
+          </div>
+
+          {/* 4줄: 면적 + 유찰 횟수 */}
+          <div className="flex items-center gap-2 text-[11px] text-gray-600">
+            {areaText && <span>{areaText}</span>}
+            {areaText && item.usbdNft != null && item.usbdNft > 0 && (
+              <span className="text-gray-300">·</span>
+            )}
             {item.usbdNft != null && item.usbdNft > 0 && (
-              <span className="text-gray-500 ml-auto">유찰 {item.usbdNft}회</span>
+              <span className="text-amber-700 font-semibold">유찰 {item.usbdNft}회</span>
             )}
           </div>
         </button>
 
-        {/* 우측 — 📍 지번 핀 (전기 SearchResultList 패턴 미러) */}
+        {/* 우측 — 📍 지번 핀 */}
         <button
           type="button"
           onClick={(e) => {

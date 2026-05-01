@@ -19,7 +19,7 @@ import { OUR_CATEGORY_LABEL } from "@/lib/onbid/types";
 import type { OnbidVillageGroup } from "@/lib/onbid/group";
 import { jibunFromPnu } from "@/lib/geo/pnu";
 
-type SortKey = "daysLeft" | "apslEvlAmt" | "discountRatio";
+type SortKey = "apslEvlAmt" | "usbdNft" | "name";
 
 interface Props {
   group: OnbidVillageGroup;
@@ -29,7 +29,7 @@ interface Props {
 
 export default function OnbidVillageModal({ group, onClose, onItemClick }: Props) {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("daysLeft");
+  const [sortKey, setSortKey] = useState<SortKey>("apslEvlAmt");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -51,14 +51,10 @@ export default function OnbidVillageModal({ group, onClose, onItemClick }: Props
       );
     }
     return [...arr].sort((a, b) => {
-      if (sortKey === "daysLeft") {
-        const aRank = rankDay(a.daysLeft);
-        const bRank = rankDay(b.daysLeft);
-        if (aRank !== bRank) return aRank - bRank;
-        return a.daysLeft - b.daysLeft;
-      }
       if (sortKey === "apslEvlAmt") return b.apslEvlAmt - a.apslEvlAmt;
-      return b.discountRatio - a.discountRatio;
+      if (sortKey === "usbdNft") return (b.usbdNft ?? 0) - (a.usbdNft ?? 0);
+      // name
+      return a.onbidCltrNm.localeCompare(b.onbidCltrNm, "ko");
     });
   }, [group.items, search, sortKey]);
 
@@ -106,9 +102,9 @@ export default function OnbidVillageModal({ group, onClose, onItemClick }: Props
               onChange={(e) => setSortKey(e.target.value as SortKey)}
               className="px-2 py-2 text-xs text-gray-700 border border-gray-300 rounded-md bg-white focus:outline-none focus:border-rose-500"
             >
-              <option value="daysLeft">임박순</option>
               <option value="apslEvlAmt">감정가순</option>
-              <option value="discountRatio">할인율순</option>
+              <option value="usbdNft">유찰순</option>
+              <option value="name">이름순</option>
             </select>
           </div>
         </div>
@@ -128,11 +124,6 @@ export default function OnbidVillageModal({ group, onClose, onItemClick }: Props
   );
 }
 
-/** 정렬 우선순위 — 진행중(0) > 임박(0) > 마감(1). 같은 그룹 내 daysLeft 오름차순. */
-function rankDay(days: number): number {
-  return days < 0 ? 1 : 0;
-}
-
 // ───────────────────────────────────────────
 // 매물 카드 1건
 // ───────────────────────────────────────────
@@ -144,14 +135,9 @@ function ItemCard({
   item: OnbidListItem;
   onClick: () => void;
 }) {
-  const dayLabel = item.daysLeft < 0 ? "마감" : `D-${item.daysLeft}`;
-  const dayBadgeClass = item.daysLeft < 0
-    ? "bg-gray-100 text-gray-500 line-through"
-    : item.isUrgent
-      ? "bg-rose-600 text-white animate-pulse"
-      : "bg-rose-50 text-rose-700 border border-rose-200";
-
-  const discountPct = Math.round(item.discountRatio * 100);
+  // 목록 카드 — 캠코 응답 단일 row 의 정확한 정보만 표시.
+  // 회차 추정/할인율/"최저입찰가" 는 어느 회차 row 인지 알 수 없어 거짓 위험 → 표시 X.
+  // 회차/현재가/할인율은 매물 클릭 시 상세 팝업(OnbidTab)에서 동단위 호출로 정확히 분석.
   const jibun = jibunFromPnu(item.ltnoPnu) ?? "—";
 
   return (
@@ -161,7 +147,7 @@ function ItemCard({
       className="block w-full text-left bg-white border border-gray-200 hover:border-rose-300 hover:bg-rose-50/30 rounded-lg transition-colors"
     >
       <div className="flex items-stretch">
-        {/* 좌측 — 지번 컬럼 (전기 LocationDetailModal 의 📍 지번 패턴 미러) */}
+        {/* 좌측 — 지번 컬럼 */}
         <div className="flex-shrink-0 w-20 md:w-24 flex flex-col items-center justify-center px-2 py-3 border-r border-gray-100 bg-gray-50/60 rounded-l-lg">
           <span className="text-[10px] text-gray-400 mb-0.5">지번</span>
           <span className="inline-flex items-center gap-1 text-rose-600 font-semibold text-sm">
@@ -172,44 +158,50 @@ function ItemCard({
 
         {/* 우측 — 매물 상세 */}
         <div className="flex-1 min-w-0 p-3">
+          {/* 1줄: 카테고리 배지 + 재산유형 + 유찰 */}
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${dayBadgeClass}`}>
-              {dayLabel}
-            </span>
             {item.ourCategory && (
               <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
                 {OUR_CATEGORY_LABEL[item.ourCategory]}
               </span>
             )}
             <span className="text-[11px] text-gray-500">{item.cltrUsgSclsCtgrNm}</span>
+            <span className="text-[11px] text-gray-300">·</span>
+            <span className="text-[11px] text-gray-500">{item.prptDivNm}</span>
             {item.usbdNft != null && item.usbdNft > 0 && (
-              <span className="ml-auto text-[10px] text-gray-500">
+              <span className="ml-auto text-[11px] text-amber-700 font-semibold">
                 유찰 {item.usbdNft}회
               </span>
             )}
           </div>
-          <div className="text-sm text-gray-900 mb-1.5 leading-tight truncate">
+
+          {/* 2줄: 매물명 */}
+          <div className="text-sm text-gray-900 mb-1.5 font-semibold leading-tight truncate">
             {item.onbidCltrNm}
           </div>
-          <div className="flex items-baseline gap-2 text-xs">
-            <span className="text-gray-400 line-through tabular-nums">
+
+          {/* 3줄: 감정가 */}
+          <div className="flex items-baseline gap-1.5 mb-1">
+            <span className="text-[11px] text-gray-500">감정가</span>
+            <span className="text-base font-bold text-gray-900 tabular-nums leading-none">
               {formatPrice(item.apslEvlAmt)}
             </span>
-            <span className="text-rose-700 font-bold tabular-nums">
-              → {formatPrice(item.lowstBidPrc)}
-            </span>
-            {discountPct > 0 && (
-              <span className="text-rose-600 font-semibold">{discountPct}% ↓</span>
-            )}
           </div>
-          <div className="text-[11px] text-gray-500 mt-1">
-            {item.landSqms != null && (
-              <span>토지 {item.landSqms.toLocaleString()}㎡</span>
-            )}
-            {item.bldSqms != null && item.bldSqms > 0 && (
-              <span className="ml-2">건물 {item.bldSqms.toLocaleString()}㎡</span>
-            )}
-          </div>
+
+          {/* 4줄: 면적 */}
+          {(item.landSqms != null || (item.bldSqms != null && item.bldSqms > 0)) && (
+            <div className="text-[11px] text-gray-600">
+              {item.landSqms != null && item.landSqms > 0 && (
+                <span>토지 {item.landSqms.toLocaleString()}㎡</span>
+              )}
+              {item.landSqms != null && item.bldSqms != null && item.bldSqms > 0 && (
+                <span className="text-gray-300"> · </span>
+              )}
+              {item.bldSqms != null && item.bldSqms > 0 && (
+                <span>건물 {item.bldSqms.toLocaleString()}㎡</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </button>

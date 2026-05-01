@@ -24,12 +24,11 @@ interface Props {
 }
 
 export default function OnbidVillageCard({ group, onShowDetail, onClose }: Props) {
+  // 마을 카드 — 매물별 단일 row 의 D-day/할인율은 어느 회차인지 알 수 없어 거짓 위험.
+  // 신뢰 가능한 집계: 매물 갯수, 카테고리 분포, 감정가 합, 유찰 발생 매물 수.
   const total = group.items.length;
-  const urgentCount = group.items.filter(
-    (i) => i.isUrgent && i.daysLeft >= 0,
-  ).length;
-  const endedCount = group.items.filter((i) => i.daysLeft < 0).length;
-  const avgDiscountPct = Math.round(group.avgDiscountRatio * 100);
+  const totalApsl = group.items.reduce((s, i) => s + (i.apslEvlAmt || 0), 0);
+  const usbdCount = group.items.filter((i) => (i.usbdNft ?? 0) > 0).length;
   const locationParts = [group.sd, group.sgg, group.emd].filter(Boolean);
 
   return (
@@ -42,14 +41,9 @@ export default function OnbidVillageCard({ group, onShowDetail, onClose }: Props
           </div>
           <div className="text-[11px] text-gray-500 mt-0.5">
             매물 {total.toLocaleString()}건
-            {urgentCount > 0 && (
-              <span className="text-rose-600 font-semibold ml-1.5">
-                ⚠ 임박 {urgentCount}
-              </span>
-            )}
-            {endedCount > 0 && (
-              <span className="text-gray-400 ml-1.5">
-                · 마감 {endedCount}
+            {usbdCount > 0 && (
+              <span className="text-amber-700 font-semibold ml-1.5">
+                · 유찰 진행 {usbdCount}건
               </span>
             )}
           </div>
@@ -69,19 +63,15 @@ export default function OnbidVillageCard({ group, onShowDetail, onClose }: Props
         </button>
       </div>
 
-      {/* 본문 — 데스크톱 (카테고리 분포 + 통계) */}
+      {/* 본문 — 데스크톱 (카테고리 분포 + 신뢰 가능한 집계만) */}
       <div className="hidden md:block overflow-y-auto flex-1 px-4 py-4 space-y-3">
         <CategoryDistribution group={group} total={total} />
-        <Stat
-          label="평균 할인율"
-          value={`${avgDiscountPct}%`}
-          subtle="(감정가 대비 최저입찰가)"
-        />
-        {group.minDaysLeft != null && (
+        <Stat label="감정가 합계" value={formatPrice(totalApsl)} />
+        {usbdCount > 0 && (
           <Stat
-            label="가장 임박"
-            value={`D-${group.minDaysLeft}`}
-            highlight={group.minDaysLeft <= 3}
+            label="유찰 진행"
+            value={`${usbdCount}건`}
+            subtle={`(전체 ${total}건 중)`}
           />
         )}
       </div>
@@ -190,4 +180,13 @@ function Stat({
       {subtle && <span className="text-[10px] text-gray-400">{subtle}</span>}
     </div>
   );
+}
+
+function formatPrice(won: number): string {
+  if (won >= 100_000_000) {
+    const eok = won / 100_000_000;
+    return eok >= 10 ? `${Math.round(eok).toLocaleString()}억` : `${eok.toFixed(1)}억`;
+  }
+  if (won >= 10_000) return `${Math.round(won / 10_000).toLocaleString()}만`;
+  return `${won.toLocaleString()}원`;
 }
