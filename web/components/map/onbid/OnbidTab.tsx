@@ -116,22 +116,9 @@ function DetailCard({ item }: { item: OnbidDetail }) {
       </div>
 
       <div className="p-3 space-y-3">
-        {/* ── 2. Hero 한 줄 요약 (카톡 복붙용) ── */}
-        <SalesHeroLine item={item} />
-
-        {/* ── 3. 가격 비교 카드 + D-day ── */}
-        <PriceHeroCard
-          apslEvlAmt={item.apslEvlAmt}
-          lowstBidPrc={item.lowstBidPrc}
-          discountPct={discountPct}
-          daysLeft={item.daysLeft}
-          isUrgent={item.isUrgent}
-          bidEndDt={item.cltrBidEndDt}
-          bidBgngDt={item.cltrBidBgngDt}
-        />
-
-        {/* ── 3-1. 회차 시나리오 (남은 회차 ≥ 2 일 때만) ── */}
-        {item.roundTotal > 1 && <RoundScenarioCard item={item} />}
+        {/* ── 2. 영업 핵심 카드 — 회차/가격/시간/시나리오 통합 ──
+            영업 시선 흐름: 회차 → 가격 → 할인 → 시간 → (구분) → 회차 시나리오. */}
+        <DealOverviewCard item={item} discountPct={discountPct} />
 
         {/* ── 4. 사진 갤러리 (라이트박스 풀스크린) ── */}
         {item.photoUrls.length > 0 && (
@@ -278,101 +265,49 @@ function DetailCard({ item }: { item: OnbidDetail }) {
   );
 }
 
-// ─── 영업 한 줄 요약 (Hero) ────────────────
-//   영업이 카톡으로 그대로 복붙할 수 있는 형태.
-//   각 정보는 데이터 있을 때만 노출 (없으면 자동 숨김).
+// ─── 영업 핵심 통합 카드 ────────────────
+//   영업 시선 흐름 한 카드 안에 (중복 제거):
+//     [헤더]  진행 회차 (5/6차)                           ⚠️ D-12 마감
+//     [메인]                4,608만원
+//                          80% ↓ (감정가 2.30억)
+//     [입찰] 입찰: 2026-05-11 ~ 05-13 17:00
+//     ─── 점선 구분 ───
+//     [시나리오] 5차 → 6차까지 단계적 진행 · 회차당 약 18% 인하
+//                모든 회차 유찰 시 → 2,304만원 (90%↓)
+//
+//   회차 정보가 없는 매물(roundTotal=1) 은 시나리오 영역만 자동 숨김.
 
-function SalesHeroLine({ item }: { item: OnbidDetail }) {
-  const parts: string[] = [];
-  if (item.roundTotal > 1) {
-    parts.push(`${item.roundCurrent}/${item.roundTotal}차`);
-  }
-  if (item.usbdNft != null && item.usbdNft > 0) {
-    parts.push(`유찰 ${item.usbdNft}회`);
-  }
-  const discountPct = Math.round(item.discountRatio * 100);
-  if (discountPct > 0) {
-    parts.push(`${discountPct}% 할인`);
-  }
-  if (item.daysLeft >= 0) {
-    parts.push(`D-${item.daysLeft}`);
-  }
-  if (item.lowstBidPrc > 0) {
-    parts.push(`최저 ${formatPrice(item.lowstBidPrc)}`);
-  }
-
-  if (parts.length === 0) return null;
-
-  return (
-    <div className="px-3 py-2 bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-200 rounded-md">
-      <div className="text-xs font-bold text-rose-900 leading-snug">
-        {parts.join("  ·  ")}
-      </div>
-    </div>
-  );
-}
-
-// ─── 가격 비교 카드 + D-day ────────────────
-//   영업 결정의 3요소 (가격 / 할인 / 시간) 을 한 카드 안에.
-
-function PriceHeroCard({
-  apslEvlAmt,
-  lowstBidPrc,
+function DealOverviewCard({
+  item,
   discountPct,
-  daysLeft,
-  isUrgent,
-  bidEndDt,
-  bidBgngDt,
 }: {
-  apslEvlAmt: number;
-  lowstBidPrc: number;
+  item: OnbidDetail;
   discountPct: number;
-  daysLeft: number;
-  isUrgent: boolean;
-  bidEndDt: string;
-  bidBgngDt: string;
 }) {
-  const isClosed = daysLeft < 0;
+  const isClosed = item.daysLeft < 0;
+  const hasRounds = item.roundTotal > 1;
+  const isLastRound = hasRounds && item.roundCurrent >= item.roundTotal;
+  const minMan =
+    item.minRoundPrice != null ? Math.round(item.minRoundPrice / 10000) : null;
+  const minDiscountPct =
+    item.minRoundDiscountRatio != null
+      ? Math.round(item.minRoundDiscountRatio * 100)
+      : null;
+  // 회차당 인하율 = 마지막 회차 할인율 / (총 회차 - 1).
+  // 캠코 실측 (양덕리/곡천리/연호리) 모두 균등 인하 확인.
+  const stepDiscountPct =
+    minDiscountPct != null && item.roundTotal > 1
+      ? Math.round(minDiscountPct / (item.roundTotal - 1))
+      : null;
 
   return (
     <div className="rounded-lg border border-rose-300 bg-white overflow-hidden">
-      {/* 상단: 감정가 → 최저입찰가 + 할인율 큰 배지 */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-3">
-        {/* 감정가 */}
-        <div className="text-center">
-          <div className="text-[10px] font-semibold text-gray-500 mb-0.5">
-            감정가
-          </div>
-          <div className="text-xs text-gray-500 line-through tabular-nums">
-            {formatPrice(apslEvlAmt)}
-          </div>
-        </div>
-        {/* 화살표 + 큰 할인율 배지 */}
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-gray-400 text-lg leading-none">→</span>
-          {discountPct > 0 && (
-            <span className="px-2 py-0.5 bg-rose-600 text-white text-xs font-bold rounded">
-              {discountPct}%↓
-            </span>
-          )}
-        </div>
-        {/* 최저입찰가 */}
-        <div className="text-center">
-          <div className="text-[10px] font-semibold text-rose-700 mb-0.5">
-            최저입찰가
-          </div>
-          <div className="text-base md:text-lg font-bold text-rose-700 tabular-nums leading-tight">
-            {formatPrice(lowstBidPrc)}
-          </div>
-        </div>
-      </div>
-
-      {/* 하단: D-day + 입찰종료일시 (영업 긴급도 시각화) */}
+      {/* ── 헤더: 회차 위치 + D-day ── */}
       <div
-        className={`px-3 py-2 border-t flex items-center justify-between gap-2 ${
+        className={`flex items-center justify-between gap-2 px-3 py-2 border-b ${
           isClosed
             ? "bg-gray-100 border-gray-200"
-            : isUrgent
+            : item.isUrgent
               ? "bg-rose-600 border-rose-700"
               : "bg-rose-50 border-rose-100"
         }`}
@@ -380,81 +315,99 @@ function PriceHeroCard({
         <span
           className={`text-xs font-bold ${
             isClosed
-              ? "text-gray-500 line-through"
-              : isUrgent
-                ? "text-white"
-                : "text-rose-700"
-          }`}
-        >
-          {isClosed ? "마감" : `D-${daysLeft}`}
-        </span>
-        <div
-          className={`text-[11px] tabular-nums ${
-            isClosed
               ? "text-gray-500"
-              : isUrgent
+              : item.isUrgent
                 ? "text-white"
                 : "text-rose-800"
           }`}
         >
-          {formatBidDate(bidBgngDt)} ~ {formatBidDate(bidEndDt).slice(5)} 마감
+          {hasRounds ? (
+            <>
+              {isLastRound && "⚠️ "}
+              {item.roundCurrent}/{item.roundTotal}차{" "}
+              {isLastRound ? "마지막 회차" : "진행 중"}
+            </>
+          ) : (
+            "공매 진행 중"
+          )}
+        </span>
+        <span
+          className={`text-xs font-bold tabular-nums ${
+            isClosed
+              ? "text-gray-500 line-through"
+              : item.isUrgent
+                ? "text-white"
+                : "text-rose-700"
+          }`}
+        >
+          {isClosed ? "마감" : `D-${item.daysLeft} 마감`}
+        </span>
+      </div>
+
+      {/* ── 메인 가격 + 할인율 + 감정가 ── */}
+      <div className="px-3 py-3 text-center space-y-1">
+        <div className="text-[10px] font-semibold text-gray-500">
+          최저입찰가
         </div>
+        <div className="text-2xl font-bold text-rose-700 tabular-nums leading-none">
+          {formatPrice(item.lowstBidPrc)}
+        </div>
+        {discountPct > 0 && (
+          <div className="text-[11px] text-gray-600">
+            <span className="px-1.5 py-px bg-rose-600 text-white text-[11px] font-bold rounded mr-1.5">
+              {discountPct}%↓
+            </span>
+            <span className="text-gray-400">감정가</span>{" "}
+            <span className="text-gray-500 line-through tabular-nums">
+              {formatPrice(item.apslEvlAmt)}
+            </span>
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
 
-// ─── 회차 시나리오 ────────────────
-//   "지금 N차 진행 중, 유찰 시 다음 가격 → 마지막 회차 가격" 추이.
-//   영업이 입찰 전략 짤 때 핵심 (이번 회차 vs 다음 회차 vs 마지막 회차 트레이드오프).
-//   동단위 호출(by-pnu)이라 회차 row 다 받아 정확.
-
-function RoundScenarioCard({ item }: { item: OnbidDetail }) {
-  const isLastRound = item.roundCurrent >= item.roundTotal;
-  const minMan =
-    item.minRoundPrice != null ? Math.round(item.minRoundPrice / 10000) : null;
-  const minDiscountPct =
-    item.minRoundDiscountRatio != null
-      ? Math.round(item.minRoundDiscountRatio * 100)
-      : null;
-
-  return (
-    <div
-      className={`rounded-md border px-3 py-2 ${
-        isLastRound
-          ? "border-rose-300 bg-rose-50"
-          : "border-gray-200 bg-gray-50"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span
-          className={`font-bold ${
-            isLastRound ? "text-rose-700" : "text-gray-700"
-          }`}
-        >
-          {isLastRound ? "⚠️ 마지막 회차 진행 중" : "회차 진행 상황"}
-        </span>
-        <span
-          className={`tabular-nums font-semibold ${
-            isLastRound ? "text-rose-700" : "text-gray-800"
-          }`}
-        >
-          {item.roundCurrent}
-          <span className="text-gray-400"> / </span>
-          {item.roundTotal}차
-        </span>
+      {/* ── 입찰 기간 ── */}
+      <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-700 tabular-nums text-center">
+        입찰 기간 · {formatBidDate(item.cltrBidBgngDt)} ~{" "}
+        {formatBidDate(item.cltrBidEndDt).slice(5)}
       </div>
-      {!isLastRound && minMan != null && minDiscountPct != null && (
-        <div className="mt-1.5 pt-1.5 border-t border-dashed border-gray-300 text-[11px] text-gray-600 leading-snug">
-          이번 못 받으면 가격이 단계별로 하락합니다.
-          <br />
-          마지막 회차 가격{" "}
-          <span className="text-gray-800 font-semibold tabular-nums">
-            {minMan.toLocaleString()}만원
-          </span>{" "}
-          <span className="text-emerald-600 font-semibold">
-            ({minDiscountPct}%↓)
-          </span>
+
+      {/* ── 회차 시나리오 (회차 ≥ 2 일 때만) ── */}
+      {hasRounds && (
+        <div className="px-3 py-2.5 border-t-2 border-dashed border-gray-200 bg-amber-50/40 space-y-1.5">
+          <div className="text-[11px] font-bold text-amber-900">
+            📉 회차 시나리오
+          </div>
+          {isLastRound ? (
+            <div className="text-[12px] text-rose-700 leading-snug">
+              이번이 마지막 입찰 기회입니다. 유찰 시 매물 종료.
+            </div>
+          ) : (
+            minMan != null &&
+            minDiscountPct != null && (
+              <>
+                <div className="text-[12px] text-gray-700 leading-snug">
+                  <b>{item.roundCurrent}차(현재)</b> →{" "}
+                  <b>{item.roundTotal}차</b>까지 단계적 진행
+                  {stepDiscountPct != null && stepDiscountPct > 0 && (
+                    <span className="text-gray-500">
+                      {" · "}회차당 약 {stepDiscountPct}% 인하
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 text-[12px]">
+                  <span className="text-gray-600">모든 회차 유찰 시</span>
+                  <span className="tabular-nums">
+                    <span className="font-semibold text-rose-700">
+                      {minMan.toLocaleString()}만원
+                    </span>
+                    <span className="text-emerald-600 font-semibold ml-1">
+                      ({minDiscountPct}%↓)
+                    </span>
+                  </span>
+                </div>
+              </>
+            )
+          )}
         </div>
       )}
     </div>
