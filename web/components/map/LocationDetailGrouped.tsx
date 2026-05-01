@@ -19,7 +19,6 @@ import { useMemo, useState } from "react";
 import type { KepcoDataRow } from "@/lib/types";
 import { hasCapacity } from "@/lib/types";
 import { FacilityCard, StepBlock } from "./FacilityCard";
-import { formatRemaining } from "@/lib/summarize";
 
 interface Props {
   rows: KepcoDataRow[];
@@ -56,7 +55,17 @@ function jibunSortKey(jibun: string | null): number {
   return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
 }
 
-export default function LocationDetailGrouped({ rows, onJibunPin, initialSearch = "", compact = false }: Props) {
+export default function LocationDetailGrouped(props: Props) {
+  // compact 모드 — 그룹/검색/필터 로직 전부 우회하고 단일 테이블로만 렌더.
+  // 같은 마을 fallback 처럼 "참고용 5건" 보여줄 때 변전소·주변압기 구분이 노이즈.
+  // 분리 컴포넌트로 빼서 useState/useMemo 호출 자체를 우회 (조건부 hook 회피).
+  if (props.compact) {
+    return <CompactTable rows={props.rows} onJibunPin={props.onJibunPin} />;
+  }
+  return <GroupedView {...props} />;
+}
+
+function GroupedView({ rows, onJibunPin, initialSearch = "" }: Props) {
   // 기본 "모두 접힘" — 사용자가 그룹 전체 구조를 먼저 파악하도록.
   // null = 모두 접힘, Set = 열린 그룹들(화이트리스트)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
@@ -153,30 +162,28 @@ export default function LocationDetailGrouped({ rows, onJibunPin, initialSearch 
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* 헤더: 검색 + 부족만 보기 토글 — compact 모드에서는 숨김 */}
-      {!compact && (
-        <div className="px-5 py-3 border-b bg-gray-50 flex items-center gap-3 flex-shrink-0">
+      {/* 헤더: 검색 + 부족만 보기 토글 */}
+      <div className="px-5 py-3 border-b bg-gray-50 flex items-center gap-3 flex-shrink-0">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="번지, 변전소, 배전선로명 검색..."
+          className="flex-1 px-3 py-2 text-base md:text-sm text-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-md bg-white focus:outline-none focus:border-blue-500"
+        />
+        <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer whitespace-nowrap select-none">
           <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="번지, 변전소, 배전선로명 검색..."
-            className="flex-1 px-3 py-2 text-base md:text-sm text-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-md bg-white focus:outline-none focus:border-blue-500"
+            type="checkbox"
+            checked={onlyBad}
+            onChange={(e) => setOnlyBad(e.target.checked)}
+            className="w-3.5 h-3.5 accent-red-500"
           />
-          <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer whitespace-nowrap select-none">
-            <input
-              type="checkbox"
-              checked={onlyBad}
-              onChange={(e) => setOnlyBad(e.target.checked)}
-              className="w-3.5 h-3.5 accent-red-500"
-            />
-            ⚠️ 부족한 것만 보기
-          </label>
-        </div>
-      )}
+          ⚠️ 부족한 것만 보기
+        </label>
+      </div>
 
-      {/* 전부 정상 배너 — compact 에서는 숨김 */}
-      {!compact && allOk && !search && !onlyBad && (
+      {/* 전부 정상 배너 */}
+      {allOk && !search && !onlyBad && (
         <div className="mx-5 mt-3 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-700 flex items-center gap-2">
           <span className="text-base">✅</span>
           <span>
@@ -197,11 +204,9 @@ export default function LocationDetailGrouped({ rows, onJibunPin, initialSearch 
             <GroupBlock
               key={g.key}
               group={g}
-              // compact = 항상 펼침 + 그룹 헤더 통째로 숨김
-              collapsed={compact ? false : !expandedKeys.has(g.key)}
-              onToggle={compact ? () => {} : () => toggleGroup(g.key)}
+              collapsed={!expandedKeys.has(g.key)}
+              onToggle={() => toggleGroup(g.key)}
               onJibunPin={onJibunPin}
-              hideHeader={compact}
             />
           ))
         )}
@@ -216,14 +221,11 @@ function GroupBlock({
   collapsed,
   onToggle,
   onJibunPin,
-  hideHeader = false,
 }: {
   group: FacilityGroup;
   collapsed: boolean;
   onToggle: () => void;
   onJibunPin?: (row: KepcoDataRow) => void;
-  /** compact 모드 — 그룹 헤더(시설 요약 + 토글) 통째로 숨기고 칼럼+행만 표시 */
-  hideHeader?: boolean;
 }) {
   const { substNm, mtrNo, dlNm, rows, noCap, status } = group;
   const total = rows.length;
@@ -245,73 +247,64 @@ function GroupBlock({
 
   return (
     <div
-      className={
-        hideHeader
-          ? "" // compact: 외곽 테두리/배경 제거 — 칼럼+행만 깔끔히
-          : `border rounded-lg overflow-hidden ${
-              status === "bad"
-                ? "border-red-200"
-                : status === "partial"
-                  ? "border-amber-200"
-                  : "border-gray-200"
-            }`
-      }
+      className={`border rounded-lg overflow-hidden ${
+        status === "bad"
+          ? "border-red-200"
+          : status === "partial"
+            ? "border-amber-200"
+            : "border-gray-200"
+      }`}
     >
-      {/* 그룹 헤더 — compact 에서는 통째로 숨김 */}
-      {!hideHeader && (
-        <button
-          type="button"
-          onClick={onToggle}
-          className={`w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors ${
-            status === "bad"
-              ? "bg-red-50 hover:bg-red-100"
-              : status === "partial"
-                ? "bg-amber-50 hover:bg-amber-100"
-                : "bg-gray-50 hover:bg-gray-100"
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`w-full text-left px-3 py-2.5 flex items-center gap-2 transition-colors ${
+          status === "bad"
+            ? "bg-red-50 hover:bg-red-100"
+            : status === "partial"
+              ? "bg-amber-50 hover:bg-amber-100"
+              : "bg-gray-50 hover:bg-gray-100"
+        }`}
+      >
+        <span
+          className={`text-gray-500 transition-transform ${
+            collapsed ? "" : "rotate-90"
           }`}
         >
-          <span
-            className={`text-gray-500 transition-transform ${
-              collapsed ? "" : "rotate-90"
-            }`}
-          >
-            ▶
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs md:text-sm text-gray-900 flex items-center gap-1.5 md:gap-2 flex-wrap">
-              <span><span className="text-gray-500 font-medium">변전소</span> <span className="font-bold text-blue-700">{substNm}</span></span>
-              <span className="text-gray-300">·</span>
-              <span><span className="text-gray-500 font-medium">주변압기</span> <span className="font-bold text-emerald-700">#{mtrNo}</span></span>
-              <span className="text-gray-300">·</span>
-              <span><span className="text-gray-500 font-medium">배전선로</span> <span className="font-bold text-amber-700">{dlNm}</span></span>
-            </div>
-            <div className="text-[11px] text-gray-600 mt-0.5 flex items-center gap-1 flex-wrap">
-              <span>{total.toLocaleString()}건</span>
-              {status !== "ok" && (
-                <>
-                  <span className="text-gray-300">·</span>
-                  {noCap.subst > 0 && (
-                    <span className="text-red-600">변전소 <span className="font-semibold">{noCap.subst}</span></span>
-                  )}
-                  {noCap.mtr > 0 && (
-                    <span className="text-red-600">주변압기 <span className="font-semibold">{noCap.mtr}</span></span>
-                  )}
-                  {noCap.dl > 0 && (
-                    <span className="text-red-600">선로 <span className="font-semibold">{noCap.dl}</span></span>
-                  )}
-                  <span className="text-red-500 text-[10px]">부족</span>
-                </>
-              )}
-            </div>
+          ▶
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs md:text-sm text-gray-900 flex items-center gap-1.5 md:gap-2 flex-wrap">
+            <span><span className="text-gray-500 font-medium">변전소</span> <span className="font-bold text-blue-700">{substNm}</span></span>
+            <span className="text-gray-300">·</span>
+            <span><span className="text-gray-500 font-medium">주변압기</span> <span className="font-bold text-emerald-700">#{mtrNo}</span></span>
+            <span className="text-gray-300">·</span>
+            <span><span className="text-gray-500 font-medium">배전선로</span> <span className="font-bold text-amber-700">{dlNm}</span></span>
           </div>
-          {statusBadge}
-        </button>
-      )}
+          <div className="text-[11px] text-gray-600 mt-0.5 flex items-center gap-1 flex-wrap">
+            <span>{total.toLocaleString()}건</span>
+            {status !== "ok" && (
+              <>
+                <span className="text-gray-300">·</span>
+                {noCap.subst > 0 && (
+                  <span className="text-red-600">변전소 <span className="font-semibold">{noCap.subst}</span></span>
+                )}
+                {noCap.mtr > 0 && (
+                  <span className="text-red-600">주변압기 <span className="font-semibold">{noCap.mtr}</span></span>
+                )}
+                {noCap.dl > 0 && (
+                  <span className="text-red-600">선로 <span className="font-semibold">{noCap.dl}</span></span>
+                )}
+                <span className="text-red-500 text-[10px]">부족</span>
+              </>
+            )}
+          </div>
+        </div>
+        {statusBadge}
+      </button>
 
-      {/* 그룹 본문 — 컬럼 헤더 + 지번 목록. compact 면 항상 펼침 */}
       {!collapsed && (
         <div className="bg-white">
-          {/* 컬럼 헤더 */}
           <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-500">
             <span className="w-3"></span>
             <span className="min-w-[60px]">번지</span>
@@ -328,6 +321,38 @@ function GroupBlock({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * compact 모드 전용 — 단일 테이블 (그룹화 없음).
+ * 같은 마을 fallback 의 "참고용 N건" 처럼 변전소/주변압기 구분이 노이즈가 되는 경우.
+ * RPC 가 이미 본번 거리순 정렬해 주므로 추가 정렬 X.
+ */
+function CompactTable({
+  rows,
+  onJibunPin,
+}: {
+  rows: KepcoDataRow[];
+  onJibunPin?: (row: KepcoDataRow) => void;
+}) {
+  return (
+    <div className="bg-white">
+      <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-500">
+        <span className="w-3"></span>
+        <span className="min-w-[60px]">번지</span>
+        <div className="flex-1 grid grid-cols-3 gap-2">
+          <span className="text-blue-600">🏭 변전소</span>
+          <span className="text-emerald-600">⚡ 주변압기</span>
+          <span className="text-amber-600">📡 배전선로</span>
+        </div>
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {rows.map((r) => (
+          <JibunRow key={r.id} row={r} onJibunPin={onJibunPin} />
+        ))}
+      </ul>
     </div>
   );
 }
@@ -434,33 +459,6 @@ function JibunRow({ row, onJibunPin }: { row: KepcoDataRow; onJibunPin?: (row: K
         </li>
       )}
     </>
-  );
-}
-
-/**
- * 인라인 잔여 표시 — 시설 라벨 + 부호 색상 숫자.
- * 그룹 뷰의 지번 행에서 좁은 폭에 맞게 컴팩트하게 표현.
- */
-function RemainInline({
-  label,
-  remaining,
-}: {
-  label: string;
-  remaining: number;
-}) {
-  const color =
-    remaining > 0
-      ? "text-blue-600"
-      : remaining < 0
-        ? "text-red-600"
-        : "text-gray-400";
-  return (
-    <span className="inline-flex items-center gap-1 min-w-0 truncate">
-      <span className="hidden md:inline text-gray-400 flex-shrink-0">{label}</span>
-      <span className={`font-semibold tabular-nums ${color}`}>
-        {formatRemaining(remaining)}
-      </span>
-    </span>
   );
 }
 
