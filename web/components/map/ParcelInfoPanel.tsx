@@ -24,8 +24,13 @@ import {
   type BuildingTitleInfo,
 } from "@/lib/api/buildings";
 import { fetchVworldParcelByPnu } from "@/lib/api/vworld";
-import { fetchKepcoByPnu, refreshKepcoByPnu } from "@/lib/kepco/by-pnu";
-import { jibunFromPnu } from "@/lib/geo/pnu";
+import {
+  fetchKepcoByPnu,
+  refreshKepcoByPnu,
+  type CapaFallback,
+} from "@/lib/kepco/by-pnu";
+import { jibunFromPnu, buildPnuFromBjdAndJibun } from "@/lib/geo/pnu";
+import LocationDetailGrouped from "./LocationDetailGrouped";
 import {
   fetchLandTransactionsByPnu,
   fetchNrgTransactionsByPnu,
@@ -167,6 +172,9 @@ export default function ParcelInfoPanel({
     } catch {}
   }, []);
 
+  // 패널 확장 토글 — 매번 기본 사이즈로 시작(저장 X). 견적 모드에서는 의미 없어 무시.
+  const [expanded, setExpanded] = useState(false);
+
   // PNU → VWorld parcel (jibun + geometry) self-fetch.
   // 모듈 캐시 (lib/api/vworld) 가 있어 같은 PNU 재방문 비용 0.
   const [jibun, setJibun] = useState<JibunInfo | null>(null);
@@ -216,9 +224,12 @@ export default function ParcelInfoPanel({
       : [];
 
   // 견적 모드 임베드 시 = 좌측 패널 0번 섹션 안. floating overlay X / 자체 헤더 X.
+  // 일반 모드: 기본(우하단 카드) ↔ 확장(중앙 큰 모달, 모바일 풀스크린).
   const wrapperClass = inQuoteMode
     ? "bg-white flex flex-col"
-    : "absolute left-4 right-4 bottom-4 md:left-auto md:right-4 md:bottom-4 md:w-[520px] max-w-[calc(100%-32px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-10 flex flex-col h-[62dvh] md:h-[min(560px,calc(100dvh-120px))] kepco-slide-up";
+    : expanded
+      ? "fixed inset-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[80vw] md:h-[85vh] md:max-w-[1400px] bg-white md:rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 flex flex-col transition-all duration-200"
+      : "absolute left-4 right-4 bottom-4 md:left-auto md:right-4 md:bottom-4 md:w-[520px] max-w-[calc(100%-32px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-10 flex flex-col h-[62dvh] md:h-[min(560px,calc(100dvh-120px))] kepco-slide-up transition-all duration-200";
 
   // 패널이 한 번이라도 jibun/geometry 받기 전엔 탭 내용 숨김.
   // (탭 자체 fetch 가 PNU 만 의존하면 이미 시작 가능하지만, ParcelTab/PriceTab 이
@@ -245,13 +256,23 @@ export default function ParcelInfoPanel({
               </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
-            aria-label="닫기"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-gray-400 hover:text-gray-600 text-base leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100"
+              aria-label={expanded ? "축소" : "확대"}
+              title={expanded ? "원래 크기로" : "크게 보기"}
+            >
+              {expanded ? "⤣" : "⤢"}
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-xl leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100"
+              aria-label="닫기"
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
 
@@ -292,7 +313,11 @@ export default function ParcelInfoPanel({
             />
           )}
           {tab === "electric" && (
-            <ElectricTab pnu={pnu} clickedJibun={clickedJibun} />
+            <ElectricTab
+              pnu={pnu}
+              clickedJibun={clickedJibun}
+              onPnuChange={onPnuChange}
+            />
           )}
           {tab === "onbid" && <OnbidTab pnu={pnu} />}
           {tab === "price" && (
@@ -813,11 +838,15 @@ function RefreshArrowIcon({
 function ElectricTab({
   pnu,
   clickedJibun,
+  onPnuChange,
 }: {
   pnu: string;
   clickedJibun: string;
+  /** fallback 결과 행의 📍 클릭 → 그 지번 PNU 로 패널 자체를 갈아끼움 */
+  onPnuChange?: (pnu: string) => void;
 }) {
   const [capa, setCapa] = useState<KepcoDataRow[]>([]);
+  const [fallback, setFallback] = useState<CapaFallback>({ used: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -831,7 +860,10 @@ function ElectricTab({
     setError(null);
     fetchKepcoByPnu(pnu)
       .then((res) => {
-        if (alive) setCapa(res.rows);
+        if (alive) {
+          setCapa(res.rows);
+          setFallback(res.fallback);
+        }
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e));
@@ -854,6 +886,8 @@ function ElectricTab({
     try {
       const r = await refreshKepcoByPnu(pnu);
       setCapa(r.rows);
+      // refresh = KEPCO live 호출이라 exact 매칭 결과만 — fallback 해제
+      setFallback({ used: false });
       if (r.source === "not_found") {
         setRefreshError("KEPCO 에 데이터 없음");
       }
@@ -900,6 +934,33 @@ function ElectricTab({
         {refreshError && (
           <div className="text-[11px] text-red-500">{refreshError}</div>
         )}
+      </div>
+    );
+  }
+
+  // ── fallback 응답 = 같은 마을의 가까운 지번 top N (의뢰자 결정 2026-05-01)
+  // 마을검색 모달의 LocationDetailGrouped 컴포넌트 그대로 재사용 —
+  // 변전소/주변압기/배전선로 그룹화 + 번지 + 시설별 잔여 용량 칼럼 한 줄 표시 + 펼침.
+  // 정렬/검색/필터/펼침 등 모든 동작이 이미 완성됨.
+  if (fallback.used) {
+    return (
+      <div className="space-y-2">
+        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-900 leading-relaxed">
+          이 지번(<b>{fallback.target_jibun}</b>)은 매칭 정보가 없어
+          같은 마을의 가까운 지번 <b>{capa.length}건</b>을 표시합니다.
+        </div>
+        {/* 길어질 경우 자동 스크롤 — 화면 절반 정도까지만 노출 */}
+        <div className="-mx-4 max-h-[55vh] overflow-y-auto">
+          <LocationDetailGrouped
+            rows={capa}
+            compact
+            onJibunPin={(row) => {
+              if (!onPnuChange || !row.addr_jibun || !row.bjd_code) return;
+              const newPnu = buildPnuFromBjdAndJibun(row.bjd_code, row.addr_jibun);
+              if (newPnu) onPnuChange(newPnu);
+            }}
+          />
+        </div>
       </div>
     );
   }

@@ -40,3 +40,4 @@
 - 🌏 [Vercel region = icn1 고정](reference_vercel_region.md) — vercel.json 프로젝트 전역. 한국 외부 API 가 미국 iad1 IP 거절. preferredRegion 은 Edge 전용이라 Node 에서 무시 (함정)
 - 🪤 [Supabase RPC plan 함정](reference_supabase_rpc_plan_trap.md) — 동일 SQL 직접 1.5ms ↔ RPC 2초+. generic plan 캐시로 인덱스 못 탐. 쿼리빌더 직접 호출 또는 표현식 인덱스로 회피
 - 🏛 [법제처 OPEN API 도메인 검증](reference_law_api_referer.md) — Referer/Origin 헤더 필수 (서버사이드 fetch). 헤더 값 한글 금지(ByteString 거부). sunlap.kr 등록 완료
+- ⚡ [KEPCO 같은 마을 fallback](reference_kepco_fallback.md) — 매칭 0건 시 본번거리 top 5. RPC plpgsql+EXECUTE 필수(sql LANGUAGE 시 plan trap = 2.5초). UI는 LocationDetailGrouped compact 재활용

@@ -7,10 +7,17 @@
  * 서버 분리:
  *   - bjd_code = PNU 앞 10자리
  *   - jibun = PNU 뒤 9자리 → 텍스트 ("36-2", "산23")
- *   - kepco_capa.addr_jibun 와 exact match (fallback 없음)
+ *   - kepco_capa.addr_jibun 와 exact match
+ *
+ * 매칭 0건 fallback (2026-05-01 의뢰자 요청):
+ *   같은 리(=같은 bjd_code) 안에서 본번 차이 최소 top 5 row 반환.
+ *   RPC fallback_kepco_nearest 가 jibun_to_num 정규화 + 거리 정렬.
+ *   한전이 모든 지번 데이터를 갖고 있지 않아 같은 마을 안의 다른 지번 정보로
+ *   대체. UI 에는 fallback 사용 표시 + 안내 배지 (LocationDetailGrouped compact).
+ *   응답 필드: fallback = { used: true, target_jibun }
  *
  * 응답:
- *   { ok, pnu, bjd_code, jibun, rows: KepcoDataRow[], total, meta: AddrMeta | null }
+ *   { ok, pnu, bjd_code, jibun, rows, total, meta, fallback }
  *
  * 사용처:
  *   - ParcelInfoPanel [전기] 탭 (lib/kepco/by-pnu) — 모든 진입(전기/공매/견적) 단일 입력 PNU.
@@ -22,7 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { jibunFromPnu } from "@/lib/geo/pnu";
+import { jibunFromPnu, jibunToNumber } from "@/lib/geo/pnu";
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
@@ -95,7 +102,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const rows = (capaRes.data ?? []) as KepcoDataRow[];
+  let rows = (capaRes.data ?? []) as KepcoDataRow[];
   const m = metaRes.data;
   const meta: AddrMeta | null = m
     ? {
@@ -107,6 +114,34 @@ export async function GET(request: NextRequest) {
       }
     : null;
 
+  // ── exact 매칭 0건 fallback (2026-05-01 의뢰자 결정) ───────────────
+  // 같은 마을(bjd_code) 내 가장 가까운 지번 top 10 표시.
+  // RPC fallback_kepco_nearest 가 jibun_to_num() 정규화 + 거리 정렬.
+  // 정상 매칭 케이스는 추가 부담 0 — exact 0건일 때만 발동.
+  let fallback: { used: false } | { used: true; target_jibun: string } = {
+    used: false,
+  };
+  if (rows.length === 0) {
+    const targetNum = jibunToNumber(jibun);
+    if (targetNum !== null) {
+      const { data: nearestRows, error: rpcErr } = await supabase.rpc(
+        "fallback_kepco_nearest",
+        {
+          p_bjd_code: bjdCode,
+          p_target_num: targetNum,
+          p_limit: 5,
+        },
+      );
+      if (rpcErr) {
+        console.error("[capa/by-pnu] fallback RPC 실패", rpcErr);
+        // RPC 실패해도 응답 자체는 정상 (rows=[]) 으로 — UI 기존 흐름 유지
+      } else if (nearestRows && nearestRows.length > 0) {
+        rows = nearestRows as KepcoDataRow[];
+        fallback = { used: true, target_jibun: jibun };
+      }
+    }
+  }
+
   return NextResponse.json(
     {
       ok: true,
@@ -116,9 +151,11 @@ export async function GET(request: NextRequest) {
       rows,
       total: rows.length,
       meta,
+      fallback,
     },
     {
-      headers: { "Cache-Control": "no-store" },
+      // 같은 PNU 재호출 시 10분간 hit (KEPCO 일배치 갱신 주기 대비 충분히 안전)
+      headers: { "Cache-Control": "private, max-age=600" },
     },
   );
 }

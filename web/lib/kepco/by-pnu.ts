@@ -13,9 +13,20 @@
 
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 
+/**
+ * fallback 정보:
+ *   used=false: exact 매칭 (rows 가 그 지번 정보 그대로)
+ *   used=true:  exact 매칭 0건 → 같은 마을의 가까운 top 10 row 반환.
+ *               UI 에서 "이 지번 정보 없음, 같은 마을 N건 표시" 안내.
+ */
+export type CapaFallback =
+  | { used: false }
+  | { used: true; target_jibun: string };
+
 export interface CapaByPnuResult {
   rows: KepcoDataRow[];
   meta: AddrMeta | null;
+  fallback: CapaFallback;
 }
 
 interface CapaByPnuApiResponse {
@@ -26,6 +37,7 @@ interface CapaByPnuApiResponse {
   rows?: KepcoDataRow[];
   total?: number;
   meta?: AddrMeta | null;
+  fallback?: CapaFallback;
   error?: string;
 }
 
@@ -42,7 +54,11 @@ interface RefreshApiResponse {
 const resultCache = new Map<string, CapaByPnuResult>();
 const inflight = new Map<string, Promise<CapaByPnuResult>>();
 
-const EMPTY_RESULT: CapaByPnuResult = { rows: [], meta: null };
+const EMPTY_RESULT: CapaByPnuResult = {
+  rows: [],
+  meta: null,
+  fallback: { used: false },
+};
 
 /**
  * GET /api/capa/by-pnu — DB 단위 조회. 같은 PNU 재호출은 모듈 캐시 hit.
@@ -70,6 +86,7 @@ export async function fetchKepcoByPnu(
     const result: CapaByPnuResult = {
       rows: data.rows ?? [],
       meta: data.meta ?? null,
+      fallback: data.fallback ?? { used: false },
     };
     resultCache.set(pnu, result);
     return result;
@@ -105,11 +122,13 @@ export async function refreshKepcoByPnu(pnu: string): Promise<{
   if (!data.ok) throw new Error(data.error || "PNU 용량 갱신 실패");
 
   // 갱신 결과를 모듈 캐시에 반영 (다음 fetchKepcoByPnu 즉시 hit).
-  // refresh 응답엔 meta 가 없으므로 기존 meta 유지 또는 null.
+  // refresh 응답엔 meta/fallback 이 없으므로 기존 meta 유지 또는 null.
+  // refresh 는 KEPCO live 호출이라 fallback 의미 없음 → used=false 로 초기화.
   const prev = resultCache.get(pnu);
   resultCache.set(pnu, {
     rows: data.rows ?? [],
     meta: prev?.meta ?? null,
+    fallback: { used: false },
   });
 
   return {
