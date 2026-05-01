@@ -847,6 +847,9 @@ function ElectricTab({
 }) {
   const [capa, setCapa] = useState<KepcoDataRow[]>([]);
   const [fallback, setFallback] = useState<CapaFallback>({ used: false });
+  // villageEmpty = 같은 마을(bjd_code) 전체에 한전 데이터 0건 — fallback 도 못 만드는 케이스.
+  // exact 매칭 0건 + fallback 도 0건일 때만 true.
+  const [villageEmpty, setVillageEmpty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -863,6 +866,7 @@ function ElectricTab({
         if (alive) {
           setCapa(res.rows);
           setFallback(res.fallback);
+          setVillageEmpty(res.villageEmpty);
         }
       })
       .catch((e: unknown) => {
@@ -886,8 +890,9 @@ function ElectricTab({
     try {
       const r = await refreshKepcoByPnu(pnu);
       setCapa(r.rows);
-      // refresh = KEPCO live 호출이라 exact 매칭 결과만 — fallback 해제
+      // refresh = KEPCO live 호출이라 exact 매칭 결과만 — fallback/villageEmpty 해제
       setFallback({ used: false });
+      setVillageEmpty(false);
       if (r.source === "not_found") {
         setRefreshError("KEPCO 에 데이터 없음");
       }
@@ -915,6 +920,46 @@ function ElectricTab({
   }
 
   if (capa.length === 0) {
+    // villageEmpty = 같은 마을 전체에 한전 데이터 0건 → fallback 도 못 만드는 케이스.
+    // 사용자가 "왜 주변 지번 정보도 안 뜨지?" 헷갈리지 않도록 별도 멘트.
+    if (villageEmpty) {
+      return (
+        <div className="py-6 px-4 space-y-3">
+          <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-3 text-xs text-gray-700 leading-relaxed space-y-1.5">
+            <div className="font-semibold text-gray-900">
+              이 마을 전체에 한전 용량 정보가 없습니다
+            </div>
+            <div>
+              한전이 이 마을(리)에 대한 데이터를 보유하고 있지 않아
+              <br />
+              주변 지번의 참고 정보도 표시할 수 없습니다.
+            </div>
+            <div className="text-[11px] text-gray-500 pt-1">
+              산악·해안 변두리 지역에서 종종 발생합니다. 정확한 용량은
+              아래 한전 시스템에서 직접 확인해 주세요.
+            </div>
+          </div>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
+                         bg-blue-50 text-blue-700 rounded border border-blue-200
+                         hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <RefreshArrowIcon spinning={refreshing} className="w-3 h-3" />
+              {refreshing ? "KEPCO 조회 중..." : "KEPCO 에서 지금 확인"}
+            </button>
+            {refreshError && (
+              <div className="text-[11px] text-red-500 mt-2">{refreshError}</div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // exact 0건 + RPC 도 호출 못 했거나 예외 (jibun 추출 실패 등) — 기존 멘트 유지
     return (
       <div className="py-6 text-center space-y-3">
         <div className="text-sm text-gray-500">

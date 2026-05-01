@@ -27,6 +27,12 @@ export interface CapaByPnuResult {
   rows: KepcoDataRow[];
   meta: AddrMeta | null;
   fallback: CapaFallback;
+  /**
+   * true = 같은 마을(bjd_code) 전체에 한전 데이터가 0건.
+   * UI 에서 "이 마을 자체에 한전 정보가 없어 주변 지번도 표시 못 함" 멘트 분기용.
+   * exact 매칭 성공 케이스는 항상 false.
+   */
+  villageEmpty: boolean;
 }
 
 interface CapaByPnuApiResponse {
@@ -38,6 +44,7 @@ interface CapaByPnuApiResponse {
   total?: number;
   meta?: AddrMeta | null;
   fallback?: CapaFallback;
+  village_empty?: boolean;
   error?: string;
 }
 
@@ -58,6 +65,7 @@ const EMPTY_RESULT: CapaByPnuResult = {
   rows: [],
   meta: null,
   fallback: { used: false },
+  villageEmpty: false,
 };
 
 /**
@@ -87,6 +95,7 @@ export async function fetchKepcoByPnu(
       rows: data.rows ?? [],
       meta: data.meta ?? null,
       fallback: data.fallback ?? { used: false },
+      villageEmpty: data.village_empty ?? false,
     };
     resultCache.set(pnu, result);
     return result;
@@ -124,11 +133,13 @@ export async function refreshKepcoByPnu(pnu: string): Promise<{
   // 갱신 결과를 모듈 캐시에 반영 (다음 fetchKepcoByPnu 즉시 hit).
   // refresh 응답엔 meta/fallback 이 없으므로 기존 meta 유지 또는 null.
   // refresh 는 KEPCO live 호출이라 fallback 의미 없음 → used=false 로 초기화.
+  // villageEmpty 도 KEPCO live 결과 기준으로는 의미 없음 → false 로 초기화.
   const prev = resultCache.get(pnu);
   resultCache.set(pnu, {
     rows: data.rows ?? [],
     meta: prev?.meta ?? null,
     fallback: { used: false },
+    villageEmpty: false,
   });
 
   return {

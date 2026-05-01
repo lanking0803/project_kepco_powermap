@@ -115,12 +115,16 @@ export async function GET(request: NextRequest) {
     : null;
 
   // ── exact 매칭 0건 fallback (2026-05-01 의뢰자 결정) ───────────────
-  // 같은 마을(bjd_code) 내 가장 가까운 지번 top 10 표시.
+  // 같은 마을(bjd_code) 내 가장 가까운 지번 top 5 표시.
   // RPC fallback_kepco_nearest 가 jibun_to_num() 정규화 + 거리 정렬.
   // 정상 매칭 케이스는 추가 부담 0 — exact 0건일 때만 발동.
+  //
+  // village_empty (2026-05-01): RPC 결과도 빈 배열 = 마을 전체에 한전 데이터 0건.
+  // 추가 쿼리 없이 같은 RPC 결과로 판정 → UI 에서 "마을 자체 정보 없음" 안내용.
   let fallback: { used: false } | { used: true; target_jibun: string } = {
     used: false,
   };
+  let villageEmpty = false;
   if (rows.length === 0) {
     const targetNum = jibunToNumber(jibun);
     if (targetNum !== null) {
@@ -138,6 +142,9 @@ export async function GET(request: NextRequest) {
       } else if (nearestRows && nearestRows.length > 0) {
         rows = nearestRows as KepcoDataRow[];
         fallback = { used: true, target_jibun: jibun };
+      } else {
+        // RPC 정상 응답 + 빈 배열 = 같은 bjd_code 안에 row 0건 = 마을 전체 한전 데이터 없음
+        villageEmpty = true;
       }
     }
   }
@@ -152,6 +159,7 @@ export async function GET(request: NextRequest) {
       total: rows.length,
       meta,
       fallback,
+      village_empty: villageEmpty,
     },
     {
       // 같은 PNU 재호출 시 10분간 hit (KEPCO 일배치 갱신 주기 대비 충분히 안전)
