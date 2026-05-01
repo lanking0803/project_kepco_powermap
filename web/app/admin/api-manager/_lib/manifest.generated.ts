@@ -534,7 +534,7 @@ export const MANIFEST: GeneratedManifest = {
             "externalDeps": [],
             "notes": "exact match 만 — fallback 없음. KEPCO 미수집 지번은 빈 rows. meta = bjd_master 의 sep_1~5 (헤더 주소 표시용 보조). PNU → bjd_code/jibun 분리는 lib/geo/pnu (jibunFromPnu)."
           },
-          "metaLine": 29,
+          "metaLine": 36,
           "metaExportName": "meta"
         }
       ]

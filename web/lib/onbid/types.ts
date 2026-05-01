@@ -122,6 +122,28 @@ export interface OnbidListItem {
   daysLeft: number;
   /** D-3 이내 임박 매물 여부 */
   isUrgent: boolean;
+
+  // ── 회차 정보 (같은 cltrMngNo 의 다중 row 를 dedup 시 보존) ──
+  // 캠코 회차 모델 실측 (test-onbid-debug-*.ts 2026-05-02):
+  //   - 같은 매물(cltrMngNo)이 회차별로 N row 응답.
+  //   - 유찰된 회차는 응답에서 빠짐 → 응답 row 갯수 = 남은 회차 수.
+  //   - 현재 회차 = usbdNft + 1 (이미 유찰된 횟수의 다음).
+  //   - 총 회차 = usbdNft + 응답 row 갯수.
+  //   - 대표 row = 가장 임박한 회차(가장 작은 cltrBidEndDt) — D-day/가격 일치.
+  //
+  // ⚠️ 신뢰도 주의:
+  //   - 시도 단위 검색(/api/onbid/search)은 numOfRows cap 으로 같은 매물 row 가 누락 가능
+  //     → 목록 카드는 회차 정보 표시하지 않음. lowstBidPrc/discountRatio 만 활용.
+  //   - 동단위 검색(/api/onbid/by-pnu)은 row 다 받음 → 정확. 상세 팝업에서 활용.
+  //
+  /** 총 회차 수 (이미 유찰 + 남은). 시도 검색에서는 부정확. */
+  roundTotal: number;
+  /** 현재 진행 회차 (usbdNft + 1, 1-base). 항상 신뢰 가능. */
+  roundCurrent: number;
+  /** 최저 시나리오 가격 — 가장 먼 미래 회차의 가격 (= 응답 마지막 sorted row). row 1개면 null. 시도 검색에서는 부정확. */
+  minRoundPrice: number | null;
+  /** 최저 시나리오 할인율 — 감정가 대비 (0~1). row 1개면 null. 시도 검색에서는 부정확. */
+  minRoundDiscountRatio: number | null;
 }
 
 // ─── 상세 응답 (사진/감정평가/위치/입찰조건 등 부가 정보) ─────────────

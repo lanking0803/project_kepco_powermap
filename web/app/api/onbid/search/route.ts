@@ -129,15 +129,8 @@ export async function GET(req: NextRequest) {
   try {
     const raw = await fetchOnbidListPage(rawParams);
 
-    // cltrMngNo 회차 중복 제거 — 같은 매물이 회차(pbctNsq)별로 N건 응답됨.
-    // 응답 순서가 최신 회차 우선이라 첫 번째 보존.
-    const dedupMap = new Map<string, (typeof raw.items)[number]>();
-    for (const it of raw.items) {
-      if (!dedupMap.has(it.cltrMngNo)) dedupMap.set(it.cltrMngNo, it);
-    }
-    const dedupedRaw = [...dedupMap.values()];
-
-    let items = await enrichRawItems(dedupedRaw);
+    // 회차 dedup + 회차 정보 보존(roundTotal, roundCurrent, minRoundPrice)은 enrichRawItems 안에서 일괄 처리.
+    let items = await enrichRawItems(raw.items);
 
     // 카테고리 사후 필터
     if (postFilterCategories && postFilterCategories.length > 0) {

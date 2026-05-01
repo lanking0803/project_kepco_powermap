@@ -130,6 +130,9 @@ function DetailCard({ item }: { item: OnbidDetail }) {
           bidBgngDt={item.cltrBidBgngDt}
         />
 
+        {/* ── 3-1. 회차 시나리오 (남은 회차 ≥ 2 일 때만) ── */}
+        {item.roundTotal > 1 && <RoundScenarioCard item={item} />}
+
         {/* ── 4. 사진 갤러리 (라이트박스 풀스크린) ── */}
         {item.photoUrls.length > 0 && (
           <PhotoGallery
@@ -281,6 +284,9 @@ function DetailCard({ item }: { item: OnbidDetail }) {
 
 function SalesHeroLine({ item }: { item: OnbidDetail }) {
   const parts: string[] = [];
+  if (item.roundTotal > 1) {
+    parts.push(`${item.roundCurrent}/${item.roundTotal}차`);
+  }
   if (item.usbdNft != null && item.usbdNft > 0) {
     parts.push(`유찰 ${item.usbdNft}회`);
   }
@@ -394,6 +400,63 @@ function PriceHeroCard({
           {formatBidDate(bidBgngDt)} ~ {formatBidDate(bidEndDt).slice(5)} 마감
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── 회차 시나리오 ────────────────
+//   "지금 N차 진행 중, 유찰 시 다음 가격 → 마지막 회차 가격" 추이.
+//   영업이 입찰 전략 짤 때 핵심 (이번 회차 vs 다음 회차 vs 마지막 회차 트레이드오프).
+//   동단위 호출(by-pnu)이라 회차 row 다 받아 정확.
+
+function RoundScenarioCard({ item }: { item: OnbidDetail }) {
+  const isLastRound = item.roundCurrent >= item.roundTotal;
+  const minMan =
+    item.minRoundPrice != null ? Math.round(item.minRoundPrice / 10000) : null;
+  const minDiscountPct =
+    item.minRoundDiscountRatio != null
+      ? Math.round(item.minRoundDiscountRatio * 100)
+      : null;
+
+  return (
+    <div
+      className={`rounded-md border px-3 py-2 ${
+        isLastRound
+          ? "border-rose-300 bg-rose-50"
+          : "border-gray-200 bg-gray-50"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span
+          className={`font-bold ${
+            isLastRound ? "text-rose-700" : "text-gray-700"
+          }`}
+        >
+          {isLastRound ? "⚠️ 마지막 회차 진행 중" : "회차 진행 상황"}
+        </span>
+        <span
+          className={`tabular-nums font-semibold ${
+            isLastRound ? "text-rose-700" : "text-gray-800"
+          }`}
+        >
+          {item.roundCurrent}
+          <span className="text-gray-400"> / </span>
+          {item.roundTotal}차
+        </span>
+      </div>
+      {!isLastRound && minMan != null && minDiscountPct != null && (
+        <div className="mt-1.5 pt-1.5 border-t border-dashed border-gray-300 text-[11px] text-gray-600 leading-snug">
+          이번 못 받으면 가격이 단계별로 하락합니다.
+          <br />
+          마지막 회차 가격{" "}
+          <span className="text-gray-800 font-semibold tabular-nums">
+            {minMan.toLocaleString()}만원
+          </span>{" "}
+          <span className="text-emerald-600 font-semibold">
+            ({minDiscountPct}%↓)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -120,18 +120,15 @@ export async function GET(req: NextRequest) {
     };
     const listRes = await fetchOnbidListPage(listParams);
 
-    // 3) 매물의 보정 PNU(=행안부 표준) 와 입력 PNU 비교 + cltrMngNo 회차 중복 제거.
+    // 3) 매물의 보정 PNU(=행안부 표준) 와 입력 PNU 비교.
     //    캠코 ltnoPnu 는 산구분 비표준(0=일반/1=산) 이라 직접 비교하면 0% 매칭 →
     //    pnuFromOnbidItem 으로 매물명에서 표준 PNU 재구성 후 비교 (실측 100%).
+    //    회차 dedup + 회차 정보 보존은 enrichRawItems 안에서 일괄 처리.
     const matchedAll = listRes.items.filter(
       (it) => pnuFromOnbidItem(it) === pnu,
     );
-    const dedupMap = new Map<string, (typeof matchedAll)[number]>();
-    for (const it of matchedAll) {
-      if (!dedupMap.has(it.cltrMngNo)) dedupMap.set(it.cltrMngNo, it);
-    }
-    const matched = [...dedupMap.values()];
-    if (matched.length === 0) {
+    const baseItems = await enrichRawItems(matchedAll);
+    if (baseItems.length === 0) {
       return NextResponse.json(
         {
           ok: true,
@@ -143,27 +140,24 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 4) 매물 각각 상세 병렬 호출 + 좌표 enrich
-    const baseItemsP = enrichRawItems(matched); // 좌표/카테고리/D-day
-    const detailsP = Promise.all(
-      matched.map((m) =>
-        fetchOnbidDetail(m.cltrMngNo, m.pbctCdtnNo).catch((e) => {
-          console.error(`[onbid/by-pnu] 상세 실패 cltrMngNo=${m.cltrMngNo}`, e);
+    // 4) 매물 각각 상세 병렬 호출 (대표 회차의 cltrMngNo + pbctCdtnNo 사용)
+    const details = await Promise.all(
+      baseItems.map((b) =>
+        fetchOnbidDetail(b.cltrMngNo, b.pbctCdtnNo).catch((e) => {
+          console.error(`[onbid/by-pnu] 상세 실패 cltrMngNo=${b.cltrMngNo}`, e);
           return null;
         }),
       ),
     );
-    const [baseItems, details] = await Promise.all([baseItemsP, detailsP]);
 
-    // 5) base + detail 결합
+    // 5) base + detail 결합. 상세 실패 시 목록 raw 를 fallback 으로 사용.
+    //    matchedAll 첫 row(=대표 회차) 가 baseItems 의 enrich 원본이라 그대로 fallback.
+    const matchedByMngNo = new Map(
+      matchedAll.map((m) => [m.cltrMngNo, m] as const),
+    );
     const items: OnbidDetail[] = baseItems.map((base, i) => {
-      const raw = details[i];
-      if (!raw) {
-        // 상세 호출 실패 — 목록 정보만이라도 OnbidDetail 형식으로 채워서 반환
-        return enrichDetail(base, {
-          ...matched[i],
-        });
-      }
+      const raw =
+        details[i] ?? matchedByMngNo.get(base.cltrMngNo) ?? matchedAll[i];
       return enrichDetail(base, raw);
     });
 

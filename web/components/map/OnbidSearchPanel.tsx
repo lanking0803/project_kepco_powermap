@@ -459,6 +459,10 @@ function ResultCard({
   const lowstMan = Math.round(item.lowstBidPrc / 10000);
   const discountPct = Math.round(item.discountRatio * 100);
   const jibun = jibunFromPnu(item.ltnoPnu) ?? "—";
+  // 목록 카드는 single-row 정보만 사용 (D-day, 가격, 할인%, 유찰N회) — 모두 row 1건만으로 정확.
+  // 회차 정보(roundTotal/roundCurrent/minRoundPrice)는 동단위 호출이 아니라 시도 단위 호출이라
+  // numOfRows=1000 cap 안에서 같은 매물 회차 row 일부만 받기 때문에 부정확 → 표시 X.
+  // 정확한 회차 정보는 매물 클릭 후 상세 팝업(ParcelInfoPanel [공매] 탭)에서 표시.
   return (
     <div
       className={`w-full px-3 py-2 border-b border-gray-200 transition-colors ${
