@@ -1,0 +1,12 @@
+{
+  "common": {
+    "userTrNo": null,
+    "hyphenTrNo": "10202605029000099915",
+    "errYn": "Y",
+    "errCd": "407",
+    "errMsg": "상세내용이 없습니다."
+  },
+  "data": {
+    "success": "false"
+  }
+}

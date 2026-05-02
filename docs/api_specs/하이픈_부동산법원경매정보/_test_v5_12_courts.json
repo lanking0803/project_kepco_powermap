@@ -1,0 +1,12 @@
+{
+  "common": {
+    "userTrNo": null,
+    "hyphenTrNo": "10202605029000099933",
+    "errYn": "Y",
+    "errCd": "410",
+    "errMsg": "주소검색어가 없습니다."
+  },
+  "data": {
+    "success": "false"
+  }
+}
