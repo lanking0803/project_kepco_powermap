@@ -23,8 +23,8 @@ import {
   type LatIndex,
 } from "./sorted-by-lat";
 
-/** 매칭 거리 절대 상한 (m). 20km 초과는 영업 가치 0 으로 판단. */
-const MAX_DISTANCE_M = 20_000;
+/** 매칭 거리 절대 상한 (m). 15km 초과는 영업 가치 0 으로 판단 (의뢰자 결정 2026-05-03). */
+const MAX_DISTANCE_M = 15_000;
 /** 표시할 최대 마을 수. */
 const TOP_N = 3;
 

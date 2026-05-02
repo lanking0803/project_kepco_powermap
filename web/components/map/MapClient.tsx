@@ -221,6 +221,11 @@ export default function MapClient({ isAdmin, email }: Props) {
   // 데이터 모드 — lib/modes/registry 의 DataModeId. 디폴트 = 전기.
   // 단일 선택(라디오) 원칙: 한 번에 1개만 ON. 전기는 베이스로 항상 표시.
   const [mode, setMode] = useState<DataModeId>("default");
+  /** 콜백 안에서 최신 mode 참조용 — useCallback deps 폭발 방지 */
+  const modeRef = useRef<DataModeId>(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
   /** 공매 활성 여부 — KakaoMap/Sidebar 가 boolean 만 필요로 해서 파생. */
   const onbidActive = mode === "onbid";
   /** 검색 결과 매물. 사이드바 검색폼이 /api/onbid/search 호출로 채움. */
@@ -240,6 +245,8 @@ export default function MapClient({ isAdmin, email }: Props) {
     setMode(next);
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
+    // uq 외 모드로 전환 시 화면에 남은 자연취락지구 폴리곤 정리
+    if (next !== "uq") setUqVillagePolygons([]);
   }, []);
 
   const [roadviewActive, setRoadviewActive] = useState(false);
@@ -302,18 +309,22 @@ export default function MapClient({ isAdmin, email }: Props) {
    * 모든 진입점(마을 마커/필지/공매 그룹) 에서 이 헬퍼 1개만 호출 — cleanup 누락/순서 꼬임 방지.
    *
    * 흐름:
-   *   1) 행정구역 폴리곤 + 시군구 자연취락지구 병렬 fetch (atomic endpoints)
-   *   2) 시군구 응답 그대로 표시 (마을 안 필터링 X — 의뢰자 결정 2026-05-02)
-   *      → 마을 경계 걸친 취락지구도 빠짐없이 시각 확인 가능
-   *   3) 두 state 함께 set
+   *   1) 행정구역 폴리곤은 항상 fetch (마을 영역 시각용)
+   *   2) 자연취락지구 폴리곤은 mode === "uq" 일 때만 fetch + 표시
+   *      (의뢰자 결정 2026-05-03: 다른 모드에선 노이즈)
+   *   3) 시군구 응답 그대로 표시 (마을 안 필터링 X — 2026-05-02)
+   *   4) 두 state 함께 set
    * 실패는 둘 다 시각 보조라 조용히 (음영만 안 그려짐).
    */
   const loadVillageAndUqPolygons = useCallback(
     async (bjdCode: string, signal?: AbortSignal) => {
       try {
+        const isUqMode = modeRef.current === "uq";
         const [adminRes, uqRes] = await Promise.allSettled([
           fetchVworldAdminPolygonByBjdCode(bjdCode, { signal }),
-          fetchVworldUqVillagesByBjdCode(bjdCode, { signal }),
+          isUqMode
+            ? fetchVworldUqVillagesByBjdCode(bjdCode, { signal })
+            : Promise.resolve([] as UqVillage[]),
         ]);
         const villagePoly =
           adminRes.status === "fulfilled"
@@ -322,7 +333,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         setVillagePolygon(villagePoly);
 
         const uqList: UqVillage[] =
-          uqRes.status === "fulfilled" ? uqRes.value : [];
+          isUqMode && uqRes.status === "fulfilled" ? uqRes.value : [];
         setUqVillagePolygons(uqList.map((uq) => uq.polygon));
       } catch {
         // AbortError 등 — state 는 그대로 두고 조용히 빠져나감

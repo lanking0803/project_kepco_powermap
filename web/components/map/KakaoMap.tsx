@@ -945,7 +945,7 @@ export default function KakaoMap({
   //
   //   zIndex 5 — 필지 클릭 (주황)
   //   zIndex 3 — 마을 외곽선 (또렷한 파란 선, fill 0)  ← 자연취락지구 위로 올려 경계 명확
-  //   zIndex 2 — 자연취락지구 (진한 보라)              ← 영업 주인공
+  //   zIndex 2 — 자연취락지구 (emerald, uq 모드 전용) ← 영업 주인공
   //   zIndex 1 — 마을 채우기 (거의 투명한 파란)        ← 약한 배경 가이드
   //
   // 마을 폴리곤을 "채우기 only" 와 "외곽선 only" 두 객체로 분리한 이유:
@@ -995,9 +995,9 @@ export default function KakaoMap({
   }, [loaded, villagePolygon]);
 
   // ─────────────────────────────────────────────
-  // 자연취락지구 폴리곤 (보라) — 영업 주인공.
-  // MapClient 가 booleanIntersects 로 솎아낸 결과만 받음 (마을 경계 살짝 넘는
-  // 케이스 그대로 표시 — 자연취락지구의 실제 모양 보존).
+  // 자연취락지구 폴리곤 (emerald) — 자연취락지구 모드 전용 시각.
+  // 색상은 lib/modes/registry.ts 의 uq.colors.primary (#10b981) 와 일치 —
+  // 영업이 "초록 = 취락지구" 메탈 모델 형성.
   // 마을 외곽선(zIndex 3) 아래, 마을 채우기(zIndex 1) 위 — zIndex 2.
   // ─────────────────────────────────────────────
   const uqPolygonsRef = useRef<any[]>([]);
@@ -1018,10 +1018,10 @@ export default function KakaoMap({
         const polygon = new window.kakao.maps.Polygon({
           path,
           strokeWeight: 2,
-          strokeColor: "#a855f7", // purple-500
+          strokeColor: "#10b981", // emerald-500 (registry uq.colors.primary 와 일치)
           strokeOpacity: 1,
           strokeStyle: "solid",
-          fillColor: "#a855f7",
+          fillColor: "#10b981",
           fillOpacity: 0.35,
           zIndex: 2,
         });
