@@ -6,7 +6,7 @@
  *
  * 본 파일은 "모드 디테일" 만 담당 — UI/검색 로직은 UqVillageSearchPanel.
  */
-import type { UqVillage } from "@/lib/vworld/uq-villages";
+import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 
 /**
  * 검색 입력 — 시도/시군구 (의뢰자 결정 2026-05-02).
@@ -30,7 +30,7 @@ export interface UqSearchParams {
 /** 검색 패널이 sessionStorage 에 저장하는 상태. */
 export interface UqPersistedState {
   params: UqSearchParams;
-  results: UqVillage[];
+  results: UqVillageWithMatches[];
 }
 
 /** 검색 입력값 기본값 — 패널 초기 마운트 + "초기화" 버튼이 사용. */

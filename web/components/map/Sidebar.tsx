@@ -52,6 +52,8 @@ interface Props {
   onOnbidResults?: (items: OnbidListItem[]) => void;
   /** 공매 매물 카드 클릭 콜백 */
   onOnbidItemClick?: (item: OnbidListItem) => void;
+  /** 자연취락지구 카드 클릭 — 매칭된 마을(row)로 진입 */
+  onUqVillagePick?: (row: MapSummaryRow) => void;
 }
 
 // ── 검색 히스토리 ──
@@ -135,6 +137,7 @@ export default function Sidebar({
   onModeChange,
   onOnbidResults,
   onOnbidItemClick,
+  onUqVillagePick,
 }: Props) {
   /** 현재 모드 설정 — 색/라벨/패널 분기 기준 (단일 진실 공급원 = registry) */
   const modeCfg = getDataMode(mode);
@@ -341,7 +344,10 @@ export default function Sidebar({
           </div>
         ) : mode === "uq" ? (
           <div className="flex-1 min-h-0">
-            <UqVillageSearchPanel />
+            <UqVillageSearchPanel
+              totalRows={totalRows}
+              onItemClick={onUqVillagePick}
+            />
           </div>
         ) : (
         <>

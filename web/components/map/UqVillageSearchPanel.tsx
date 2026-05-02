@@ -4,15 +4,12 @@
  * 자연취락지구 모드 검색 패널 — Sidebar 안에 inline 으로 들어감.
  *
  * 외곽 컨테이너/헤더는 부모 Sidebar 가 제공 (= OnbidSearchPanel 패턴 미러).
- * 본 컴포넌트는 검색 입력 + (다음 단계) 결과 카드 리스트만 담당.
  *
- * 데이터 소스:
- *   - 시도/시군구 드롭다운 = /api/regions/sigungu (모든 모드 공통)
- *     · bjd_master 단일 진실 공급원, 30일 CDN + 모듈 scope 캐시
- *     · 사용자는 한글로 선택, API 호출은 sigunguCode (5자리) 사용
- *   - 검색 = /api/uq-villages/by-bjd?bjd_code=... (다음 단계)
- *
- * ⚠️ 본 커밋은 입력 UI만. 실제 검색/결과/지도 렌더는 다음 단계.
+ * 데이터 흐름:
+ *   1. /api/regions/sigungu → 시도/시군구 드롭다운 (atomic, 30일 CDN)
+ *   2. 검색 → /api/uq-villages/by-bjd?bjd_code=... 호출
+ *   3. matchUqWithNearestVillages — 직경×5 임계값 안 마을 Top 3 매칭
+ *   4. 결과 카드 표시. 카드 클릭 → onItemClick(row) → MapClient 가 마을 진입
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -28,15 +25,20 @@ import {
 } from "@/lib/modes/modes/uq";
 import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
 import { fetchVworldUqVillagesByBjdCode } from "@/lib/api/vworld";
-import type { UqVillage } from "@/lib/vworld/uq-villages";
+import {
+  matchUqWithNearestVillages,
+  type UqVillageWithMatches,
+  type NearVillage,
+} from "@/lib/uq/match-village";
+import type { MapSummaryRow } from "@/lib/types";
 
 const MODE_ID = "uq";
 
 interface Props {
-  /** 검색 결과 변경 — 지도 마커/폴리곤 갱신용 (다음 단계) */
-  onResults?: (items: unknown[]) => void;
-  /** 결과 카드 클릭 — 지도 강조 + 마을 진입 (다음 단계) */
-  onItemClick?: (item: unknown) => void;
+  /** 마을 후보 풀 — 시군구 prefix 필터 후 KNN 매칭에 사용 */
+  totalRows: MapSummaryRow[];
+  /** 카드 클릭 시 호출 — MapClient 가 마을 마커 클릭 핸들러로 위임 */
+  onItemClick?: (row: MapSummaryRow) => void;
 }
 
 /** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 */
@@ -44,7 +46,7 @@ function formatSigungu(si: string | null, gu: string): string {
   return si && si.trim() !== "" ? `${si} ${gu}` : gu;
 }
 
-export default function UqVillageSearchPanel(_props: Props) {
+export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) {
   const persisted =
     typeof window !== "undefined"
       ? loadModeState<UqPersistedState>(MODE_ID)
@@ -53,8 +55,10 @@ export default function UqVillageSearchPanel(_props: Props) {
   const [params, setParams] = useState<UqSearchParams>(
     persisted?.params ?? UQ_EMPTY_PARAMS,
   );
-  /** 검색 결과 — 면적 큰 순 정렬해서 보관. 새로고침 시 sessionStorage 로 복원. */
-  const [results, setResults] = useState<UqVillage[]>(persisted?.results ?? []);
+  /** 검색 결과 (매칭 정보 포함). 새로고침 시 sessionStorage 로 복원. */
+  const [results, setResults] = useState<UqVillageWithMatches[]>(
+    persisted?.results ?? [],
+  );
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -106,9 +110,9 @@ export default function UqVillageSearchPanel(_props: Props) {
   const canSearch = params.sigunguCode !== "" && !searching;
 
   /**
-   * /api/uq-villages/by-bjd 호출. atomic endpoint 가 sigunguCode 5자리만 보고
-   * 시군구 단위 응답을 주므로 뒤 5자리는 "00000" 으로 채워 10자리 만족.
-   * 결과는 면적 큰 순 정렬 + sessionStorage 저장.
+   * /api/uq-villages/by-bjd 호출 + 가까운 마을 매칭.
+   * sigunguCode 5자리 → bjd_code 10자리 (뒤 5자리는 "00000").
+   * 결과는 면적 큰 순 정렬 + 매칭 정보 부착 + sessionStorage 저장.
    */
   const runSearch = async () => {
     if (!canSearch) return;
@@ -118,8 +122,13 @@ export default function UqVillageSearchPanel(_props: Props) {
       const bjdCode = `${params.sigunguCode}00000`;
       const items = await fetchVworldUqVillagesByBjdCode(bjdCode);
       const sorted = [...items].sort((a, b) => b.area_m2 - a.area_m2);
-      setResults(sorted);
-      saveModeState<UqPersistedState>(MODE_ID, { params, results: sorted });
+      const matched = matchUqWithNearestVillages(
+        sorted,
+        totalRows,
+        params.sigunguCode,
+      );
+      setResults(matched);
+      saveModeState<UqPersistedState>(MODE_ID, { params, results: matched });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setSearchError(msg);
@@ -242,7 +251,12 @@ export default function UqVillageSearchPanel(_props: Props) {
           </p>
         )}
         {results.map((v, i) => (
-          <UqResultCard key={v.mnum || i} index={i + 1} village={v} />
+          <UqResultCard
+            key={v.mnum || i}
+            index={i + 1}
+            village={v}
+            onItemClick={onItemClick}
+          />
         ))}
       </div>
     </div>
@@ -254,24 +268,101 @@ export default function UqVillageSearchPanel(_props: Props) {
 interface UqResultCardProps {
   /** 1-based 표시 번호 (지도 ↔ 카드 매칭용) */
   index: number;
-  village: UqVillage;
+  village: UqVillageWithMatches;
+  /** 카드 클릭(또는 매칭 마을 라벨 클릭) 시 — MapClient 가 마을 진입 처리 */
+  onItemClick?: (row: MapSummaryRow) => void;
 }
 
-function UqResultCard({ index, village }: UqResultCardProps) {
+function UqResultCard({ index, village, onItemClick }: UqResultCardProps) {
   const pyeong = Math.round(village.area_m2 / PYEONG_PER_M2);
+  const primary = village.matches[0]; // 가장 가까운 마을 (없을 수 있음)
+
+  const handleCardClick = () => {
+    if (primary) onItemClick?.(primary.row);
+  };
+
   return (
-    <div className="border border-emerald-200 bg-emerald-50/40 rounded-md px-2.5 py-2 hover:bg-emerald-50 hover:border-emerald-300 transition-colors cursor-default">
+    <div
+      className={
+        "border rounded-md px-2.5 py-2 transition-colors " +
+        (primary
+          ? "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 cursor-pointer"
+          : "border-gray-200 bg-gray-50/60 cursor-default")
+      }
+      onClick={handleCardClick}
+      role={primary ? "button" : undefined}
+      tabIndex={primary ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (primary && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          handleCardClick();
+        }
+      }}
+    >
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs font-bold text-emerald-800">🏘 #{index}</span>
         <span className="text-sm font-bold text-emerald-900 tabular-nums">
           {pyeong.toLocaleString()}평
         </span>
       </div>
-      <div className="mt-0.5 flex items-center justify-between text-[11px] text-gray-600 tabular-nums">
+
+      {/* 매칭된 마을 Top 3 — 하나라도 있으면 표시, 없으면 미매칭 안내 */}
+      {village.matches.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {village.matches.map((m, i) => (
+            <MatchChip
+              key={m.bjd_code}
+              match={m}
+              primary={i === 0}
+              onClick={(row) => {
+                // 칩 자체 클릭 — 카드 클릭 동일 동작 (이벤트 전파 방지)
+                onItemClick?.(row);
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-[11px] text-gray-400">위치 미매칭</p>
+      )}
+
+      <div className="mt-1 flex items-center justify-between text-[11px] text-gray-600 tabular-nums">
         <span>{Math.round(village.area_m2).toLocaleString()}㎡</span>
         {village.dyear && <span>고시 {village.dyear}년</span>}
       </div>
     </div>
+  );
+}
+
+interface MatchChipProps {
+  match: NearVillage;
+  primary: boolean;
+  onClick: (row: MapSummaryRow) => void;
+}
+
+function MatchChip({ match, primary, onClick }: MatchChipProps) {
+  const label =
+    [match.addr_dong, match.addr_li].filter(Boolean).join(" ") || "마을";
+  const distLabel =
+    match.distanceM < 1000
+      ? `${Math.round(match.distanceM)}m`
+      : `${(match.distanceM / 1000).toFixed(1)}km`;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(match.row);
+      }}
+      className={
+        "text-[10px] px-1.5 py-0.5 rounded border transition-colors " +
+        (primary
+          ? "bg-emerald-100 border-emerald-300 text-emerald-800 hover:bg-emerald-200"
+          : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50")
+      }
+      title={`${label} — 약 ${distLabel}`}
+    >
+      {label} <span className="text-gray-500">· {distLabel}</span>
+    </button>
   );
 }
 

@@ -768,6 +768,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         onModeChange={handleModeChange}
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
+        onUqVillagePick={handleTopRankingPick}
       />
 
       <main className="flex-1 flex min-w-0">
