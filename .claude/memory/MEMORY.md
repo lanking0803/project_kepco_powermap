@@ -48,3 +48,4 @@
 - 🎴 [ParcelInfoPanel 카드 패턴](project_panel_card_pattern.md) — 공매탭 Section 미러 + accent 색상 분기 (rose/amber/blue/gray)
 - 🏘 [자연취락지구 폴리곤 표시](project_uq_villages.md) ⭐ — 마을 클릭 시 자동 표시. 별도 토글 X. atomic /api/uq-villages/by-bjd + 프론트 Turf 후처리 (2026-05-02)
 - 🪤 [VWorld lt_c_uq128 호출 함정](reference_vworld_uq128.md) — OGC FILTER (XML) 만 작동. CQL_FILTER/attrFilter 무시. 시군구 5자리까지만 필터 가능, 읍면동/리 단위 코드 응답에 없음
+- 🪤 [캠코 lctnSggnm 표기 규칙](reference_onbid_sigungu_format.md) — 일반시 일반구는 "성남시 분당구" 통합. 광역시 자치구/일반 군은 단독. 분당구 단독 검색 0건 사고(2026-05-02)
