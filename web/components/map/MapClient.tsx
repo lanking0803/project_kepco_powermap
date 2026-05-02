@@ -32,6 +32,7 @@ import {
 } from "@/lib/onbid/group";
 import OnbidVillageCard from "./onbid/OnbidVillageCard";
 import OnbidVillageModal from "./onbid/OnbidVillageModal";
+import type { DataModeId } from "@/lib/modes/registry";
 import LocationSummaryCard from "./LocationSummaryCard";
 import LocationDetailModal from "./LocationDetailModal";
 import ParcelInfoPanel from "./ParcelInfoPanel";
@@ -219,8 +220,11 @@ export default function MapClient({ isAdmin, email }: Props) {
     }
   }, [mapInstance, cadastralActive]);
 
-  // 데이터 모드 (전기 ↔ 공매, 상호 전환). 디폴트 = 전기 (onbidActive=false).
-  const [onbidActive, setOnbidActive] = useState(false);
+  // 데이터 모드 — lib/modes/registry 의 DataModeId. 디폴트 = 전기.
+  // 단일 선택(라디오) 원칙: 한 번에 1개만 ON. 전기는 베이스로 항상 표시.
+  const [mode, setMode] = useState<DataModeId>("default");
+  /** 공매 활성 여부 — KakaoMap/Sidebar 가 boolean 만 필요로 해서 파생. */
+  const onbidActive = mode === "onbid";
   /** 검색 결과 매물. 사이드바 검색폼이 /api/onbid/search 호출로 채움. */
   const [onbidItems, setOnbidItems] = useState<OnbidListItem[]>([]);
   /** 빨간 마을 마커 클릭으로 선택된 그룹 — OnbidVillageCard 표시 출처 */
@@ -233,10 +237,9 @@ export default function MapClient({ isAdmin, email }: Props) {
     () => groupOnbidItemsByVillage(onbidItems),
     [onbidItems],
   );
-  const setOnbidMode = useCallback((next: boolean) => {
-    setOnbidActive(next);
-    // OFF 시 결과 비우지 않음 — 검색 입력값/결과/마커 모두 sessionStorage 로 유지
-    // (OnbidSearchPanel 이 mount 시 복원하면서 onResults 콜백으로 마커도 자동 복원)
+  /** 모드 전환 — 공매 카드/모달은 닫고, 검색 결과는 sessionStorage 로 보존. */
+  const handleModeChange = useCallback((next: DataModeId) => {
+    setMode(next);
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
   }, []);
@@ -761,8 +764,8 @@ export default function MapClient({ isAdmin, email }: Props) {
         onMapFilter={applyMapFilter}
         onClearMapFilter={clearMapFilter}
         panelResetKey={panelResetKey}
-        onbidActive={onbidActive}
-        onSetOnbid={setOnbidMode}
+        mode={mode}
+        onModeChange={handleModeChange}
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
       />

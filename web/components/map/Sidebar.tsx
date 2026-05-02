@@ -13,6 +13,8 @@ import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
+import ModeSelector from "./ModeSelector";
+import { getDataMode, type DataModeId } from "@/lib/modes/registry";
 
 type SidebarTab = "search" | "filter" | "compare";
 
@@ -41,10 +43,10 @@ interface Props {
   onClearMapFilter?: () => void;
   /** 패널 리셋 키 — 값이 바뀌면 현재 패널 1단계로 복귀 */
   panelResetKey?: number;
-  /** 데이터 모드 — 공매 활성 시 콘텐츠/색상 모드별 분기 */
-  onbidActive?: boolean;
-  /** 공매 토글 ON/OFF — 사이드바 헤더 버튼이 호출 (2026-05-02 의뢰자 결정) */
-  onSetOnbid?: (active: boolean) => void;
+  /** 데이터 모드 — DataModeId. 헤더 색/검색 패널/콘텐츠 분기 기준. */
+  mode?: DataModeId;
+  /** 모드 변경 콜백 — ModeSelector 가 호출. */
+  onModeChange?: (next: DataModeId) => void;
   /** 공매 검색 결과 변경 콜백 (지도 마커용) */
   onOnbidResults?: (items: OnbidListItem[]) => void;
   /** 공매 매물 카드 클릭 콜백 */
@@ -128,11 +130,14 @@ export default function Sidebar({
   onMapFilter,
   onClearMapFilter,
   panelResetKey = 0,
-  onbidActive = false,
-  onSetOnbid,
+  mode = "default",
+  onModeChange,
   onOnbidResults,
   onOnbidItemClick,
 }: Props) {
+  /** 현재 모드 설정 — 색/라벨/패널 분기 기준 (단일 진실 공급원 = registry) */
+  const modeCfg = getDataMode(mode);
+  const onbidActive = mode === "onbid";
   const [activeTab, setActiveTab] = useState<SidebarTab>("search");
 
   // 탭 전환 시: 지도 필터 해제 (패널은 언마운트되므로 자동 리셋)
@@ -263,36 +268,19 @@ export default function Sidebar({
         className="w-80 max-w-[85vw] bg-white
           flex flex-col h-full"
       >
-        {/* ── 헤더 ── 공매 ON 시에만 빨강 강조 (전기는 항상 기본 상태) */}
+        {/* ── 헤더 ── 헤더 배경색은 현재 모드의 색 토큰을 그대로 사용 */}
         <div
-          className={`px-3 py-2 border-b space-y-1.5 transition-colors ${
-            onbidActive
-              ? "bg-rose-50 border-rose-200"
-              : "bg-blue-50 border-blue-200"
-          }`}
+          className={`px-3 py-2 border-b space-y-1.5 transition-colors ${modeCfg.colors.bgClass} ${modeCfg.colors.borderClass}`}
         >
-          {/* 줄 1: 서비스명 + 공매 토글 (우측) */}
+          {/* 줄 1: 서비스명 + 모드 드롭다운 */}
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-bold text-gray-900 flex-1 min-w-0 truncate">
               배전선로 여유용량 지도
             </h1>
-            {onSetOnbid && (
-              <button
-                type="button"
-                onClick={() => onSetOnbid(!onbidActive)}
-                title={
-                  onbidActive
-                    ? "공매 끄기 (전기 마커는 그대로 유지)"
-                    : "공매지도 — 캠코 부동산 매물 검색 (전기 위에 겹쳐 표시)"
-                }
-                className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold leading-none border transition-colors ${
-                  onbidActive
-                    ? "bg-rose-600 text-white border-rose-700 hover:bg-rose-700"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-rose-50 hover:border-rose-300"
-                }`}
-              >
-                🟥 공매 {onbidActive ? "ON" : "OFF"}
-              </button>
+            {onModeChange && (
+              <div className="shrink-0 w-44">
+                <ModeSelector mode={mode} onChange={onModeChange} />
+              </div>
             )}
           </div>
           {/* 줄 2: 사용 안내 + 새로고침 */}
