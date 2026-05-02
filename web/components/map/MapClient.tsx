@@ -214,8 +214,8 @@ export default function MapClient({ isAdmin, email }: Props) {
   );
   const setOnbidMode = useCallback((next: boolean) => {
     setOnbidActive(next);
-    // 모드 전환 시 결과 비움 — 사용자가 검색 버튼 눌러서 채우는 흐름
-    if (!next) setOnbidItems([]);
+    // OFF 시 결과 비우지 않음 — 검색 입력값/결과/마커 모두 sessionStorage 로 유지
+    // (OnbidSearchPanel 이 mount 시 복원하면서 onResults 콜백으로 마커도 자동 복원)
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
   }, []);
@@ -713,6 +713,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         onClearMapFilter={clearMapFilter}
         panelResetKey={panelResetKey}
         onbidActive={onbidActive}
+        onSetOnbid={setOnbidMode}
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
       />
@@ -907,8 +908,6 @@ export default function MapClient({ isAdmin, email }: Props) {
             onToggleRoadview={handleToggleRoadview}
             cadastralActive={cadastralActive}
             onToggleCadastral={handleToggleCadastral}
-            onbidActive={onbidActive}
-            onSetOnbid={setOnbidMode}
             onZoomIn={() => mapInstance?.setLevel(mapInstance.getLevel() - 1)}
             onZoomOut={() => mapInstance?.setLevel(mapInstance.getLevel() + 1)}
             onShare={handleShare}

@@ -43,6 +43,8 @@ interface Props {
   panelResetKey?: number;
   /** 데이터 모드 — 공매 활성 시 콘텐츠/색상 모드별 분기 */
   onbidActive?: boolean;
+  /** 공매 토글 ON/OFF — 사이드바 헤더 버튼이 호출 (2026-05-02 의뢰자 결정) */
+  onSetOnbid?: (active: boolean) => void;
   /** 공매 검색 결과 변경 콜백 (지도 마커용) */
   onOnbidResults?: (items: OnbidListItem[]) => void;
   /** 공매 매물 카드 클릭 콜백 */
@@ -127,6 +129,7 @@ export default function Sidebar({
   onClearMapFilter,
   panelResetKey = 0,
   onbidActive = false,
+  onSetOnbid,
   onOnbidResults,
   onOnbidItemClick,
 }: Props) {
@@ -268,15 +271,28 @@ export default function Sidebar({
               : "bg-blue-50 border-blue-200"
           }`}
         >
-          {/* 줄 1: 서비스명 + 공매 ON 시 표시 */}
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-sm font-bold text-gray-900">
+          {/* 줄 1: 서비스명 + 공매 토글 (우측) */}
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-bold text-gray-900 flex-1 min-w-0 truncate">
               배전선로 여유용량 지도
             </h1>
-            {onbidActive && (
-              <span className="text-[11px] font-bold text-rose-700">
-                · 🟥 공매 ON
-              </span>
+            {onSetOnbid && (
+              <button
+                type="button"
+                onClick={() => onSetOnbid(!onbidActive)}
+                title={
+                  onbidActive
+                    ? "공매 끄기 (전기 마커는 그대로 유지)"
+                    : "공매지도 — 캠코 부동산 매물 검색 (전기 위에 겹쳐 표시)"
+                }
+                className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold leading-none border transition-colors ${
+                  onbidActive
+                    ? "bg-rose-600 text-white border-rose-700 hover:bg-rose-700"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-rose-50 hover:border-rose-300"
+                }`}
+              >
+                🟥 공매 {onbidActive ? "ON" : "OFF"}
+              </button>
             )}
           </div>
           {/* 줄 2: 사용 안내 + 새로고침 */}

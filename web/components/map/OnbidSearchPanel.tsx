@@ -9,7 +9,7 @@
  * 데이터: /api/onbid/search 호출 (캠코 OnbidRlstListSrvc2 + bjd_master JOIN).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   OUR_CATEGORY_LABEL,
   type OnbidListItem,
@@ -17,6 +17,38 @@ import {
   type OurCategory,
 } from "@/lib/onbid/types";
 import { jibunFromPnu } from "@/lib/geo/pnu";
+
+/**
+ * sessionStorage 키 — 공매 토글 OFF/ON 시 검색 입력값/결과 유지용.
+ * 새로고침 시는 휘발 OK (의뢰자 결정, 2026-05-02). 탭 닫으면 사라짐.
+ */
+const SS_KEY = "onbid_search_state_v1";
+
+interface PersistedState {
+  params: OnbidSearchParams;
+  results: OnbidListItem[];
+  totalCountAll: number | null;
+}
+
+function loadPersisted(): PersistedState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedState;
+  } catch {
+    return null;
+  }
+}
+
+function savePersisted(state: PersistedState) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(SS_KEY, JSON.stringify(state));
+  } catch {
+    // quota 초과 등 — 조용히 무시 (검색 동작 자체는 영향 없음)
+  }
+}
 
 interface Props {
   /** 검색 결과 변경 시 호출 — 지도 마커 갱신용 */
@@ -75,12 +107,41 @@ const ALL_CATEGORIES: OurCategory[] = [
 ];
 
 export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
-  const [params, setParams] = useState<OnbidSearchParams>(EMPTY_PARAMS);
+  // sessionStorage 복원 — 마운트 시 1회. 토글 OFF→ON 사이클에서 검색 상태 유지.
+  const persistedRef = useRef<PersistedState | null>(null);
+  if (persistedRef.current === null && typeof window !== "undefined") {
+    persistedRef.current = loadPersisted();
+  }
+  const persisted = persistedRef.current;
+
+  const [params, setParams] = useState<OnbidSearchParams>(
+    persisted?.params ?? EMPTY_PARAMS,
+  );
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [results, setResults] = useState<OnbidListItem[]>([]);
+  const [results, setResults] = useState<OnbidListItem[]>(
+    persisted?.results ?? [],
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [totalCountAll, setTotalCountAll] = useState<number | null>(null);
+  const [totalCountAll, setTotalCountAll] = useState<number | null>(
+    persisted?.totalCountAll ?? null,
+  );
+
+  // 마운트 시 — 복원된 결과를 부모(MapClient)로 올려서 지도 마커도 즉시 복원
+  const onResultsRef = useRef(onResults);
+  onResultsRef.current = onResults;
+  useEffect(() => {
+    if (persisted && persisted.results.length > 0) {
+      onResultsRef.current?.(persisted.results);
+    }
+    // 마운트 1회만 — persisted 는 ref 라서 deps 변경 X
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // params/results/totalCountAll 변경 시 sessionStorage 자동 저장
+  useEffect(() => {
+    savePersisted({ params, results, totalCountAll });
+  }, [params, results, totalCountAll]);
 
   /** /api/onbid/search 호출 — 캠코 실 데이터 */
   const runSearch = async () => {
@@ -134,6 +195,14 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
     setError(null);
     setTotalCountAll(null);
     onResults?.([]);
+    // 사용자가 명시적으로 "초기화" 누른 경우 — sessionStorage 도 비움
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem(SS_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
   };
 
   const toggleCategory = (cat: OurCategory) => {

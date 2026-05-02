@@ -31,10 +31,6 @@ interface Props {
   /** 지적편집도 오버레이 ON/OFF — 필지 경계를 배경으로 표시 */
   cadastralActive: boolean;
   onToggleCadastral: () => void;
-  /** 공매 토글 ON/OFF — 캠코 매물 검색 사이드바 + 매물 마커 추가.
-   *  전기 마커는 항상 표시되고, 공매는 위에 겹쳐 표시 (2026-05-02 의뢰자 결정). */
-  onbidActive: boolean;
-  onSetOnbid: (active: boolean) => void;
   /** 줌 레벨 (1~14, 숫자 작을수록 확대) */
   zoomLevel?: number;
   /** 줌 인/아웃 콜백 */
@@ -60,8 +56,6 @@ export default function MapToolbar({
   onToggleRoadview,
   cadastralActive,
   onToggleCadastral,
-  onbidActive,
-  onSetOnbid,
   onZoomIn,
   onZoomOut,
   onShare,
@@ -96,25 +90,8 @@ export default function MapToolbar({
         </button>
       </div>
 
-      {/* ── 1B. 공매 토글 (전기 마커는 항상 표시, 공매만 ON/OFF) ── */}
-      <button
-        type="button"
-        onClick={() => onSetOnbid(!onbidActive)}
-        title={
-          onbidActive
-            ? "공매 끄기 (전기 마커는 그대로 유지)"
-            : "공매지도 — 캠코 부동산 매물 검색 (전기 위에 겹쳐 표시)"
-        }
-        className={`px-3 py-[7px] rounded shadow border text-xs font-bold leading-none transition-colors ${
-          onbidActive
-            ? "bg-rose-600 text-white border-rose-700 hover:bg-rose-700"
-            : "bg-white text-gray-700 border-gray-300 hover:bg-rose-50"
-        }`}
-      >
-        🟥 공매 {onbidActive ? "ON" : "OFF"}
-      </button>
-
-      {/* ── 1C. 부가 오버레이 (병렬, 데이터 모드와 무관하게 ON/OFF) ── */}
+      {/* ── 1B. 부가 오버레이 (병렬, 데이터 모드와 무관하게 ON/OFF)
+              공매 토글은 사이드바 헤더로 이동 (2026-05-02 의뢰자 결정) ── */}
       <div className="flex items-center gap-1.5">
         <button
           type="button"
