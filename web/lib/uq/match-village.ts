@@ -4,16 +4,16 @@
  * VWorld 응답에 마을(읍면동/리) 정보가 없어, 우리 KEPCO 마을 데이터
  * (MapSummaryRow) 중 거리상 가까운 것을 추정 매칭한다.
  *
- * 임계값 (의뢰자 결정 2026-05-02):
- *   1. 취락지구 면적을 원으로 가정 → 직경 D = 2·√(A/π)
- *   2. 임계값 = D × 5
- *   3. 임계값 안에 들어오는 마을 중 거리 가까운 Top 3
- *   4. 0개면 "위치 미매칭"
+ * 매칭 정책 (의뢰자 결정 2026-05-02 갱신):
+ *   1. 시군구 prefix 후보가 있으면 거리 가까운 Top 3 무조건 표시
+ *   2. 임계값 검사 X — 카드의 거리 라벨로 영업이 신뢰도 자체 판단
+ *      (도시 일반구는 마을 데이터 적어 임계값 안 매칭이 어려운 경우 다수)
+ *   3. 시군구 후보 자체가 0개일 때만 "근처 마을 데이터 없음"
  *
  * 정밀도 한계:
  *   - 마을 중심점 ↔ 취락지구 중심점 직선거리 (벡터)
  *   - 마을 형태/크기 무시 (실제 영역은 클릭 후 지도에서 시각 확인)
- *   - 표기는 "~일대" 로 모호함 인정
+ *   - 칩에 거리 표기 — 영업이 "0.3km" vs "3.2km" 보고 신뢰도 판단
  */
 import type { MapSummaryRow } from "@/lib/types";
 import type { UqVillage } from "@/lib/vworld/uq-villages";
@@ -54,26 +54,16 @@ function findMatches(
   village: UqVillage,
   candidates: MapSummaryRow[],
 ): NearVillage[] {
-  // 임계값 = 직경 × 5 = 2·√(A/π) × 5
-  const diameter = 2 * Math.sqrt(village.area_m2 / Math.PI);
-  const threshold = diameter * 5;
-
-  const inRange: NearVillage[] = [];
-  for (const row of candidates) {
-    const d = distanceMeters(village.center, { lat: row.lat, lng: row.lng });
-    if (d <= threshold) {
-      inRange.push({
-        bjd_code: row.bjd_code,
-        addr_dong: row.addr_dong,
-        addr_li: row.addr_li,
-        distanceM: d,
-        row,
-      });
-    }
-  }
-
-  inRange.sort((a, b) => a.distanceM - b.distanceM);
-  return inRange.slice(0, 3);
+  // 임계값 없이 거리 가까운 Top 3 무조건. 카드의 거리 라벨로 신뢰도 자체 판단.
+  const all: NearVillage[] = candidates.map((row) => ({
+    bjd_code: row.bjd_code,
+    addr_dong: row.addr_dong,
+    addr_li: row.addr_li,
+    distanceM: distanceMeters(village.center, { lat: row.lat, lng: row.lng }),
+    row,
+  }));
+  all.sort((a, b) => a.distanceM - b.distanceM);
+  return all.slice(0, 3);
 }
 
 /**
