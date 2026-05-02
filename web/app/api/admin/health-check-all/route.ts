@@ -107,19 +107,26 @@ async function checkOne(
       healthLevel = "error";
       summary = `${res.status} ${res.statusText}`;
     } else {
-      // 200 OK 라도 NODATA 패턴 감지
-      const lower = text.toLowerCase();
-      const isNoData =
-        lower.includes("nodata_error") ||
-        /<resultcode>03<\/resultcode>/i.test(text) ||
-        /"resultcode"\s*:\s*"03"/i.test(text) ||
-        /<totalcnt>0<\/totalcnt>/i.test(text);
-      if (isNoData) {
-        healthLevel = "nodata";
-        summary = "200 OK · NODATA";
+      // Hyphen 처럼 HTTP 200 + 본문 errCd 로 실패 표현하는 케이스 우선 판정
+      const hyphenErr = matchHyphenErrCd(text);
+      if (hyphenErr) {
+        healthLevel = hyphenErr.level;
+        summary = hyphenErr.summary;
       } else {
-        healthLevel = "ok";
-        summary = "200 OK";
+        // 200 OK 라도 NODATA 패턴 감지
+        const lower = text.toLowerCase();
+        const isNoData =
+          lower.includes("nodata_error") ||
+          /<resultcode>03<\/resultcode>/i.test(text) ||
+          /"resultcode"\s*:\s*"03"/i.test(text) ||
+          /<totalcnt>0<\/totalcnt>/i.test(text);
+        if (isNoData) {
+          healthLevel = "nodata";
+          summary = "200 OK · NODATA";
+        } else {
+          healthLevel = "ok";
+          summary = "200 OK";
+        }
       }
     }
 
@@ -174,4 +181,56 @@ function substituteRecord(rec: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(rec)) out[k] = substitute(v);
   return out;
+}
+
+/**
+ * Hyphen 응답은 HTTP 200 + 본문에 errCd 로 인증실패/권한없음을 표현.
+ * 의뢰자가 "프로그램 오류 vs 결제 만료"를 직관적으로 구분할 수 있도록
+ * errCd 별로 healthLevel 과 summary 를 분기.
+ *
+ * 매핑은 lib/hyphen/types.ts HYPHEN_ERR_CD_MAP 과 의미 맞춤:
+ *   200    → ok        ("정상")
+ *   407    → ok        ("매물 0건 — 정상 응답")
+ *   HDM006 → error     ("인증실패 — 결제 만료 의심")
+ *   HDM009 → error     ("키 오류 — 변조/만료")
+ *   HDM012 → error     ("권한없음 — 멤버십 미가입")
+ *   HDM016 → nodata    ("테스트 모드 레이트리밋 — 20초 후 재시도")
+ *   기타   → error     ("알 수 없는 errCd")
+ *
+ * Hyphen 외 서비스는 errCd 키가 없어서 null 반환 → 기존 로직(NODATA/ok) 그대로.
+ */
+function matchHyphenErrCd(
+  text: string,
+): { level: HealthLevel; summary: string } | null {
+  const m = text.match(/"errCd"\s*:\s*"([^"]+)"/);
+  if (!m) return null;
+  const errCd = m[1];
+  switch (errCd) {
+    case "200":
+      return { level: "ok", summary: "200 OK · errCd=200" };
+    case "407":
+      return { level: "ok", summary: "200 OK · errCd=407 (매물 0건)" };
+    case "HDM006":
+      return {
+        level: "error",
+        summary: "HDM006 인증실패 — 결제 만료 의심",
+      };
+    case "HDM009":
+      return {
+        level: "error",
+        summary: "HDM009 키 오류 — 변조/만료",
+      };
+    case "HDM012":
+      return {
+        level: "error",
+        summary: "HDM012 권한없음 — 멤버십 미가입",
+      };
+    case "HDM016":
+      return {
+        level: "nodata",
+        summary: "HDM016 테스트 레이트리밋 — 20초 후 재시도",
+      };
+    default:
+      return { level: "error", summary: `errCd=${errCd}` };
+  }
 }
