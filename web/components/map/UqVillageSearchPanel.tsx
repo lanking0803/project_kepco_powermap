@@ -63,6 +63,10 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
     const raw = persisted?.results ?? [];
     return raw.map((v) => ({ ...v, matches: v.matches ?? [] }));
   });
+  /** 검색 1회라도 실행됐나 — 검색 전 안내 vs 0건 안내 구분. */
+  const [hasSearched, setHasSearched] = useState(
+    (persisted?.results?.length ?? 0) > 0,
+  );
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -122,6 +126,7 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
     if (!canSearch) return;
     setSearching(true);
     setSearchError(null);
+    setHasSearched(true);
     try {
       const bjdCode = `${params.sigunguCode}00000`;
       const items = await fetchVworldUqVillagesByBjdCode(bjdCode);
@@ -146,6 +151,7 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
     setParams(UQ_EMPTY_PARAMS);
     setResults([]);
     setSearchError(null);
+    setHasSearched(false);
     clearModeState(MODE_ID);
   };
 
@@ -250,8 +256,16 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
           </p>
         )}
         {!searching && !searchError && results.length === 0 && (
-          <p className="text-xs text-gray-400 text-center py-8">
-            시도/시군구를 선택하고 [검색] 버튼을 눌러주세요.
+          <p className="text-xs text-gray-400 text-center py-8 leading-relaxed">
+            {hasSearched ? (
+              <>
+                이 시군구에는 자연취락지구가 없습니다.
+                <br />
+                다른 시군구를 시도해보세요.
+              </>
+            ) : (
+              "시도/시군구를 선택하고 [검색] 버튼을 눌러주세요."
+            )}
           </p>
         )}
         {results.map((v, i) => (
