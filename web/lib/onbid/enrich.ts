@@ -22,6 +22,7 @@ import type {
 } from "./types";
 import { classifyOurCategory } from "./categories";
 import type { OnbidRawDetailItem, OnbidRawListItem } from "./client";
+import { pnuFromOnbidItem } from "./pnu-fix";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -76,6 +77,10 @@ export function enrichRawItem(
   const roundCurrent = usbdNft + 1;
   const roundTotal = usbdNft + round.remainingRounds;
 
+  // ★ 기준정보 = 행안부 표준 PNU. enrich 단계에서 한 번만 계산 후 모든 사용처 공유.
+  // 캠코 ltnoPnu 는 비표준이라 외부 API 호출에 직접 쓰면 안 됨. pnuStandard 만 사용할 것.
+  const pnuStandard = pnuFromOnbidItem(raw);
+
   return {
     cltrMngNo: raw.cltrMngNo,
     pbctCdtnNo: raw.pbctCdtnNo,
@@ -84,6 +89,7 @@ export function enrichRawItem(
     pbctNo: raw.pbctNo,
     onbidCltrNm: raw.onbidCltrNm,
     ltnoPnu: raw.ltnoPnu,
+    pnuStandard,
     rdnmPnu: raw.rdnmPnu,
     lctnSdnm: raw.lctnSdnm,
     lctnSggnm: raw.lctnSggnm,

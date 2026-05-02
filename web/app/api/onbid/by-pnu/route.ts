@@ -132,8 +132,9 @@ export async function GET(req: NextRequest) {
     const listRes = await fetchOnbidListPage(listParams);
 
     // 3) 매물의 보정 PNU(=행안부 표준) 와 입력 PNU 비교.
-    //    캠코 ltnoPnu 는 산구분 비표준(0=일반/1=산) 이라 직접 비교하면 0% 매칭 →
-    //    pnuFromOnbidItem 으로 매물명에서 표준 PNU 재구성 후 비교 (실측 100%).
+    //    입력 pnu = 우리 기준정보 (pnuStandard 와 동일 표준).
+    //    캠코 raw 의 ltnoPnu 는 산구분 비표준 → pnuFromOnbidItem 으로 표준 변환 후 비교.
+    //    (enrich 후 객체의 pnuStandard 와 같은 알고리즘이지만, 여기는 raw 단계이므로 함수 직접 호출.)
     //    회차 dedup + 회차 정보 보존은 enrichRawItems 안에서 일괄 처리.
     const matchedAll = listRes.items.filter(
       (it) => pnuFromOnbidItem(it) === pnu,

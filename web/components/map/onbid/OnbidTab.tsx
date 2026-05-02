@@ -106,9 +106,10 @@ export default function OnbidTab({
               key={it.cltrMngNo}
               item={it}
               onClick={() => {
-                // OnbidListItem.ltnoPnu 는 이미 PNU 19자리(행안부 표준) — 직접 사용.
-                if (onPnuChange && /^\d{19}$/.test(it.ltnoPnu)) {
-                  onPnuChange(it.ltnoPnu);
+                // ★ 우리 기준정보 = pnuStandard (행안부 표준 PNU).
+                // 캠코 ltnoPnu 직접 사용 금지 — 산구분 비표준이라 VWorld·우리DB 매칭 0%.
+                if (onPnuChange && it.pnuStandard && /^\d{19}$/.test(it.pnuStandard)) {
+                  onPnuChange(it.pnuStandard);
                 }
               }}
             />

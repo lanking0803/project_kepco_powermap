@@ -71,8 +71,26 @@ export interface OnbidListItem {
   pbctNo: number;
   /** 매물명 (보통 지번 텍스트 포함) */
   onbidCltrNm: string;
-  /** 지번 PNU 19자리 */
+  /**
+   * 캠코 응답의 ltnoPnu 19자리 (원본).
+   *
+   * ⚠️ 산구분(11번째 자리) 표기가 행안부 표준과 다름:
+   *   - 캠코식: 0=일반, 1=산
+   *   - 행안부:  1=일반, 2=산
+   *
+   * → 우리 시스템 모든 API 의 기준정보는 행안부 표준 PNU 이므로
+   *   이 값을 외부 호출(VWorld·KEPCO·공시지가 등) 에 직접 사용 X.
+   *   `pnuStandard` 를 사용해야 함. 본 필드는 디버그/캠코 원본 비교용.
+   */
   ltnoPnu: string;
+  /**
+   * ★ 우리 시스템 기준정보 — 행안부 표준 PNU 19자리.
+   * pnuFromOnbidItem(raw) 결과를 enrich 단계에서 첨부.
+   * 매물명에서 지번 추출 실패 시 null (이론상 거의 발생 X).
+   *
+   * 모든 외부 API 호출 / 패널 진입 / 우리 DB 매칭은 이 값을 사용.
+   */
+  pnuStandard: string | null;
   /** 도로명 PNU 25자리 */
   rdnmPnu: string;
   /** 소재지 시도 */

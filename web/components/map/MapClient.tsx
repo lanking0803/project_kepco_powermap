@@ -30,7 +30,6 @@ import {
   groupOnbidItemsByVillage,
   type OnbidVillageGroup,
 } from "@/lib/onbid/group";
-import { pnuFromOnbidItem } from "@/lib/onbid/pnu-fix";
 import OnbidVillageCard from "./onbid/OnbidVillageCard";
 import OnbidVillageModal from "./onbid/OnbidVillageModal";
 import LocationSummaryCard from "./LocationSummaryCard";
@@ -577,16 +576,16 @@ export default function MapClient({ isAdmin, email }: Props) {
   /**
    * 공매 매물 카드 클릭 — 매물의 PNU 로 통합 진입점 호출.
    *
-   * ⚠️ 캠코 ltnoPnu 의 산구분(11번째)이 비표준(0=일반/1=산) 이라 직접 쓰면 VWorld 매칭률 0%.
-   *    pnuFromOnbidItem 으로 행안부 표준(1=일반/2=산) PNU 재구성 후 사용.
-   *    상세: lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증).
+   * ★ 우리 기준정보 = pnuStandard (행안부 표준 PNU). enrich 단계에서 캠코 ltnoPnu →
+   *   pnuFromOnbidItem 변환 결과가 미리 첨부되어 있음. 모든 외부 API 호출/패널 진입은
+   *   이 값 기준. 캠코 원본 ltnoPnu 직접 사용 금지 (산구분 비표준 → VWorld 0% 매칭).
    *
    * 모드 분기 없음 — 공매 매물에서 진입해도 패널은 마지막 본 탭으로 시작.
    * 사용자가 [공매] 탭을 보려면 한 번 클릭 (그러면 다음 진입부턴 자동으로 그 탭).
    */
   const openParcelPanelOnOnbidItemClick = useCallback(
     async (onbid: OnbidListItem) => {
-      const pnu = pnuFromOnbidItem(onbid);
+      const pnu = onbid.pnuStandard;
       if (!pnu || !/^\d{19}$/.test(pnu)) {
         setSimpleToast("이 매물의 PNU 를 만들 수 없습니다.");
         return;
