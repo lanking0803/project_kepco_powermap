@@ -55,10 +55,14 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
   const [params, setParams] = useState<UqSearchParams>(
     persisted?.params ?? UQ_EMPTY_PARAMS,
   );
-  /** 검색 결과 (매칭 정보 포함). 새로고침 시 sessionStorage 로 복원. */
-  const [results, setResults] = useState<UqVillageWithMatches[]>(
-    persisted?.results ?? [],
-  );
+  /**
+   * 검색 결과 (매칭 정보 포함). 새로고침 시 sessionStorage 로 복원.
+   * 구 sessionStorage 데이터(matches 미보유) 안전 보강 — 빈 배열로 채워 폭발 방지.
+   */
+  const [results, setResults] = useState<UqVillageWithMatches[]>(() => {
+    const raw = persisted?.results ?? [];
+    return raw.map((v) => ({ ...v, matches: v.matches ?? [] }));
+  });
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -275,7 +279,9 @@ interface UqResultCardProps {
 
 function UqResultCard({ index, village, onItemClick }: UqResultCardProps) {
   const pyeong = Math.round(village.area_m2 / PYEONG_PER_M2);
-  const primary = village.matches[0]; // 가장 가까운 마을 (없을 수 있음)
+  // matches 가 누락된 옛 sessionStorage 데이터에 대비해 방어
+  const matches = village.matches ?? [];
+  const primary = matches[0]; // 가장 가까운 마을 (없을 수 있음)
 
   const handleCardClick = () => {
     if (primary) onItemClick?.(primary.row);
@@ -307,9 +313,9 @@ function UqResultCard({ index, village, onItemClick }: UqResultCardProps) {
       </div>
 
       {/* 매칭된 마을 Top 3 — 하나라도 있으면 표시, 없으면 미매칭 안내 */}
-      {village.matches.length > 0 ? (
+      {matches.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">
-          {village.matches.map((m, i) => (
+          {matches.map((m, i) => (
             <MatchChip
               key={m.bjd_code}
               match={m}
