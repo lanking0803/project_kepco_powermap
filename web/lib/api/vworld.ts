@@ -10,12 +10,14 @@
  *     이후 같은 필지 클릭은 효과 받음)
  *
  * Endpoint ↔ 함수 매핑:
- *   /api/parcel/by-pnu     ↔ fetchVworldParcelByPnu
- *   /api/parcel/by-latlng  ↔ fetchVworldParcelByLatLng
- *   /api/polygon/by-bjd    ↔ fetchVworldAdminPolygonByBjdCode
+ *   /api/parcel/by-pnu        ↔ fetchVworldParcelByPnu
+ *   /api/parcel/by-latlng     ↔ fetchVworldParcelByLatLng
+ *   /api/polygon/by-bjd       ↔ fetchVworldAdminPolygonByBjdCode
+ *   /api/uq-villages/by-bjd   ↔ fetchVworldUqVillagesByBjdCode
  */
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import type { AdminPolygonResult } from "@/lib/vworld/admin-polygon";
+import type { UqVillage } from "@/lib/vworld/uq-villages";
 
 export interface ParcelLookupResult {
   jibun: JibunInfo;
@@ -42,12 +44,24 @@ interface PolygonApiResponse {
   error?: string;
 }
 
+interface UqVillagesApiResponse {
+  ok: boolean;
+  bjd_code?: string;
+  sgg_code?: string;
+  count?: number;
+  villages?: UqVillage[];
+  error?: string;
+}
+
 interface FetchOptions {
   signal?: AbortSignal;
 }
 
 const parcelByPnuCache = new Map<string, ParcelLookupResult | null>();
 const polygonByBjdCache = new Map<string, AdminPolygonResult | null>();
+// 자연취락지구는 시군구 단위 응답 → 캐시 키도 시군구 5자리.
+// 같은 시군구의 다른 마을 클릭 시 즉시 재사용.
+const uqVillagesBySggCache = new Map<string, UqVillage[]>();
 // inflight Promise 캐시 — 같은 PNU 동시 호출(MapClient + ParcelInfoPanel + StrictMode 등)
 // 시 첫 호출의 Promise 를 재사용해 fetch 1회로 합침. resolve 후엔 결과 캐시로 이관.
 const parcelByPnuInflight = new Map<string, Promise<ParcelLookupResult | null>>();
@@ -125,8 +139,34 @@ export async function fetchVworldAdminPolygonByBjdCode(
   return result;
 }
 
+/**
+ * /api/uq-villages/by-bjd — 자연취락지구 폴리곤.
+ * 입력은 bjd_code 10자리지만 응답·캐시는 시군구(앞 5자리) 단위.
+ * 같은 시군구의 다른 마을을 클릭해도 캐시 hit (외부 호출 0).
+ */
+export async function fetchVworldUqVillagesByBjdCode(
+  bjdCode: string,
+  options?: FetchOptions,
+): Promise<UqVillage[]> {
+  if (!/^\d{10}$/.test(bjdCode)) return [];
+  const sggKey = bjdCode.slice(0, 5);
+  const cached = uqVillagesBySggCache.get(sggKey);
+  if (cached) return cached;
+
+  const res = await fetch(
+    `/api/uq-villages/by-bjd?bjd_code=${encodeURIComponent(bjdCode)}`,
+    { signal: options?.signal },
+  );
+  const data = (await res.json()) as UqVillagesApiResponse;
+  if (!data.ok) throw new Error(data.error || "자연취락지구 조회 실패");
+  const villages = data.villages ?? [];
+  uqVillagesBySggCache.set(sggKey, villages);
+  return villages;
+}
+
 /** VWorld 캐시 초기화 — 필지/폴리곤은 거의 안 변하므로 보통 호출 X */
 export function clearVworldCache(): void {
   parcelByPnuCache.clear();
   polygonByBjdCache.clear();
+  uqVillagesBySggCache.clear();
 }

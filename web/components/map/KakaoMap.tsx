@@ -94,6 +94,12 @@ interface Props {
    */
   villagePolygon?: number[][][] | null;
   /**
+   * 자연취락지구 폴리곤들 — 마을 폴리곤 안에 있는 0~N개.
+   * MapClient 가 Turf.booleanIntersects 로 이미 솎아낸 결과만 들어옴.
+   * 외각: number[][][] (한 폴리곤의 외곽링들), 외각: 폴리곤 N개.
+   */
+  uqVillagePolygons?: number[][][][];
+  /**
    * 공매 모드 ON 여부. true 일 때 매물 마커 표시 + KEPCO 마커 시각적 비중 ↓.
    */
   onbidActive?: boolean;
@@ -378,6 +384,7 @@ export default function KakaoMap({
   onParcelClick,
   highlightedParcel = null,
   villagePolygon = null,
+  uqVillagePolygons = [],
   onbidActive = false,
   onbidVillages = [],
   onOnbidVillageClick,
@@ -962,6 +969,42 @@ export default function KakaoMap({
       villagePolygonsRef.current.push(polygon);
     });
   }, [loaded, villagePolygon]);
+
+  // ─────────────────────────────────────────────
+  // 자연취락지구 폴리곤 (보라) — 마을 폴리곤 안에 들어오는 0~N개.
+  // MapClient 가 Turf 로 이미 솎아낸 결과만 받음.
+  // 마을 폴리곤(파랑) 위, 필지(주황) 아래 — zIndex 2.
+  // ─────────────────────────────────────────────
+  const uqPolygonsRef = useRef<any[]>([]);
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!loaded || !map) return;
+
+    uqPolygonsRef.current.forEach((p) => p.setMap(null));
+    uqPolygonsRef.current = [];
+
+    if (!uqVillagePolygons || uqVillagePolygons.length === 0) return;
+
+    uqVillagePolygons.forEach((polyRings) => {
+      polyRings.forEach((ring) => {
+        const path = ring.map(
+          ([lng, lat]) => new window.kakao.maps.LatLng(lat, lng),
+        );
+        const polygon = new window.kakao.maps.Polygon({
+          path,
+          strokeWeight: 1.5,
+          strokeColor: "#a855f7", // purple-500
+          strokeOpacity: 0.9,
+          strokeStyle: "solid",
+          fillColor: "#a855f7",
+          fillOpacity: 0.25,
+          zIndex: 2, // 마을(1) 위, 필지(5) 아래
+        });
+        polygon.setMap(map);
+        uqPolygonsRef.current.push(polygon);
+      });
+    });
+  }, [loaded, uqVillagePolygons]);
 
   // ─────────────────────────────────────────────
   // 공매 매물 마커 — 전기와 동일 패턴 (줌별 카드/클러스터 분기).

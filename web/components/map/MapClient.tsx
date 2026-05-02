@@ -48,7 +48,11 @@ import {
   fetchVworldParcelByPnu,
   fetchVworldParcelByLatLng,
   fetchVworldAdminPolygonByBjdCode,
+  fetchVworldUqVillagesByBjdCode,
 } from "@/lib/api/vworld";
+import type { UqVillage } from "@/lib/vworld/uq-villages";
+import booleanIntersects from "@turf/boolean-intersects";
+import type { Feature, MultiPolygon } from "geojson";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import {
   emptyFilters,
@@ -62,6 +66,23 @@ import {
 interface Props {
   isAdmin: boolean;
   email: string;
+}
+
+/**
+ * 외곽링 배열 → Turf 가 받는 GeoJSON Feature<MultiPolygon>.
+ * 우리 폴리곤 표준이 [[[lng,lat], ...], ...] 형태라 한 번 감싸기만 하면 됨.
+ */
+function ringsToMultiPolygonFeature(
+  rings: number[][][],
+): Feature<MultiPolygon> {
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "MultiPolygon",
+      coordinates: rings.map((ring) => [ring]),
+    },
+  };
 }
 
 export default function MapClient({ isAdmin, email }: Props) {
@@ -266,11 +287,63 @@ export default function MapClient({ isAdmin, email }: Props) {
     null,
   );
   const [villagePolygon, setVillagePolygon] = useState<number[][][] | null>(null);
+  // 자연취락지구 — 마을 폴리곤 안에 있는 0~N개 (Turf 교차 후 결과만 보유).
+  // 마을 폴리곤이 바뀌면 자동 cleanup. cleanup 누락 방지를 위해 villagePolygon 과 한 묶음으로 관리.
+  const [uqVillagePolygons, setUqVillagePolygons] = useState<number[][][][]>([]);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const villageReqSeqRef = useRef(0);
   const villageAbortRef = useRef<AbortController | null>(null);
   // 지번 상세 패널 close 핸들러 — 마을 클릭 시 우선 닫기 위해 ref 로 forward.
   const closeParcelPanelRef = useRef<(() => void) | null>(null);
+
+  /**
+   * 마을 폴리곤 + 자연취락지구 폴리곤 동시 로드.
+   * 모든 진입점(마을 마커/필지/공매 그룹) 에서 이 헬퍼 1개만 호출 — cleanup 누락/순서 꼬임 방지.
+   *
+   * 흐름:
+   *   1) 행정구역 폴리곤 + 시군구 자연취락지구 병렬 fetch (atomic endpoints)
+   *   2) Turf.booleanIntersects 로 마을 안에 있는 취락지구만 필터 (시군구 통째에서 솎아냄)
+   *   3) 두 state 함께 set
+   * 실패는 둘 다 시각 보조라 조용히 (음영만 안 그려짐).
+   */
+  const loadVillageAndUqPolygons = useCallback(
+    async (bjdCode: string, signal?: AbortSignal) => {
+      try {
+        const [adminRes, uqRes] = await Promise.allSettled([
+          fetchVworldAdminPolygonByBjdCode(bjdCode, { signal }),
+          fetchVworldUqVillagesByBjdCode(bjdCode, { signal }),
+        ]);
+        const villagePoly =
+          adminRes.status === "fulfilled"
+            ? ((adminRes.value?.polygon as number[][][] | undefined) ?? null)
+            : null;
+        setVillagePolygon(villagePoly);
+
+        const uqList: UqVillage[] =
+          uqRes.status === "fulfilled" ? uqRes.value : [];
+        if (!villagePoly || uqList.length === 0) {
+          setUqVillagePolygons([]);
+          return;
+        }
+        const villageFeat = ringsToMultiPolygonFeature(villagePoly);
+        const matched = uqList
+          .filter((uq) => {
+            const uqFeat = ringsToMultiPolygonFeature(uq.polygon);
+            return booleanIntersects(villageFeat, uqFeat);
+          })
+          .map((uq) => uq.polygon);
+        setUqVillagePolygons(matched);
+      } catch {
+        // AbortError 등 — state 는 그대로 두고 조용히 빠져나감
+      }
+    },
+    [],
+  );
+
+  const clearPolygons = useCallback(() => {
+    setVillagePolygon(null);
+    setUqVillagePolygons([]);
+  }, []);
 
   const openVillagePanelOnMarkerClick = useCallback(
     async (row: MapSummaryRow) => {
@@ -291,52 +364,42 @@ export default function MapClient({ isAdmin, email }: Props) {
         rowsLoading: false,
         rowsError: null,
       });
-      // KEPCO 카드 집계 + VWorld 행정구역 폴리곤 병렬. allSettled — 폴리곤 실패해도 카드는 표시.
-      const [summaryResult, polygonResult] = await Promise.allSettled([
-        fetchKepcoSummaryByBjdCode(row.bjd_code, { signal: controller.signal }),
-        fetchVworldAdminPolygonByBjdCode(row.bjd_code, {
-          signal: controller.signal,
-        }),
-      ]);
-      if (seq !== villageReqSeqRef.current) return;
+      // KEPCO 카드 집계 — VWorld 폴리곤(행정구역+취락지구)은 헬퍼가 비동기로 처리
+      const summaryPromise = fetchKepcoSummaryByBjdCode(row.bjd_code, {
+        signal: controller.signal,
+      });
+      // 폴리곤 fire-and-forget — 카드 표시 흐름과 분리
+      void loadVillageAndUqPolygons(row.bjd_code, controller.signal);
 
-      // summary 처리
-      if (summaryResult.status === "fulfilled") {
+      try {
+        const summary = await summaryPromise;
+        if (seq !== villageReqSeqRef.current) return;
         setSelectedVillage({
           bjdCode: row.bjd_code,
           markerRow: row,
-          summary: summaryResult.value,
+          summary,
           loading: false,
           error: null,
           rows: null,
           rowsLoading: false,
           rowsError: null,
         });
-      } else {
-        const err = summaryResult.reason as Error;
-        if (err.name === "AbortError") return; // 새 클릭으로 취소
+      } catch (err) {
+        if (seq !== villageReqSeqRef.current) return;
+        if ((err as Error).name === "AbortError") return;
         setSelectedVillage({
           bjdCode: row.bjd_code,
           markerRow: row,
           summary: null,
           loading: false,
-          error: String(err.message ?? err),
+          error: String((err as Error).message ?? err),
           rows: null,
           rowsLoading: false,
           rowsError: null,
         });
       }
-
-      // polygon 처리 — 실패는 시각 보조라 조용히 (음영만 안 그려짐)
-      if (polygonResult.status === "fulfilled") {
-        setVillagePolygon(
-          (polygonResult.value?.polygon as number[][][] | undefined) ?? null,
-        );
-      } else {
-        setVillagePolygon(null);
-      }
     },
-    [],
+    [loadVillageAndUqPolygons],
   );
 
   // "상세 목록 보기" 클릭 — 모달 즉시 열고 raw rows lazy fetch.
@@ -379,9 +442,9 @@ export default function MapClient({ isAdmin, email }: Props) {
     villageReqSeqRef.current++;
     villageAbortRef.current?.abort();
     setSelectedVillage(null);
-    setVillagePolygon(null);
+    clearPolygons();
     setDetailModalOpen(false);
-  }, []);
+  }, [clearPolygons]);
 
   // ─────────────── 지번 클릭 → 필지 정보 패널 ───────────────
   // 단일 입력값 PNU. ParcelInfoPanel 내부에서 모든 탭이 PNU 만 보고 자체 fetch.
@@ -450,16 +513,9 @@ export default function MapClient({ isAdmin, email }: Props) {
         setSelectedJibun(parcelResult.jibun);
         setSelectedGeometry(parcelResult.geometry);
 
-        // 지도 폴리곤용 — 마을(테두리) fire-and-forget
+        // 지도 폴리곤용 — 마을(테두리) + 자연취락지구 fire-and-forget
         const bjdCode = pnu.slice(0, 10);
-        fetchVworldAdminPolygonByBjdCode(bjdCode, { signal: controller.signal })
-          .then((r) => {
-            if (seq !== parcelReqSeqRef.current) return;
-            setVillagePolygon(
-              (r?.polygon as number[][][] | undefined) ?? null,
-            );
-          })
-          .catch(() => {});
+        void loadVillageAndUqPolygons(bjdCode, controller.signal);
 
         const c = parcelResult.geometry.center;
         if (c?.lat != null) moveMapToRef.current?.(c.lat, c.lng);
@@ -470,7 +526,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         }
       }
     },
-    [],
+    [loadVillageAndUqPolygons],
   );
 
   /** 검색결과(KepcoDataRow)/TopRanking 클릭 — bjd_code+addr_jibun 으로 PNU 합성. */
@@ -619,24 +675,17 @@ export default function MapClient({ isAdmin, email }: Props) {
       const firstPnu = group.items[0]?.ltnoPnu;
       if (firstPnu && /^\d{19}$/.test(firstPnu)) {
         const bjdCode = firstPnu.slice(0, 10);
-        try {
-          const polyRes = await fetchVworldAdminPolygonByBjdCode(bjdCode);
-          setVillagePolygon(
-            (polyRes?.polygon as number[][][] | undefined) ?? null,
-          );
-        } catch {
-          setVillagePolygon(null);
-        }
+        void loadVillageAndUqPolygons(bjdCode);
       }
     },
-    [onbidVillages],
+    [onbidVillages, loadVillageAndUqPolygons],
   );
 
   const closeOnbidVillage = useCallback(() => {
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
-    setVillagePolygon(null);
-  }, []);
+    clearPolygons();
+  }, [clearPolygons]);
 
   /**
    * 지도 좌표 클릭 — VWorld BBOX → point-in-polygon 으로 정확 1필지 선별 → PNU 로 통합 진입.
@@ -790,6 +839,7 @@ export default function MapClient({ isAdmin, email }: Props) {
             onParcelClick={openParcelPanelOnMapClick}
             highlightedParcel={selectedGeometry?.polygon ?? null}
             villagePolygon={villagePolygon}
+            uqVillagePolygons={uqVillagePolygons}
             onbidActive={onbidActive}
             onbidVillages={onbidVillages.map((g) => ({
               key: g.key,

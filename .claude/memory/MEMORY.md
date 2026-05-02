@@ -46,3 +46,5 @@
 - ⚡ [KEPCO 같은 마을 fallback](reference_kepco_fallback.md) — 매칭 0건 시 본번거리 top 5. RPC plpgsql+EXECUTE 필수(sql LANGUAGE 시 plan trap = 2.5초). UI는 LocationDetailGrouped compact 재활용
 - 📊 [차트는 라이브러리 사용](feedback_charts_use_library.md) — Recharts 우선. SVG 직접 그리기 시 점 찌그러짐/툴팁/보간 재구현으로 유지보수 어려움
 - 🎴 [ParcelInfoPanel 카드 패턴](project_panel_card_pattern.md) — 공매탭 Section 미러 + accent 색상 분기 (rose/amber/blue/gray)
+- 🏘 [자연취락지구 폴리곤 표시](project_uq_villages.md) ⭐ — 마을 클릭 시 자동 표시. 별도 토글 X. atomic /api/uq-villages/by-bjd + 프론트 Turf 후처리 (2026-05-02)
+- 🪤 [VWorld lt_c_uq128 호출 함정](reference_vworld_uq128.md) — OGC FILTER (XML) 만 작동. CQL_FILTER/attrFilter 무시. 시군구 5자리까지만 필터 가능, 읍면동/리 단위 코드 응답에 없음
