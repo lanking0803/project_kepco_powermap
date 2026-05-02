@@ -1,0 +1,53 @@
+"use client";
+
+/**
+ * 데이터 모드 드롭다운 — 단일 책임: 현재 모드 표시 + 변경 이벤트.
+ *
+ * 옵션 목록/색/라벨/disabled 여부는 모두 lib/modes/registry 가 결정.
+ * 본 컴포넌트는 그 정보를 그대로 렌더만 한다 (로직 X).
+ *
+ * 모드 추가 시 본 파일은 손대지 않는다 — registry.ts 만 수정.
+ */
+import {
+  DATA_MODES,
+  DATA_MODE_ORDER,
+  getDataMode,
+  isModeSelectable,
+  type DataModeId,
+} from "@/lib/modes/registry";
+
+interface Props {
+  mode: DataModeId;
+  onChange: (next: DataModeId) => void;
+  /** 외곽 추가 클래스 (사이드바 헤더 등에 맞춤) */
+  className?: string;
+}
+
+export default function ModeSelector({ mode, onChange, className = "" }: Props) {
+  const current = getDataMode(mode);
+
+  return (
+    <select
+      aria-label="데이터 모드"
+      value={mode}
+      onChange={(e) => onChange(e.target.value as DataModeId)}
+      className={
+        "w-full px-3 py-2 rounded-md text-sm font-semibold border-2 outline-none focus:ring-2 focus:ring-offset-1 transition-colors " +
+        `${current.colors.borderClass} ${current.colors.bgClass} ${current.colors.textClass} ` +
+        className
+      }
+    >
+      {DATA_MODE_ORDER.map((id) => {
+        const m = DATA_MODES[id];
+        const disabled = !isModeSelectable(id);
+        const suffix = disabled && m.comingSoonLabel ? ` (${m.comingSoonLabel})` : "";
+        return (
+          <option key={id} value={id} disabled={disabled}>
+            {m.icon} {m.label}
+            {suffix}
+          </option>
+        );
+      })}
+    </select>
+  );
+}
