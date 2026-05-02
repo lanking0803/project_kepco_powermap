@@ -14,7 +14,6 @@ import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
 import UqVillageSearchPanel from "./UqVillageSearchPanel";
 import type { LatIndex } from "@/lib/uq/sorted-by-lat";
-import AuctionSearchPanel from "./AuctionSearchPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import ModeSelector from "./ModeSelector";
 import { getDataMode, type DataModeId } from "@/lib/modes/registry";
@@ -360,10 +359,6 @@ export default function Sidebar({
               onItemClick={onUqVillagePick}
               onPolygonFocus={onUqPolygonFocus}
             />
-          </div>
-        ) : mode === "auction" ? (
-          <div className="flex-1 min-h-0">
-            <AuctionSearchPanel />
           </div>
         ) : (
         <>
