@@ -1,0 +1,20 @@
+{
+  "common": {
+    "userTrNo": null,
+    "hyphenTrNo": "10202605029000033175",
+    "errYn": "N",
+    "errCd": "200",
+    "errMsg": "The request has succeeded"
+  },
+  "data": {
+    "success": "true",
+    "data": [
+      {
+        "소재지코드": "4157034033100600009",
+        "소재지": "경기도 김포시 대곶면 대명리 60-9 위양지상   \t\t\t\t\t\t\t\t\t\t\r\n[도로명주소]   대곶로20번길 182",
+        "사건번호코드": 118229,
+        "물건번호": 1
+      }
+    ]
+  }
+}

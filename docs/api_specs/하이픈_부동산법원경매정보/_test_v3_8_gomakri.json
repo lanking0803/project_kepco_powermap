@@ -1,0 +1,20 @@
+{
+  "common": {
+    "userTrNo": null,
+    "hyphenTrNo": "10202605029000033826",
+    "errYn": "N",
+    "errCd": "200",
+    "errMsg": "The request has succeeded"
+  },
+  "data": {
+    "success": "true",
+    "data": [
+      {
+        "소재지코드": "4157035022101440011",
+        "소재지": "경기도 김포시 월곶면 고막리 144-11 ",
+        "사건번호코드": 1479871,
+        "물건번호": 1
+      }
+    ]
+  }
+}

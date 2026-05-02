@@ -1,0 +1,915 @@
+26. 5. 2.  10:50                                          (HYPHEN)- , API,   
+
+                                API                                                             MY              TR
+
+  ()                                                                                                         
+
+                                                                            Server
+                                                                            https://api.hyphen.im
+API                     API     OAuth2.0                                    Production Server
+                                                                            Client Libraries
+API                        API   OAuth2.0                 ,   API 
+                         .       .                            .                Shell Ruby Node.js PHP Python More
+  .
+                                                                            Fetch JavaScript
+ API              POST
+
+                  POST
+
+                  POST    V1.0 OAS 3.0.1
+                  POST
+                        API  
+
+                  POST
+
+                  POST  API      
+                  POST  , ,        
+                        .     
+                  POST
+
+                  POST
+
+                  POST
+
+                  POST
+
+                         API
+
+                                                                            ENDPOINTS
+
+                                                                                  POST /au0147001254
+                                                                                  POST /au0147001253
+                                                                                  POST /au0147001252
+                                                                                  POST /au0147001251
+                                                                                  POST /au0147001250
+                                                                                  POST /au0147001249
+                                                                                  POST /au0147001248
+                                                                                  POST /au0147001247
+                                                                                  POST /au0147001246
+                                                                                  POST /au0147001245
+                                                                                  POST /au0147001244
+
+                                                                            POST /au0147001254                 JavaScript Fetch
+
+                        Headers                                             1 fetch('https://api.hyphen.im/au0147001254', {
+
+                        hyphen-gustation string required                    2 method: 'POST',
+
+                                                                            3 headers: {
+
+                        Example Y                                           4        'Content-Type': 'application/json',
+                        user-id string required
+                                                                            5        Hkey: '',
+                        ID( )   
+                                                                            6        'Hyphen-Gustation': 'Y',
+                        Hkey string required
+                                                                            7        'User-Id': ''
+                        H ( )     
+                                                                            8 },
+                        user-tr-no string
+                                                                            9 body: JSON.stringify({
+                        ( )   
+                                                                            10       product_id: ''
+                        Body
+                                                                            11 })
+                        product_id string required
+                                                                            12 })
+                        
+                                                                                                                          Test Request
+
+                                                                            200 404                                       Show Schema
+
+                                                          application/json
+
+                                                                                                                                       TOP
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                                       1/9
+26. 5. 2.  10:50     Responses                         (HYPHEN)- , API,   
+
+  Powered by Scalar  200 OK                                                                                              {
+                     404 Not Found                                                                                           "common": {
+                                                                                                                                "userTrNo": "...",
+                                                                                                                                "hyphenTrNo": "...",
+                                                                                                                                "errYn": "...",
+                                                                                                                                "errCd": "...",
+                                                                                                                                "errMsg": "..."
+                                                                                                                             },
+                                                                                                                             "data": {
+                                                                                                                                "success": "...",
+                                                                                                                                "data": {
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": 1,
+                                                                                                                                    "get": "...",
+                                                                                                                                    "get": [
+                                                                                                                                        {}
+                                                                                                                                    ],
+                                                                                                                                    "get": [
+                                                                                                                                        {
+                                                                                                                                           "get": 1,
+
+                                                                                              OK
+
+                     
+
+                     Headers                                             POST /au0147001253                                                           JavaScript Fetch
+
+                     hyphen-gustation string required                    1 fetch('https://api.hyphen.im/au0147001253', {
+
+                                                                         2 method: 'POST',
+
+                     Example Y                                           3 headers: {
+
+                     user-id string required                             4        'Content-Type': 'application/json',
+
+                     ID( )                                               5        Hkey: '',
+
+                     Hkey string required                                6        'Hyphen-Gustation': 'Y',
+
+                     H ( )                                               7        'User-Id': ''
+
+                     user-tr-no string                                   8 },
+
+                     ( )                                                 9 body: JSON.stringify({
+
+                                                                         10       page: '',
+
+                                                                         11       yongdo: '',
+
+                                                                         12       court: '',
+
+                                                                         13       scode: '',
+
+                                                                         14       sido: '',
+
+                                                                         15       gugun: '',
+
+                                                                         16       dong: '',
+
+                     Body                              application/json  17       barea_min: '',
+
+                                                                         18       barea_max: '',
+
+                                                                         19       larea_min: '',
+
+                     page string                                         20       larea_max: '',
+
+                     ( 1 )                                               21       lowMin: '',
+
+                                                                         22       lowMax: '',
+
+                     yongdo string                                       23       gamMin: '',
+
+                     ( )                                                 24       gamMax: '',
+
+                                                                         25       sday_s: '',
+
+                                                                         26       sday_e: '',
+
+                     court string                                        27       syear: '',
+
+                     ( )                                                 28       sno: ''
+
+                                                                         29 })
+
+                     scode string                                        30 })
+
+                     ( )                                                                                                                              Test Request
+
+                     sido string                                         200 404                                                                      Show Schema
+
+                     ( )   
+
+                     gugun string
+
+                     ( )   
+
+                     dong string
+
+                     ( )   
+
+                     barea_min string                                                                                                                              TOP
+                                                                                                                                                                             2/9
+                     ( )   
+
+                     barea_max string
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254
+26. 5. 2.  10:50                                    (HYPHEN)- , API,   
+
+                  ( )                                                  {
+
+                  larea_min string                                         "common": {
+                                                                              "userTrNo": "...",
+                  ( )                                                         "hyphenTrNo": "...",
+                                                                              "errYn": "...",
+
+                  larea_max string                                            "errCd": "...",
+                                                                              "errMsg": "..."
+                  ( )                                                      },
+
+                  lowMin string                                            "data": {
+                                                                              "success": "...",
+                   (:)                                                        "nowpage": "...",
+                                                                              "totallist": "...",
+
+                  lowMax string                                            "totalpage": "...",
+                                                                           "data": [
+                   (:)
+                                                                              {
+
+                  gamMin string                                                 "get": "...",
+                                                                                "get": 1,
+                  ( : )                                                         "get": "...",
+                                                                                "get": "...",
+
+                  gamMax string                                                 "get": 1,
+                                                                                "get": 1,
+                  ( : )                                                         "get": "...",
+
+                  sday_s string                                                 "get": "...",
+                                                                                "get": "...",
+                     (YYYY-MM-DD)                                               "get": "...",
+                                                                                "get": 1,
+
+                  sday_e string                                                 "get": "...",
+                                                                                "get": 1,
+                     (YYYY-MM-DD)                                               "get": 1,
+
+                  syear string                                                  "get": 1,
+                                                                                "get": 1,
+                   (YYYY)                                                       "get": "...",
+                                                                                "get": "...",
+
+                  sno string                                                    "get": "...",
+                                                                                "get": "...",
+
+                                                                                "get": 1,
+
+                  Responses
+
+                  200 OK
+                  404 Not Found
+
+                                                                       POST /au0147001252                 JavaScript Fetch
+
+                  Headers                                              1 fetch('https://api.hyphen.im/au0147001252', {
+
+                  hyphen-gustation string required                     2 method: 'POST',
+
+                                                                       3 headers: {
+
+                  Example Y                                            4        'Content-Type': 'application/json',
+                  user-id string required
+                                                                       5        Hkey: '',
+                  ID( )   
+                                                                       6        'Hyphen-Gustation': 'Y',
+                  Hkey string required
+                                                                       7        'User-Id': ''
+                  H ( )     
+                                                                       8 },
+                  user-tr-no string
+                                                                       9 body: JSON.stringify({
+                  ( )   
+                                                                       10       page: '',
+                  Body
+                                                                       11       yongdo: '',
+                  page string
+                                                                       12       court: '',
+                  ( 1 )     
+                                                                       13       scode: '',
+                  yongdo string
+                                                                       14       sido: '',
+                  ( )   
+                                                                       15       gugun: '',
+                  court string
+                                                                       16       dong: '',
+                  ( )   
+                                                    application/json   17       barea_min: '',
+                  scode string
+                                                                       18       barea_max: '',
+                  ( )   
+                                                                       19       larea_min: '',
+                  sido string
+                                                                       20       larea_max: '',
+                  ( )   
+                                                                       21       lowMin: '',
+                  gugun string
+                                                                       22       lowMax: '',
+                  ( )   
+                                                                       23       gamMin: '',
+                  dong string
+                                                                       24       gamMax: '',
+                  ( )   
+                                                                       25       sday_s: '',
+                  barea_min string
+                                                                       26       sday_e: '',
+                  ( )   
+                                                                       27       syear: '',
+
+                                                                       28       sno: ''
+
+                                                                       29 })
+
+                                                                       30 })
+
+                                                                                                                     Test Request
+
+                                                                       200 404                                       Show Schema
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                             TOP
+                                                                                                                                            3/9
+26. 5. 2.  10:50                                    (HYPHEN)- , API,   
+
+                  barea_max string                                     {
+                                                                          "common": {
+                  ( )                                                         "userTrNo": "...",
+                                                                              "hyphenTrNo": "...",
+                  larea_min string                                            "errYn": "...",
+                                                                              "errCd": "...",
+                  ( )                                                         "errMsg": "..."
+                                                                          },
+                  larea_max string                                        "data": {
+                                                                              "success": "...",
+                  ( )                                                         "nowpage": "...",
+                                                                              "totallist": "...",
+                  lowMin string                                               "totalpage": "...",
+                                                                              "data": [
+                   (:)                                                           {
+                                                                                     "get": "...",
+                  lowMax string                                                      "get": "...",
+                                                                                     "get": "...",
+                   (:)                                                               "get": "...",
+                                                                                     "get": "...",
+                  gamMin string                                                      "get": "...",
+                                                                                     "get": "...",
+                  ( : )                                                              "get": "...",
+                                                                                     "get": "...",
+                  gamMax string                                                      "get": "...",
+                                                                                     "get": "...",
+                  ( : )                                                              "get": "...",
+                                                                                     "get": "...",
+                  sday_s string                                                      "get": "...",
+                                                                                     "get": "...",
+                     (YYYY-MM-DD)                                                    "get": "...",
+                                                                                     "get": "...",
+                  sday_e string                                                      "get": "...",
+                                                                                     "get": "...",
+                     (YYYY-MM-DD)                                                    "get": " "
+
+                  syear string                                         OK
+
+                   (YYYY)
+
+                  sno string
+
+                  
+
+                  Responses
+
+                  200 OK
+                  404 Not Found
+
+                  
+
+                  Headers                                              POST /au0147001251                 JavaScript Fetch
+
+                  hyphen-gustation string required                     1 fetch('https://api.hyphen.im/au0147001251', {
+
+                                                                       2 method: 'POST',
+
+                  Example Y                                            3 headers: {
+                  user-id string required
+                                                                       4        'Content-Type': 'application/json',
+                  ID( )   
+                                                                       5        Hkey: '',
+                  Hkey string required
+                                                                       6        'Hyphen-Gustation': 'Y',
+                  H ( )     
+                                                                       7        'User-Id': ''
+                  user-tr-no string
+                                                                       8 },
+                  ( )   
+                                                                       9 body: JSON.stringify({
+                  Body
+                                                                       10       page: '',
+                  page string
+                                                                       11       yongdo: '',
+                  ( 1 )     
+                                                                       12       court: '',
+                  yongdo string
+                                                                       13       scode: '',
+                  ( )   
+                                                                       14       sido: '',
+                  court string
+                                                                       15       gugun: '',
+                  ( )   
+                                                                       16       dong: '',
+                  scode string
+                                                    application/json   17       barea_min: '',
+                  ( )   
+                                                                       18       barea_max: '',
+                  sido string
+                                                                       19       larea_min: '',
+                  ( )   
+                                                                       20       larea_max: '',
+                  gugun string
+                                                                       21       lowMin: '',
+                  ( )   
+                                                                       22       lowMax: '',
+                  dong string
+                                                                       23       gamMin: '',
+                  ( )   
+                                                                       24       gamMax: '',
+                  barea_min string
+                                                                       25       sday_s: '',
+
+                                                                       26       sday_e: '',
+
+                                                                       27       syear: '',
+
+                                                                       28       sno: ''
+
+                                                                       29 })
+
+                                                                       30 })
+
+                                                                                                                     Test Request
+
+                                                                       200 404                                       Show Schema
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                             TOP
+                                                                                                                                            4/9
+26. 5. 2.  10:50                                    (HYPHEN)- , API,   
+
+                  ( )                                                  {
+
+                  barea_max string                                         "common": {
+                                                                              "userTrNo": "...",
+                  ( )                                                         "hyphenTrNo": "...",
+                                                                              "errYn": "...",
+
+                  larea_min string                                            "errCd": "...",
+                                                                              "errMsg": "..."
+                  ( )                                                      },
+
+                  larea_max string                                         "data": {
+                                                                              "success": "...",
+                  ( )                                                         "data": [
+                                                                                  {
+
+                  lowMin string                                                 "get": "...",
+                                                                                "get": 1,
+                   (:)                                                          "get": "...",
+
+                  lowMax string                                                 "get": "...",
+                                                                                "get": 1,
+                   (:)                                                          "get": 1,
+                                                                                "get": "...",
+
+                  gamMin string                                                 "get": "...",
+                                                                                "get": "...",
+                  ( : )                                                         "get": "...",
+
+                  gamMax string                                                 "get": 1,
+                                                                                "get": "...",
+                  ( : )                                                         "get": 1,
+                                                                                "get": 1,
+
+                  sday_s string                                                 "get": 1,
+                                                                                "get": 1,
+                  ( : )                                                         "get": "...",
+
+                  sday_e string                                                 "get": "...",
+                                                                                "get": "...",
+                     (YYYY-MM-DD)                                               "get": "...",
+                                                                                "get": 1,
+
+                  syear string                                                  "get": "...",
+                                                                                "get": "...",
+                   (YYYY)                                                       "get": 1,
+
+                  sno string                                                    "get": "...",
+                                                                                "get": "...",
+
+                                                                                "get": "...",
+
+                  Responses
+
+                  200 OK
+                  404 Not Found
+
+                                                                       POST /au0147001250                 JavaScript Fetch
+
+                  Headers                                              1 fetch('https://api.hyphen.im/au0147001250', {
+
+                  hyphen-gustation string required                     2 method: 'POST',
+
+                                                                       3 headers: {
+
+                  Example Y                                            4        'Content-Type': 'application/json',
+                  user-id string required
+                                                                       5        Hkey: '',
+                  ID( )   
+                                                                       6        'Hyphen-Gustation': 'Y',
+                  Hkey string required
+                                                                       7        'User-Id': ''
+                  H ( )     
+                                                                       8 },
+                  user-tr-no string
+                                                                       9 body: JSON.stringify({
+                  ( )   
+                                                                       10
+                  Body
+                                                                       11 })
+                  object
+                                                                       12 })
+                  Responses
+                                                                                                                     Test Request
+                  200 OK
+                  404 Not Found                                        200 404                                       Show Schema
+
+                                                    application/json   {
+                                                                          "common": {
+                                                                              "userTrNo": "...",
+                                                                              "hyphenTrNo": "...",
+                                                                              "errYn": "...",
+                                                                              "errCd": "...",
+                                                                              "errMsg": "..."
+                                                                          },
+                                                                          "data": {
+                                                                              "success": "...",
+                                                                              "data": [
+                                                                                 {
+                                                                                     "get": "...",
+                                                                                     "get": "..."
+                                                                                 }
+                                                                              ]
+                                                                          }
+
+                                                                       }
+
+                                                                       OK
+
+                                                                                                                                  TOP
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                                  5/9
+26. 5. 2.  10:50                                    (HYPHEN)- , API,   
+
+                                                                       POST /au0147001249                 JavaScript Fetch
+
+                  Headers                                              1 fetch('https://api.hyphen.im/au0147001249', {
+
+                  hyphen-gustation string required                     2 method: 'POST',
+
+                                                                       3 headers: {
+
+                  Example Y                                            4        'Content-Type': 'text/plain;charset=UTF-8',
+                  user-id string required
+                                                                       5        Hkey: '',
+                  ID( )   
+                                                                       6        'Hyphen-Gustation': 'Y',
+                  Hkey string required
+                                                                       7        'User-Id': ''
+                  H ( )     
+                                                                       8 },
+                  user-tr-no string
+                                                                       9 body: ''
+                  ( )   
+                                                                       10 })
+                  Responses
+                                                                                                                     Test Request
+                  200 OK
+                  404 Not Found                                        200 404                                       Show Schema
+
+                                                                       {
+                                                                          "common": {
+                                                                              "userTrNo": "...",
+                                                                              "hyphenTrNo": "...",
+                                                                              "errYn": "...",
+                                                                              "errCd": "...",
+                                                                              "errMsg": "..."
+                                                                          },
+                                                                          "data": {
+                                                                              "success": "...",
+                                                                              "data": [
+                                                                                 {
+                                                                                     "get": "...",
+                                                                                     "get": "..."
+                                                                                 }
+                                                                              ]
+                                                                          }
+
+                                                                       }
+
+                                                                       OK
+
+                  
+
+                  Headers                                              POST /au0147001248                 JavaScript Fetch
+
+                  hyphen-gustation string required                     1 fetch('https://api.hyphen.im/au0147001248', {
+
+                                                                       2 method: 'POST',
+
+                  Example Y                                            3 headers: {
+
+                  user-id string required                              4        'Content-Type': 'application/json',
+
+                  ID( )                                                5        Hkey: '',
+
+                  Hkey string required                                 6        'Hyphen-Gustation': 'Y',
+
+                  H ( )                                                7        'User-Id': ''
+
+                  user-tr-no string                                    8 },
+
+                  ( )                                                  9 body: JSON.stringify({
+
+                                                                       10       gugun: ''
+
+                                                                       11 })
+
+                                                                       12 })
+
+                                                                                                                     Test Request
+
+                                                                       200 404                                       Show Schema
+
+                  Body                              application/json   {
+                                                                          "common": {
+                  gugun string required                                       "userTrNo": "...",
+                  gugun                                                       "hyphenTrNo": "...",
+                                                                              "errYn": "...",
+                                                                              "errCd": "...",
+                  Responses                                                   "errMsg": "..."
+                                                                          },
+                  200 OK                                                  "data": {
+                  404 Not Found                                               "success": "...",
+                                                                              "data": [
+                                                                                 {
+                                                                                     "get": "...",
+                                                                                     "get": "..."
+                                                                                 }
+                                                                              ]
+                                                                          }
+
+                                                                       }
+
+                                                                       OK
+
+                                                                                                                                  TOP
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                                  6/9
+26. 5. 2.  10:50                                    (HYPHEN)- , API,   
+
+                                                                       POST /au0147001247                 JavaScript Fetch
+
+                  Headers                                              1 fetch('https://api.hyphen.im/au0147001247', {
+
+                  hyphen-gustation string required                     2 method: 'POST',
+
+                                                                       3 headers: {
+
+                  Example Y                                            4        'Content-Type': 'application/json',
+                  user-id string required
+                                                                       5        Hkey: '',
+                  ID( )   
+                                                                       6        'Hyphen-Gustation': 'Y',
+                  Hkey string required
+                                                                       7        'User-Id': ''
+                  H ( )     
+                                                                       8 },
+                  user-tr-no string
+                                                                       9 body: JSON.stringify({
+                  ( )   
+                                                                       10       sido: ''
+                  Body
+                                                                       11 })
+                  sido string required
+                                                                       12 })
+                  sido    
+                                                                                                                     Test Request
+                  Responses
+                                                                       200 404                                       Show Schema
+                  200 OK
+                  404 Not Found                     application/json   {
+                                                                          "common": {
+                                                                              "userTrNo": "...",
+                                                                              "hyphenTrNo": "...",
+                                                                              "errYn": "...",
+                                                                              "errCd": "...",
+                                                                              "errMsg": "..."
+                                                                          },
+                                                                          "data": {
+                                                                              "success": "...",
+                                                                              "data": [
+                                                                                 {
+                                                                                     "get": "...",
+                                                                                     "get": "..."
+                                                                                 }
+                                                                              ]
+                                                                          }
+
+                                                                       }
+
+                                                                       OK
+
+                                                                       POST /au0147001246                 JavaScript Fetch
+
+                  Headers                                              1 fetch('https://api.hyphen.im/au0147001246', {
+
+                  hyphen-gustation string required                     2 method: 'POST',
+
+                                                                       3 headers: {
+
+                  Example Y                                            4        'Content-Type': 'application/json',
+                  user-id string required
+                                                                       5        Hkey: '',
+                  ID( )   
+                                                                       6        'Hyphen-Gustation': 'Y',
+                  Hkey string required
+                                                                       7        'User-Id': ''
+                  H ( )     
+                                                                       8 },
+                  user-tr-no string
+                                                                       9 body: JSON.stringify({
+                  ( )   
+                                                                       10
+                  Body
+                                                                       11 })
+                  object
+                                                                       12 })
+                  Responses
+                                                                                                                     Test Request
+                  200 OK
+                  404 Not Found                                        200 404                                       Show Schema
+
+                                                    application/json
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                             TOP
+                                                                                                                                            7/9
+26. 5. 2.  10:50                                    (HYPHEN)- , API,   
+
+                                                                                                                      {
+                                                                                                                          "common": {
+                                                                                                                             "userTrNo": "...",
+                                                                                                                             "hyphenTrNo": "...",
+                                                                                                                             "errYn": "...",
+                                                                                                                             "errCd": "...",
+                                                                                                                             "errMsg": "..."
+                                                                                                                          },
+                                                                                                                          "data": {
+                                                                                                                             "success": "...",
+                                                                                                                             "data": {
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": "...",
+                                                                                                                                 "get": " "
+
+                                                                                  POST /au0147001245                                               JavaScript Fetch
+
+                  Headers                                                         1 fetch('https://api.hyphen.im/au0147001245', {
+
+                  hyphen-gustation string required                                2 method: 'POST',
+
+                                                                                  3 headers: {
+
+                  Example Y                                                       4        'Content-Type': 'application/json',
+                  user-id string required
+                                                                                  5        Hkey: '',
+                  ID( )   
+                                                                                  6        'Hyphen-Gustation': 'Y',
+                  Hkey string required
+                                                                                  7        'User-Id': ''
+                  H ( )     
+                                                                                  8 },
+                  user-tr-no string
+                                                                                  9 body: JSON.stringify({
+                  ( )   
+                                                                                  10       sojaesch: ''
+                  Body
+                                                                                  11 })
+                  sojaesch string required
+                                                                                  12 })
+                    
+                                                                                                                                                   Test Request
+                  Responses
+                                                                                  200 404                                                          Show Schema
+                  200 OK
+                  404 Not Found                     application/json              {
+                                                                                     "common": {
+                                                                                         "userTrNo": "...",
+                                                                                         "hyphenTrNo": "...",
+                                                                                         "errYn": "...",
+                                                                                         "errCd": "...",
+                                                                                         "errMsg": "..."
+                                                                                     },
+                                                                                     "data": {
+                                                                                         "sojaesch": "..."
+                                                                                     }
+
+                                                                                  }
+
+                                                                                  OK
+
+                                                                                  POST /au0147001244                                               JavaScript Fetch
+
+                                Headers                                           1 fetch('https://api.hyphen.im/au0147001244', {
+
+                                            hyphen-gustation string required      2 method: 'POST',
+
+                                                                                  3 headers: {
+
+                                           Example Y                              4        'Content-Type': 'text/plain;charset=UTF-8',
+                                            user-id string required
+                                                                                  5        Hkey: '',
+                                      ID( )   
+                                                                                  6        'Hyphen-Gustation': 'Y',
+                                            Hkey string required
+                                                                                  7        'User-Id': ''
+                                      H ( )     
+                                                                                  8 },
+                                            user-tr-no string
+                                                                                  9 body: ''
+                                      ( )   
+                                                                                  10 })
+                                Responses
+                                                                                                                                                   Test Request
+                                            200 OK
+                                                                                  200 404                                                          Show Schema
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254
+                                                                                                                                                                TOP
+
+                                                                                                                                                                     8/9
+26. 5. 2.  10:50                   (HYPHEN)- , API,   
+
+                  404 Not Found                                                                      {
+                                                                                                         "common": {
+                                                                                                            "userTrNo": "...",
+                                                                                                            "hyphenTrNo": "...",
+                                                                                                            "errYn": "...",
+                                                                                                            "errCd": "...",
+                                                                                                            "errMsg": "..."
+                                                                                                         },
+                                                                                                         "data": {
+                                                                                                            "success": "...",
+                                                                                                            "data": {
+                                                                                                                "get": "...",
+                                                                                                                "get": "...",
+                                                                                                                "get": "...",
+                                                                                                                "get": "...",
+                                                                                                                "get": "...",
+                                                                                                                "()": "..."
+                                                                                                            }
+                                                                                                         }
+
+                                                                                                     }
+
+                                                                          OK
+
+                                                                         2022                                                     ISMS
+                                                                       IT                                                           
+1600-4173 1) (, , , )             : fbs@hyphen.im
+                                 API : help@hyphen.im
+           2) API                 : pay@hyphen.im
+           3) ()
+              :  08:30 ~ 17:30
+           (   )
+
+                                      
+
+()    498-81-02543       351, 12()    :  2022--0211                                                                                
+COPYRIGHT © Hyphen, co. ALL RIGHTS RESERVED
+
+https://hyphen.im/product-api/view?seq=207#tag/-api/POST/au0147001254                                                                   TOP
+                                                                                                                                                  9/9
+
