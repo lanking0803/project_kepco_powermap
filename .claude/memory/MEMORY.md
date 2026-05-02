@@ -44,3 +44,5 @@
 - 🪤 [Supabase RPC plan 함정](reference_supabase_rpc_plan_trap.md) — 동일 SQL 직접 1.5ms ↔ RPC 2초+. generic plan 캐시로 인덱스 못 탐. 쿼리빌더 직접 호출 또는 표현식 인덱스로 회피
 - 🏛 [법제처 OPEN API 도메인 검증](reference_law_api_referer.md) — Referer/Origin 헤더 필수 (서버사이드 fetch). 헤더 값 한글 금지(ByteString 거부). sunlap.kr 등록 완료
 - ⚡ [KEPCO 같은 마을 fallback](reference_kepco_fallback.md) — 매칭 0건 시 본번거리 top 5. RPC plpgsql+EXECUTE 필수(sql LANGUAGE 시 plan trap = 2.5초). UI는 LocationDetailGrouped compact 재활용
+- 📊 [차트는 라이브러리 사용](feedback_charts_use_library.md) — Recharts 우선. SVG 직접 그리기 시 점 찌그러짐/툴팁/보간 재구현으로 유지보수 어려움
+- 🎴 [ParcelInfoPanel 카드 패턴](project_panel_card_pattern.md) — 공매탭 Section 미러 + accent 색상 분기 (rose/amber/blue/gray)

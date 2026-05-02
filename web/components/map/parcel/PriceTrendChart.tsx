@@ -16,13 +16,13 @@
  *   - 막대(count)는 0 으로 그대로 표기
  */
 
+import { useEffect, useRef, useState } from "react";
 import {
   Area,
   Bar,
   CartesianGrid,
   ComposedChart,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -44,7 +44,27 @@ interface ChartRow {
   count: number;
 }
 
+const CHART_HEIGHT = 176;
+
 export default function PriceTrendChart({ monthly, formatYm }: Props) {
+  // ResponsiveContainer 가 부모 측정 못 해서 -1 width 경고를 띄우는 케이스가 있어
+  // ResizeObserver 로 직접 측정 후 명시적 width 전달 (Recharts 권장 폴백 방식).
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setWidth(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   if (monthly.length === 0) return null;
 
   const data: ChartRow[] = monthly.map((m) => ({
@@ -59,10 +79,14 @@ export default function PriceTrendChart({ monthly, formatYm }: Props) {
   }));
 
   return (
-    // 명시적 width 100% — flex 부모(공매탭 PriceCard) 안에서 -1 으로 찌부러지는 거 방지
-    <div style={{ width: "100%", height: 176 }}>
-      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+    <div
+      ref={containerRef}
+      style={{ width: "100%", height: CHART_HEIGHT, minWidth: 0 }}
+    >
+      {width > 0 && (
         <ComposedChart
+          width={width}
+          height={CHART_HEIGHT}
           data={data}
           margin={{ top: 8, right: 8, bottom: 4, left: 0 }}
         >
@@ -135,7 +159,7 @@ export default function PriceTrendChart({ monthly, formatYm }: Props) {
             isAnimationActive={false}
           />
         </ComposedChart>
-      </ResponsiveContainer>
+      )}
     </div>
   );
 }
