@@ -13,6 +13,7 @@ import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
 import UqVillageSearchPanel from "./UqVillageSearchPanel";
+import AuctionSearchPanel from "./AuctionSearchPanel";
 import type { LatIndex } from "@/lib/uq/sorted-by-lat";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import ModeSelector from "./ModeSelector";
@@ -359,6 +360,10 @@ export default function Sidebar({
               onItemClick={onUqVillagePick}
               onPolygonFocus={onUqPolygonFocus}
             />
+          </div>
+        ) : mode === "auction" ? (
+          <div className="flex-1 min-h-0">
+            <AuctionSearchPanel />
           </div>
         ) : (
         <>
