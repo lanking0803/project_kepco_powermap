@@ -8,10 +8,23 @@
  */
 import type { UqVillage } from "@/lib/vworld/uq-villages";
 
-/** 검색 입력 — 시도/시군구만 (의뢰자 결정 2026-05-02). */
+/**
+ * 검색 입력 — 시도/시군구 (의뢰자 결정 2026-05-02).
+ *
+ * 한글(sido/sigungu)은 UI 표시용, sigunguCode 는 API 호출 키.
+ * 두 표현을 함께 저장 — 사용자가 보던 한글 그대로 복원 + 코드는 호출 안정성.
+ * 둘 다 MapSummaryRow (MV) 한 행에서 동시에 추출 가능 (별도 fetch 불필요).
+ */
 export interface UqSearchParams {
+  /** 시도 한글명 (예: "전라남도") — drop down 표시 + sessionStorage 복원용 */
   sido: string;
+  /** 시군구 한글명 (예: "곡성군") — drop down 표시 + sessionStorage 복원용 */
   sigungu: string;
+  /**
+   * 시군구 5자리 행안부 표준 코드 (예: "46720") — API 호출 키.
+   * bjd_code 10자리의 앞 5자리. VWorld lt_c_uq128 의 std_sggcd 와 매칭.
+   */
+  sigunguCode: string;
 }
 
 /** 검색 패널이 sessionStorage 에 저장하는 상태. */
@@ -24,4 +37,5 @@ export interface UqPersistedState {
 export const UQ_EMPTY_PARAMS: UqSearchParams = {
   sido: "",
   sigungu: "",
+  sigunguCode: "",
 };
