@@ -109,19 +109,18 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
   }, [allSigungus]);
 
   /**
-   * 선택 시도의 시군구 옵션 — { label: 표시 한글, value: 캠코 송신값 }.
-   * 캠코 lctnSggnm 은 자치구/행정구/군 단독 표기 — 일반시 일반구도
-   * "권선구" 단독으로 보낸다 (수원시 권선구 통합 X). 일반시 일반구만
-   * 사용자에겐 "수원시 권선구" 로 보여주고 송신은 gu 단독.
+   * 선택 시도의 시군구 옵션 — { label, value } 둘 다 통합 표기.
+   * 캠코 lctnSggnm 검증 결과(2026-05-02): 일반시 일반구는
+   * "성남시 분당구" 통합 표기로 받음. gu 단독("분당구") 검색 시 0건.
    */
   const sigunguOptions = useMemo(() => {
     if (!params.sido) return [] as Array<{ label: string; value: string }>;
     return allSigungus
       .filter((r) => r.sido === params.sido)
-      .map((r) => ({
-        label: r.si ? `${r.si} ${r.gu}` : r.gu,
-        value: r.gu, // 캠코는 gu 단독
-      }));
+      .map((r) => {
+        const display = r.si ? `${r.si} ${r.gu}` : r.gu;
+        return { label: display, value: display };
+      });
   }, [allSigungus, params.sido]);
 
   /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구 자동 초기화. */
