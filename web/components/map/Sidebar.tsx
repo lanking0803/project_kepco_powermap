@@ -12,6 +12,7 @@ import type { SearchRiResult } from "@/lib/search/searchKepco";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
+import UqVillageSearchPanel from "./UqVillageSearchPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import ModeSelector from "./ModeSelector";
 import { getDataMode, type DataModeId } from "@/lib/modes/registry";
@@ -328,13 +329,19 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* ── 공매 모드: 탭 없이 검색 폼 + 결과 ── */}
-        {onbidActive ? (
+        {/* ── 모드별 검색 패널 분기 ──
+            전기(default) 외 모드는 자기 패널을 풀스크린으로 표시.
+            모드 추가 시 if 1줄 추가로 확장. */}
+        {mode === "onbid" ? (
           <div className="flex-1 min-h-0">
             <OnbidSearchPanel
               onResults={onOnbidResults}
               onItemClick={onOnbidItemClick}
             />
+          </div>
+        ) : mode === "uq" ? (
+          <div className="flex-1 min-h-0">
+            <UqVillageSearchPanel />
           </div>
         ) : (
         <>

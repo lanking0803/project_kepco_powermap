@@ -26,6 +26,7 @@ import {
   ONBID_EMPTY_PARAMS,
   type OnbidPersistedState,
 } from "@/lib/modes/modes/onbid";
+import { SIDOS } from "@/lib/modes/region";
 
 /** 모드 ID — registry 에 등록된 안정 키. sessionStorage 키는 storage 헬퍼가 자동 처리. */
 const MODE_ID = "onbid";
@@ -39,27 +40,6 @@ interface Props {
 
 /** 표시 한도 — 이 값 이상은 받지 않음 (캠코는 99,999 까지 가능하나 UX/렌더 부담) */
 const MAX_RESULT_LIMIT = 1000;
-
-/** 한국 행정 표준 시·도 (캠코 응답 lctnSdnm 과 동일 표기) */
-const SIDOS = [
-  "서울특별시",
-  "부산광역시",
-  "대구광역시",
-  "인천광역시",
-  "광주광역시",
-  "대전광역시",
-  "울산광역시",
-  "세종특별자치시",
-  "경기도",
-  "강원특별자치도",
-  "충청북도",
-  "충청남도",
-  "전북특별자치도",
-  "전라남도",
-  "경상북도",
-  "경상남도",
-  "제주특별자치도",
-];
 
 const ALL_CATEGORIES: OurCategory[] = [
   "토지",

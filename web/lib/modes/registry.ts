@@ -115,8 +115,9 @@ export const DATA_MODES: Record<DataModeId, DataModeConfig> = {
       polygonFill: "#10b981",
       polygonOpacity: 0.3,
     },
-    status: "building",
-    comingSoonLabel: "곧 출시",
+    status: "live",
+    // searchPanel 은 Sidebar 가 mode 분기로 직접 import. 본 필드는 향후
+    // "동적 패널 분기 자동화" 로 갈 때 활용 (현재는 미사용 — null 유지).
     searchPanel: null,
     sessionKey: "uq_search_state_v1",
   },
