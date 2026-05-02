@@ -27,6 +27,8 @@ import {
   type UqSearchParams,
 } from "@/lib/modes/modes/uq";
 import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
+import { fetchVworldUqVillagesByBjdCode } from "@/lib/api/vworld";
+import type { UqVillage } from "@/lib/vworld/uq-villages";
 
 const MODE_ID = "uq";
 
@@ -51,6 +53,10 @@ export default function UqVillageSearchPanel(_props: Props) {
   const [params, setParams] = useState<UqSearchParams>(
     persisted?.params ?? UQ_EMPTY_PARAMS,
   );
+  /** 검색 결과 — 면적 큰 순 정렬해서 보관. 새로고침 시 sessionStorage 로 복원. */
+  const [results, setResults] = useState<UqVillage[]>(persisted?.results ?? []);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   /** 시군구 마스터 — 마운트 시 1회 lazy fetch. 이후 모듈 캐시 hit. */
   const [allSigungus, setAllSigungus] = useState<SigunguEntry[]>([]);
@@ -97,16 +103,36 @@ export default function UqVillageSearchPanel(_props: Props) {
     }
   }, [sigungus, params.sigungu]);
 
-  const canSearch = params.sigunguCode !== "";
+  const canSearch = params.sigunguCode !== "" && !searching;
 
-  const runSearch = () => {
+  /**
+   * /api/uq-villages/by-bjd 호출. atomic endpoint 가 sigunguCode 5자리만 보고
+   * 시군구 단위 응답을 주므로 뒤 5자리는 "00000" 으로 채워 10자리 만족.
+   * 결과는 면적 큰 순 정렬 + sessionStorage 저장.
+   */
+  const runSearch = async () => {
     if (!canSearch) return;
-    // TODO(다음 단계): /api/uq-villages/by-bjd?bjd_code=${params.sigunguCode + "00000"}
-    saveModeState<UqPersistedState>(MODE_ID, { params, results: [] });
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const bjdCode = `${params.sigunguCode}00000`;
+      const items = await fetchVworldUqVillagesByBjdCode(bjdCode);
+      const sorted = [...items].sort((a, b) => b.area_m2 - a.area_m2);
+      setResults(sorted);
+      saveModeState<UqPersistedState>(MODE_ID, { params, results: sorted });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setSearchError(msg);
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const reset = () => {
     setParams(UQ_EMPTY_PARAMS);
+    setResults([]);
+    setSearchError(null);
     clearModeState(MODE_ID);
   };
 
@@ -191,15 +217,66 @@ export default function UqVillageSearchPanel(_props: Props) {
         </div>
       </div>
 
-      {/* 결과 영역 — 다음 단계에서 채움 */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3">
-        <p className="text-xs text-gray-400 text-center py-8">
-          검색 결과는 다음 단계에서 표시됩니다.
-        </p>
+      {/* 결과 헤더 — 결과 카운트만 한 줄 표시 */}
+      <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+        <span className="text-xs font-bold text-gray-700">결과</span>
+        <span className="text-xs text-gray-500">
+          {searching
+            ? "검색 중…"
+            : results.length > 0
+            ? `${results.length}곳`
+            : "—"}
+        </span>
+      </div>
+
+      {/* 결과 카드 리스트 */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+        {searchError && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+            ⚠️ {searchError}
+          </p>
+        )}
+        {!searching && !searchError && results.length === 0 && (
+          <p className="text-xs text-gray-400 text-center py-8">
+            시도/시군구를 선택하고 [검색] 버튼을 눌러주세요.
+          </p>
+        )}
+        {results.map((v, i) => (
+          <UqResultCard key={v.mnum || i} index={i + 1} village={v} />
+        ))}
       </div>
     </div>
   );
 }
+
+/* ── 결과 카드 — 영업 1차 발굴 정보 ── */
+
+interface UqResultCardProps {
+  /** 1-based 표시 번호 (지도 ↔ 카드 매칭용) */
+  index: number;
+  village: UqVillage;
+}
+
+function UqResultCard({ index, village }: UqResultCardProps) {
+  const pyeong = Math.round(village.area_m2 / PYEONG_PER_M2);
+  return (
+    <div className="border border-emerald-200 bg-emerald-50/40 rounded-md px-2.5 py-2 hover:bg-emerald-50 hover:border-emerald-300 transition-colors cursor-default">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs font-bold text-emerald-800">🏘 #{index}</span>
+        <span className="text-sm font-bold text-emerald-900 tabular-nums">
+          {pyeong.toLocaleString()}평
+        </span>
+      </div>
+      <div className="mt-0.5 flex items-center justify-between text-[11px] text-gray-600 tabular-nums">
+        <span>{Math.round(village.area_m2).toLocaleString()}㎡</span>
+        {village.dyear && <span>고시 {village.dyear}년</span>}
+      </div>
+    </div>
+  );
+}
+
+/** ㎡ → 평 변환 상수 (1평 = 3.3058㎡, 영업 표준). */
+const PYEONG_PER_M2 = 3.3058;
 
 /* ── 작은 보조 컴포넌트 — OnbidSearchPanel 과 모양 통일을 위해 inline ── */
 

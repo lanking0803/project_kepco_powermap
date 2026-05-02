@@ -37,6 +37,8 @@ export interface UqVillage {
   sido_name: string;
   /** "전주시" */
   sigg_name: string;
+  /** 고시년도 (VWorld dyear, 예: "2019"). 명세상 4자리 문자열. 누락 가능. */
+  dyear: string | null;
   /** 외곽링들 (MultiPolygon 풀어서). [[[lng,lat], ...], ...] */
   polygon: Position[][];
   /** 가장 큰 폴리곤의 centroid (라벨 위치 안정성 — admin-polygon 패턴) */
@@ -53,6 +55,8 @@ interface UqFeature {
     sido_name?: string;
     sigg_name?: string;
     std_sggcd?: string;
+    dyear?: string;
+    dnum?: string;
   };
 }
 
@@ -135,6 +139,7 @@ export async function getUqVillagesByBjd(
         uname: props.uname ?? "자연취락지구",
         sido_name: props.sido_name ?? "",
         sigg_name: props.sigg_name ?? "",
+        dyear: props.dyear ?? null,
         polygon: rings,
         center: { lat, lng },
         area_m2: a,
