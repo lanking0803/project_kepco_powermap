@@ -7,10 +7,10 @@
  * 본 컴포넌트는 검색 입력 + (다음 단계) 결과 카드 리스트만 담당.
  *
  * 데이터 소스:
- *   - 시도/시군구 드롭다운 = totalRows (MapSummaryRow[]) 에서 동적 derive.
- *     KEPCO 데이터가 있는 시군구만 노출 — 없는 시군구는 영업 의미 0 (자연 사전 필터).
- *   - 사용자는 한글로 선택, API 호출은 sigunguCode (bjd_code 앞 5자리) 사용.
- *   - 검색 = /api/uq-villages/by-bjd?bjd_code=... (다음 단계에서 연결)
+ *   - 시도/시군구 드롭다운 = /api/regions/sigungu (모든 모드 공통)
+ *     · bjd_master 단일 진실 공급원, 30일 CDN + 모듈 scope 캐시
+ *     · 사용자는 한글로 선택, API 호출은 sigunguCode (5자리) 사용
+ *   - 검색 = /api/uq-villages/by-bjd?bjd_code=... (다음 단계)
  *
  * ⚠️ 본 커밋은 입력 UI만. 실제 검색/결과/지도 렌더는 다음 단계.
  */
@@ -26,13 +26,11 @@ import {
   type UqPersistedState,
   type UqSearchParams,
 } from "@/lib/modes/modes/uq";
-import type { MapSummaryRow } from "@/lib/types";
+import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
 
 const MODE_ID = "uq";
 
 interface Props {
-  /** 지도 마커 원본 — 시도/시군구 드롭다운 derive 출처 */
-  totalRows: MapSummaryRow[];
   /** 검색 결과 변경 — 지도 마커/폴리곤 갱신용 (다음 단계) */
   onResults?: (items: unknown[]) => void;
   /** 결과 카드 클릭 — 지도 강조 + 마을 진입 (다음 단계) */
@@ -40,11 +38,11 @@ interface Props {
 }
 
 /** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 */
-function formatSigungu(addrSi: string | null, addrGu: string | null): string {
-  return [addrSi, addrGu].filter((s): s is string => !!s && s.trim() !== "").join(" ");
+function formatSigungu(si: string | null, gu: string): string {
+  return si && si.trim() !== "" ? `${si} ${gu}` : gu;
 }
 
-export default function UqVillageSearchPanel({ totalRows }: Props) {
+export default function UqVillageSearchPanel(_props: Props) {
   const persisted =
     typeof window !== "undefined"
       ? loadModeState<UqPersistedState>(MODE_ID)
@@ -54,38 +52,43 @@ export default function UqVillageSearchPanel({ totalRows }: Props) {
     persisted?.params ?? UQ_EMPTY_PARAMS,
   );
 
-  /** 시도 목록 — KEPCO 데이터 있는 시도만, 알파벳 순. */
+  /** 시군구 마스터 — 마운트 시 1회 lazy fetch. 이후 모듈 캐시 hit. */
+  const [allSigungus, setAllSigungus] = useState<SigunguEntry[]>([]);
+  const [regionsLoading, setRegionsLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSigungus()
+      .then((items) => {
+        if (alive) setAllSigungus(items);
+      })
+      .catch((e) => {
+        console.error("[UqVillageSearchPanel] 시군구 로드 실패", e);
+      })
+      .finally(() => {
+        if (alive) setRegionsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /** 시도 목록 — 한국 표준 17개. 입력 데이터 안정 정렬. */
   const sidos = useMemo(() => {
     const set = new Set<string>();
-    for (const r of totalRows) {
-      if (r.addr_do) set.add(r.addr_do);
-    }
-    return [...set].sort();
-  }, [totalRows]);
+    for (const r of allSigungus) set.add(r.sido);
+    return [...set];
+  }, [allSigungus]);
 
-  /**
-   * 선택된 시도의 시군구 목록 — { label: 한글, code: bjd 앞 5자리 } 짝.
-   * 같은 시군구 행이 여러 개라도 1번만 노출. 코드는 첫 행 기준 (모두 동일).
-   */
+  /** 선택 시도의 시군구 목록 — { label: 한글, code: 5자리 } */
   const sigungus = useMemo(() => {
     if (!params.sido) return [] as Array<{ label: string; code: string }>;
-    const map = new Map<string, string>(); // label -> code
-    for (const r of totalRows) {
-      if (r.addr_do !== params.sido) continue;
-      const label = formatSigungu(r.addr_si, r.addr_gu);
-      if (!label) continue;
-      if (!map.has(label)) {
-        // bjd_code 10자리 → 시군구 5자리
-        const code = (r.bjd_code || "").slice(0, 5);
-        if (/^\d{5}$/.test(code)) map.set(label, code);
-      }
-    }
-    return [...map.entries()]
-      .map(([label, code]) => ({ label, code }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [totalRows, params.sido]);
+    return allSigungus
+      .filter((r) => r.sido === params.sido)
+      .map((r) => ({ label: formatSigungu(r.si, r.gu), code: r.code }));
+  }, [allSigungus, params.sido]);
 
-  /** 시도 변경 시 — 선택했던 시군구가 새 시도에 없으면 초기화. */
+  /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구는 자동 초기화. */
   useEffect(() => {
     if (!params.sigungu) return;
     const stillValid = sigungus.some((s) => s.label === params.sigungu);
@@ -99,7 +102,6 @@ export default function UqVillageSearchPanel({ totalRows }: Props) {
   const runSearch = () => {
     if (!canSearch) return;
     // TODO(다음 단계): /api/uq-villages/by-bjd?bjd_code=${params.sigunguCode + "00000"}
-    //   호출 + 결과 카드 + 지도 폴리곤 렌더.
     saveModeState<UqPersistedState>(MODE_ID, { params, results: [] });
   };
 
@@ -116,6 +118,7 @@ export default function UqVillageSearchPanel({ totalRows }: Props) {
             <Field label="시도">
               <select
                 value={params.sido}
+                disabled={regionsLoading}
                 onChange={(e) =>
                   setParams((p) => ({
                     ...p,
@@ -124,9 +127,11 @@ export default function UqVillageSearchPanel({ totalRows }: Props) {
                     sigunguCode: "",
                   }))
                 }
-                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-emerald-500 focus:outline-none"
+                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-emerald-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
               >
-                <option value="">선택</option>
+                <option value="">
+                  {regionsLoading ? "불러오는 중…" : "선택"}
+                </option>
                 {sidos.map((sd) => (
                   <option key={sd} value={sd}>
                     {sd}
@@ -137,7 +142,7 @@ export default function UqVillageSearchPanel({ totalRows }: Props) {
             <Field label="시군구">
               <select
                 value={params.sigungu}
-                disabled={!params.sido}
+                disabled={!params.sido || regionsLoading}
                 onChange={(e) => {
                   const label = e.target.value;
                   const found = sigungus.find((s) => s.label === label);

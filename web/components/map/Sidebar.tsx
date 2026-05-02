@@ -341,7 +341,7 @@ export default function Sidebar({
           </div>
         ) : mode === "uq" ? (
           <div className="flex-1 min-h-0">
-            <UqVillageSearchPanel totalRows={totalRows} />
+            <UqVillageSearchPanel />
           </div>
         ) : (
         <>
