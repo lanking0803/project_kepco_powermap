@@ -17,38 +17,18 @@ import {
   type OurCategory,
 } from "@/lib/onbid/types";
 import { jibunFromPnu } from "@/lib/geo/pnu";
+import {
+  loadModeState,
+  saveModeState,
+  clearModeState,
+} from "@/lib/modes/storage";
+import {
+  ONBID_EMPTY_PARAMS,
+  type OnbidPersistedState,
+} from "@/lib/modes/modes/onbid";
 
-/**
- * sessionStorage 키 — 공매 토글 OFF/ON 시 검색 입력값/결과 유지용.
- * 새로고침 시는 휘발 OK (의뢰자 결정, 2026-05-02). 탭 닫으면 사라짐.
- */
-const SS_KEY = "onbid_search_state_v1";
-
-interface PersistedState {
-  params: OnbidSearchParams;
-  results: OnbidListItem[];
-  totalCountAll: number | null;
-}
-
-function loadPersisted(): PersistedState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(SS_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PersistedState;
-  } catch {
-    return null;
-  }
-}
-
-function savePersisted(state: PersistedState) {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(SS_KEY, JSON.stringify(state));
-  } catch {
-    // quota 초과 등 — 조용히 무시 (검색 동작 자체는 영향 없음)
-  }
-}
+/** 모드 ID — registry 에 등록된 안정 키. sessionStorage 키는 storage 헬퍼가 자동 처리. */
+const MODE_ID = "onbid";
 
 interface Props {
   /** 검색 결과 변경 시 호출 — 지도 마커 갱신용 */
@@ -56,23 +36,6 @@ interface Props {
   /** 매물 카드 클릭 시 호출 — 지도 강조 + ParcelInfoPanel (UI-6) */
   onItemClick?: (item: OnbidListItem) => void;
 }
-
-const EMPTY_PARAMS: OnbidSearchParams = {
-  sido: "",
-  sigungu: "",
-  emdong: "",
-  categories: [],
-  landMin: null,
-  landMax: null,
-  apslMin: null,
-  apslMax: null,
-  bidStart: null,
-  bidEnd: null,
-  usbdMin: null,
-  usbdMax: null,
-  pageNo: 1,
-  numOfRows: 1000, // 한 번에 1,000건. 더 많으면 안내로 좁히도록 유도.
-};
 
 /** 표시 한도 — 이 값 이상은 받지 않음 (캠코는 99,999 까지 가능하나 UX/렌더 부담) */
 const MAX_RESULT_LIMIT = 1000;
@@ -107,15 +70,15 @@ const ALL_CATEGORIES: OurCategory[] = [
 ];
 
 export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
-  // sessionStorage 복원 — 마운트 시 1회. 토글 OFF→ON 사이클에서 검색 상태 유지.
-  const persistedRef = useRef<PersistedState | null>(null);
+  // 모드 영속화 헬퍼로 마운트 시 1회 복원. 모드 전환 OFF→ON 사이클에서 검색 상태 유지.
+  const persistedRef = useRef<OnbidPersistedState | null>(null);
   if (persistedRef.current === null && typeof window !== "undefined") {
-    persistedRef.current = loadPersisted();
+    persistedRef.current = loadModeState<OnbidPersistedState>(MODE_ID);
   }
   const persisted = persistedRef.current;
 
   const [params, setParams] = useState<OnbidSearchParams>(
-    persisted?.params ?? EMPTY_PARAMS,
+    persisted?.params ?? ONBID_EMPTY_PARAMS,
   );
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [results, setResults] = useState<OnbidListItem[]>(
@@ -140,7 +103,11 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
 
   // params/results/totalCountAll 변경 시 sessionStorage 자동 저장
   useEffect(() => {
-    savePersisted({ params, results, totalCountAll });
+    saveModeState<OnbidPersistedState>(MODE_ID, {
+      params,
+      results,
+      totalCountAll,
+    });
   }, [params, results, totalCountAll]);
 
   /** /api/onbid/search 호출 — 캠코 실 데이터 */
@@ -190,19 +157,13 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
   };
 
   const reset = () => {
-    setParams(EMPTY_PARAMS);
+    setParams(ONBID_EMPTY_PARAMS);
     setResults([]);
     setError(null);
     setTotalCountAll(null);
     onResults?.([]);
     // 사용자가 명시적으로 "초기화" 누른 경우 — sessionStorage 도 비움
-    if (typeof window !== "undefined") {
-      try {
-        sessionStorage.removeItem(SS_KEY);
-      } catch {
-        /* ignore */
-      }
-    }
+    clearModeState(MODE_ID);
   };
 
   const toggleCategory = (cat: OurCategory) => {

@@ -32,7 +32,7 @@ export default function ModeSelector({ mode, onChange, className = "" }: Props) 
       value={mode}
       onChange={(e) => onChange(e.target.value as DataModeId)}
       className={
-        "w-full px-3 py-2 rounded-md text-sm font-semibold border-2 outline-none focus:ring-2 focus:ring-offset-1 transition-colors " +
+        "w-full px-1.5 py-0.5 rounded text-[11px] font-semibold leading-tight border outline-none focus:ring-1 transition-colors " +
         `${current.colors.borderClass} ${current.colors.bgClass} ${current.colors.textClass} ` +
         className
       }

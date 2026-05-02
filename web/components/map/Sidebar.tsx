@@ -278,7 +278,7 @@ export default function Sidebar({
               배전선로 여유용량 지도
             </h1>
             {onModeChange && (
-              <div className="shrink-0 w-44">
+              <div className="shrink-0 w-24">
                 <ModeSelector mode={mode} onChange={onModeChange} />
               </div>
             )}

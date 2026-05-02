@@ -13,7 +13,7 @@
  * Tailwind v4 oxide 스캐너는 정적 문자열만 인식한다. 본 파일에서
  * 클래스 문자열이 직접 등장하므로 별도 safelist 불필요.
  */
-import type { ComponentType } from "react";
+import type { DataModePanelComponent } from "./types";
 
 /* ────────────────────────────────────────────────────────────────────
  *  타입
@@ -45,14 +45,6 @@ export interface ModeColorTokens {
   polygonOpacity?: number;
 }
 
-/** 검색 패널이 부모(Sidebar/MapClient)와 주고받는 공통 인터페이스. */
-export interface DataModePanelProps {
-  /** 검색 결과 변경 — 지도 마커 갱신용 (모드별 item 타입은 unknown, 부모에서 분기) */
-  onResults?: (items: unknown[]) => void;
-  /** 결과 카드 클릭 — 지도 강조 + 상세 패널 진입 */
-  onItemClick?: (item: unknown) => void;
-}
-
 export interface DataModeConfig {
   id: DataModeId;
   /** 드롭다운/카드/툴팁 라벨 */
@@ -66,7 +58,7 @@ export interface DataModeConfig {
   /** 미개발 모드 옵션에 띄울 라벨 (예: "곧 출시", "Phase 3 예정") */
   comingSoonLabel?: string;
   /** 사이드바 검색 패널. default 는 null = 기존 사이드바 검색 UI 그대로. */
-  searchPanel: ComponentType<DataModePanelProps> | null;
+  searchPanel: DataModePanelComponent | null;
   /** sessionStorage 키 — 모드별 검색 상태 보존 (기존 키와 호환) */
   sessionKey: string;
 }
