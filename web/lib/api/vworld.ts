@@ -143,6 +143,9 @@ export async function fetchVworldAdminPolygonByBjdCode(
  * /api/uq-villages/by-bjd — 자연취락지구 폴리곤.
  * 입력은 bjd_code 10자리지만 응답·캐시는 시군구(앞 5자리) 단위.
  * 같은 시군구의 다른 마을을 클릭해도 캐시 hit (외부 호출 0).
+ *
+ * ⚠️ 마을 클릭 자동 표시 등 단일 sgg 호출 전용. 검색 모드는
+ * fetchVworldUqVillagesByQuery 를 사용 (일반시 일반구 시 단위 합치기).
  */
 export async function fetchVworldUqVillagesByBjdCode(
   bjdCode: string,
@@ -162,6 +165,40 @@ export async function fetchVworldUqVillagesByBjdCode(
   const villages = data.villages ?? [];
   uqVillagesBySggCache.set(sggKey, villages);
   return villages;
+}
+
+/**
+ * 검색 모드용 — 사용자가 선택한 시군구 5자리에 대해
+ * VWorld 등록 단위 함정을 우회하기 위해 1~2개 sgg 코드를 모두 호출하고 합친다.
+ *
+ * 일반시 일반구(예: 41135 분당구) 검색 시 시 단위(41130) + 구 단위(41135)
+ * 모두 호출해서 mnum dedup. 일반 군/광역시 자치구는 단일 호출.
+ *
+ * 캐시 hit 시 외부 호출 0.
+ */
+export async function fetchVworldUqVillagesByQuery(
+  sggCodes: string[],
+  options?: FetchOptions,
+): Promise<UqVillage[]> {
+  if (sggCodes.length === 0) return [];
+  const results = await Promise.all(
+    sggCodes.map((sgg) =>
+      fetchVworldUqVillagesByBjdCode(`${sgg}00000`, options),
+    ),
+  );
+  // mnum 기반 dedup — 시 단위 호출과 구 단위 호출에 같은 폴리곤이 중복 등록될
+  // 가능성은 낮지만 안전장치.
+  const seen = new Set<string>();
+  const merged: UqVillage[] = [];
+  for (const list of results) {
+    for (const v of list) {
+      const key = v.mnum || `${v.center.lat},${v.center.lng}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(v);
+    }
+  }
+  return merged;
 }
 
 /** VWorld 캐시 초기화 — 필지/폴리곤은 거의 안 변하므로 보통 호출 X */

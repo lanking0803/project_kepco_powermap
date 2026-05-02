@@ -24,7 +24,8 @@ import {
   type UqSearchParams,
 } from "@/lib/modes/modes/uq";
 import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
-import { fetchVworldUqVillagesByBjdCode } from "@/lib/api/vworld";
+import { fetchVworldUqVillagesByQuery } from "@/lib/api/vworld";
+import { getUqQuerySggCodes } from "@/lib/uq/sgg-strategy";
 import {
   matchUqWithNearestVillages,
   type UqVillageWithMatches,
@@ -118,9 +119,11 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
   const canSearch = params.sigunguCode !== "" && !searching;
 
   /**
-   * /api/uq-villages/by-bjd 호출 + 가까운 마을 매칭.
-   * sigunguCode 5자리 → bjd_code 10자리 (뒤 5자리는 "00000").
-   * 결과는 면적 큰 순 정렬 + 매칭 정보 부착 + sessionStorage 저장.
+   * 검색 — VWorld 등록 단위 함정(일반시 일반구) 우회를 위해 sgg-strategy 가
+   * 결정한 1~2개 코드 모두 호출하고 합친다. 자연취락지구만 필터(서버 lib).
+   *
+   * 매칭은 사용자가 선택한 시군구 5자리(sigunguCode) prefix 마을만 후보 →
+   * 일반시 일반구 검색 시 시 단위 응답에서 자동으로 그 구 영역만 노출됨.
    */
   const runSearch = async () => {
     if (!canSearch) return;
@@ -128,8 +131,8 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
     setSearchError(null);
     setHasSearched(true);
     try {
-      const bjdCode = `${params.sigunguCode}00000`;
-      const items = await fetchVworldUqVillagesByBjdCode(bjdCode);
+      const queryCodes = getUqQuerySggCodes(params.sigunguCode);
+      const items = await fetchVworldUqVillagesByQuery(queryCodes);
       const sorted = [...items].sort((a, b) => b.area_m2 - a.area_m2);
       const matched = matchUqWithNearestVillages(
         sorted,

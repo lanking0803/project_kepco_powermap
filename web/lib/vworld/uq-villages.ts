@@ -120,6 +120,13 @@ export async function getUqVillagesByBjd(
     const result: UqVillage[] = [];
     for (const f of features) {
       const props = f.properties || {};
+
+      // ⚠️ uname 필터 — VWorld lt_c_uq128 응답에 자연취락지구 + 집단취락지구
+      // 혼재 (검증 2026-05-02). 영업 가치는 자연취락지구만 (자연/관리/농림지역의
+      // 마을 정비, 건폐율 60%). 집단취락지구는 그린벨트 안 마을이라 신축 제한
+      // 강해 태양광/창고 영업 무관.
+      if (props.uname !== "자연취락지구") continue;
+
       // 외곽링 풀기 (Polygon → 1개, MultiPolygon → N개)
       const rings: Position[][] = [];
       if (f.geometry.type === "Polygon") {
@@ -138,6 +145,8 @@ export async function getUqVillagesByBjd(
         mnum: props.mnum ?? "",
         uname: props.uname ?? "자연취락지구",
         sido_name: props.sido_name ?? "",
+        // ⚠️ sigg_name 텍스트는 VWorld 측 라벨 부정확 사례 있음 (예산군→"부여군").
+        // 신뢰는 std_sggcd 코드만. UI 라벨용으로만 사용.
         sigg_name: props.sigg_name ?? "",
         dyear: props.dyear ?? null,
         polygon: rings,
