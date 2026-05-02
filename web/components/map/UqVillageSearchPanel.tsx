@@ -38,8 +38,16 @@ const MODE_ID = "uq";
 interface Props {
   /** 마을 후보 풀 — 시군구 prefix 필터 후 KNN 매칭에 사용 */
   totalRows: MapSummaryRow[];
-  /** 카드 클릭 시 호출 — MapClient 가 마을 마커 클릭 핸들러로 위임 */
+  /** 칩(매칭 마을명) 클릭 — MapClient 가 마을 마커 클릭 핸들러로 위임 */
   onItemClick?: (row: MapSummaryRow) => void;
+  /**
+   * 카드 본체 클릭 — 그 취락지구 1개 폴리곤만 시각 강조 + 카메라 이동.
+   * 마을 진입 X. 영업이 폴리곤 자체를 보고 판단하고 싶을 때.
+   */
+  onPolygonFocus?: (village: {
+    polygon: number[][][];
+    center: { lat: number; lng: number };
+  }) => void;
 }
 
 /** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 */
@@ -47,7 +55,11 @@ function formatSigungu(si: string | null, gu: string): string {
   return si && si.trim() !== "" ? `${si} ${gu}` : gu;
 }
 
-export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) {
+export default function UqVillageSearchPanel({
+  totalRows,
+  onItemClick,
+  onPolygonFocus,
+}: Props) {
   const persisted =
     typeof window !== "undefined"
       ? loadModeState<UqPersistedState>(MODE_ID)
@@ -277,6 +289,7 @@ export default function UqVillageSearchPanel({ totalRows, onItemClick }: Props) 
             index={i + 1}
             village={v}
             onItemClick={onItemClick}
+            onPolygonFocus={onPolygonFocus}
           />
         ))}
       </div>
@@ -290,33 +303,37 @@ interface UqResultCardProps {
   /** 1-based 표시 번호 (지도 ↔ 카드 매칭용) */
   index: number;
   village: UqVillageWithMatches;
-  /** 카드 클릭(또는 매칭 마을 라벨 클릭) 시 — MapClient 가 마을 진입 처리 */
+  /** 매칭 마을 칩 클릭 — 마을 진입 흐름 (MapClient 가 처리) */
   onItemClick?: (row: MapSummaryRow) => void;
+  /** 카드 본체 클릭 — 그 취락지구 폴리곤 1개만 시각 강조 + 카메라 이동 */
+  onPolygonFocus?: (village: {
+    polygon: number[][][];
+    center: { lat: number; lng: number };
+  }) => void;
 }
 
-function UqResultCard({ index, village, onItemClick }: UqResultCardProps) {
+function UqResultCard({
+  index,
+  village,
+  onItemClick,
+  onPolygonFocus,
+}: UqResultCardProps) {
   const pyeong = Math.round(village.area_m2 / PYEONG_PER_M2);
   // matches 가 누락된 옛 sessionStorage 데이터에 대비해 방어
   const matches = village.matches ?? [];
-  const primary = matches[0]; // 가장 가까운 마을 (없을 수 있음)
 
   const handleCardClick = () => {
-    if (primary) onItemClick?.(primary.row);
+    onPolygonFocus?.({ polygon: village.polygon, center: village.center });
   };
 
   return (
     <div
-      className={
-        "border rounded-md px-2.5 py-2 transition-colors " +
-        (primary
-          ? "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 cursor-pointer"
-          : "border-gray-200 bg-gray-50/60 cursor-default")
-      }
+      className="border rounded-md px-2.5 py-2 transition-colors border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 cursor-pointer"
       onClick={handleCardClick}
-      role={primary ? "button" : undefined}
-      tabIndex={primary ? 0 : undefined}
+      role="button"
+      tabIndex={0}
       onKeyDown={(e) => {
-        if (primary && (e.key === "Enter" || e.key === " ")) {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           handleCardClick();
         }
@@ -345,7 +362,9 @@ function UqResultCard({ index, village, onItemClick }: UqResultCardProps) {
           ))}
         </div>
       ) : (
-        <p className="mt-1 text-[11px] text-gray-400">위치 미매칭</p>
+        <p className="mt-1 text-[11px] text-gray-500">
+          근처 마을 데이터 없음 — 지도에서 위치 확인 필요
+        </p>
       )}
 
       <div className="mt-1 flex items-center justify-between text-[11px] text-gray-600 tabular-nums">

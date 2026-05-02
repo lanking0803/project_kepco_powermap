@@ -52,8 +52,6 @@ import {
   fetchVworldUqVillagesByBjdCode,
 } from "@/lib/api/vworld";
 import type { UqVillage } from "@/lib/vworld/uq-villages";
-import booleanIntersects from "@turf/boolean-intersects";
-import type { Feature, MultiPolygon } from "geojson";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import {
   emptyFilters,
@@ -67,23 +65,6 @@ import {
 interface Props {
   isAdmin: boolean;
   email: string;
-}
-
-/**
- * 외곽링 배열 → Turf 가 받는 GeoJSON Feature<MultiPolygon>.
- * 우리 폴리곤 표준이 [[[lng,lat], ...], ...] 형태라 한 번 감싸기만 하면 됨.
- */
-function ringsToMultiPolygonFeature(
-  rings: number[][][],
-): Feature<MultiPolygon> {
-  return {
-    type: "Feature",
-    properties: {},
-    geometry: {
-      type: "MultiPolygon",
-      coordinates: rings.map((ring) => [ring]),
-    },
-  };
 }
 
 export default function MapClient({ isAdmin, email }: Props) {
@@ -305,7 +286,8 @@ export default function MapClient({ isAdmin, email }: Props) {
    *
    * 흐름:
    *   1) 행정구역 폴리곤 + 시군구 자연취락지구 병렬 fetch (atomic endpoints)
-   *   2) Turf.booleanIntersects 로 마을 안에 있는 취락지구만 필터 (시군구 통째에서 솎아냄)
+   *   2) 시군구 응답 그대로 표시 (마을 안 필터링 X — 의뢰자 결정 2026-05-02)
+   *      → 마을 경계 걸친 취락지구도 빠짐없이 시각 확인 가능
    *   3) 두 state 함께 set
    * 실패는 둘 다 시각 보조라 조용히 (음영만 안 그려짐).
    */
@@ -324,24 +306,14 @@ export default function MapClient({ isAdmin, email }: Props) {
 
         const uqList: UqVillage[] =
           uqRes.status === "fulfilled" ? uqRes.value : [];
-        if (!villagePoly || uqList.length === 0) {
-          setUqVillagePolygons([]);
-          return;
-        }
-        const villageFeat = ringsToMultiPolygonFeature(villagePoly);
-        const matched = uqList
-          .filter((uq) => {
-            const uqFeat = ringsToMultiPolygonFeature(uq.polygon);
-            return booleanIntersects(villageFeat, uqFeat);
-          })
-          .map((uq) => uq.polygon);
-        setUqVillagePolygons(matched);
+        setUqVillagePolygons(uqList.map((uq) => uq.polygon));
       } catch {
         // AbortError 등 — state 는 그대로 두고 조용히 빠져나감
       }
     },
     [],
   );
+
 
   const clearPolygons = useCallback(() => {
     setVillagePolygon(null);
@@ -583,6 +555,20 @@ export default function MapClient({ isAdmin, email }: Props) {
     moveMapToRef.current = moveMapTo;
   }, [moveMapTo]);
 
+  /**
+   * 취락지구 카드 본체 클릭 — 폴리곤 1개로 카메라 이동 + 그 폴리곤만 강조.
+   * 마을 폴리곤은 표시 X (영업 의도 = 그 취락지구 1개 시각 확인).
+   * 같은 state 를 마을 흐름과 공유 — 가장 마지막 액션이 화면 결정.
+   */
+  const handleUqPolygonFocus = useCallback(
+    (village: { polygon: number[][][]; center: { lat: number; lng: number } }) => {
+      moveMapTo(village.center.lat, village.center.lng);
+      setVillagePolygon(null);
+      setUqVillagePolygons([village.polygon]);
+    },
+    [moveMapTo],
+  );
+
   // 검색 결과 클릭 — ri (마을) → 마을 흐름, ji (지번) → 지번 흐름 으로 분기
   const handleSearchResultPick = useCallback(
     async (pick: SearchPick) => {
@@ -769,6 +755,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
         onUqVillagePick={handleTopRankingPick}
+        onUqPolygonFocus={handleUqPolygonFocus}
       />
 
       <main className="flex-1 flex min-w-0">

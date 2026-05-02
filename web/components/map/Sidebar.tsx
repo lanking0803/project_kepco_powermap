@@ -13,6 +13,7 @@ import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
 import UqVillageSearchPanel from "./UqVillageSearchPanel";
+import AuctionSearchPanel from "./AuctionSearchPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import ModeSelector from "./ModeSelector";
 import { getDataMode, type DataModeId } from "@/lib/modes/registry";
@@ -52,8 +53,13 @@ interface Props {
   onOnbidResults?: (items: OnbidListItem[]) => void;
   /** 공매 매물 카드 클릭 콜백 */
   onOnbidItemClick?: (item: OnbidListItem) => void;
-  /** 자연취락지구 카드 클릭 — 매칭된 마을(row)로 진입 */
+  /** 자연취락지구 — 칩(매칭 마을명) 클릭. 마을 진입 흐름. */
   onUqVillagePick?: (row: MapSummaryRow) => void;
+  /** 자연취락지구 — 카드 본체 클릭. 그 폴리곤 1개만 시각 강조. */
+  onUqPolygonFocus?: (village: {
+    polygon: number[][][];
+    center: { lat: number; lng: number };
+  }) => void;
 }
 
 // ── 검색 히스토리 ──
@@ -138,6 +144,7 @@ export default function Sidebar({
   onOnbidResults,
   onOnbidItemClick,
   onUqVillagePick,
+  onUqPolygonFocus,
 }: Props) {
   /** 현재 모드 설정 — 색/라벨/패널 분기 기준 (단일 진실 공급원 = registry) */
   const modeCfg = getDataMode(mode);
@@ -347,7 +354,12 @@ export default function Sidebar({
             <UqVillageSearchPanel
               totalRows={totalRows}
               onItemClick={onUqVillagePick}
+              onPolygonFocus={onUqPolygonFocus}
             />
+          </div>
+        ) : mode === "auction" ? (
+          <div className="flex-1 min-h-0">
+            <AuctionSearchPanel />
           </div>
         ) : (
         <>
