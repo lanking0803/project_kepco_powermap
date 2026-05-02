@@ -418,6 +418,69 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/auction/by-pnu",
+      "id": "auction-by-pnu",
+      "filePath": "app/api/auction/by-pnu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "Hyphen 경매다 /au0147001252 (진행물건검색) + bjd_master 역조회. 면 단위 sweep ≤ 20페이지 cap.",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4157034033103470000",
+                "description": "PNU 19자리 (지번 코드). 검증 케이스: 김포시 대곶면 대명리 347"
+              }
+            ],
+            "outputSchema": "{ ok: true, pnu, apiStatus, errCd, errMsg, items: AuctionListItem[], fallback, village_empty, truncated, fetchedAt }",
+            "externalDeps": [
+              "hyphen",
+              "supabase (bjd_master)"
+            ],
+            "notes": "면(里) 단위까지만 호출 (dong=pnu[0:10]). 최대 20페이지(= 200건) cap. 응답에 종결 매물(매각/취하 등) 도 포함됨 — UI 에서 진행상태 배지로 구분. Hyphen dong 필터는 실제로 '면' 단위 매칭 → 응답에 다른 리도 섞여 옴 → PNU 매칭으로 정확 필터. apiStatus=auth_failed 면 의뢰자 비즈머니 충전 또는 결제 만료 — UI 가 배너로 안내."
+          },
+          "metaLine": 45,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/auction/detail",
+      "id": "auction-detail",
+      "filePath": "app/api/auction/detail/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "Hyphen 경매다 /au0147001254 (경매사건상세보기)",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "productId",
+                "type": "string",
+                "required": true,
+                "sample": "1054811",
+                "description": "경매번호 (= 진행물건검색 응답의 '경매번호' 필드. 사건번호코드 X)"
+              }
+            ],
+            "outputSchema": "{ ok: true, productId, apiStatus, errCd, errMsg, detail: AuctionRawDetailItem | null, fetchedAt }",
+            "externalDeps": [
+              "hyphen"
+            ],
+            "notes": "사건번호코드와 product_id 는 다름 — 검색 응답의 '경매번호' 필드를 productId 로 전달해야 함. 응답에 이미지/감정평가서/임차인/등기부/명도비/예상배당/인근물건 등 45개 필드 포함."
+          },
+          "metaLine": 23,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/buildings/by-pnu",
       "id": "buildings-by-pnu",
       "filePath": "app/api/buildings/by-pnu/route.ts",
@@ -1224,6 +1287,38 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "id": "hyphen",
+      "name": "Hyphen — 부동산 법원경매 정보(경매다)",
+      "category": "hyphen",
+      "consoleUrl": "https://hyphen.im/mypage/my-bizmoney",
+      "envKeys": [
+        "HYPHEN_HKEY",
+        "HYPHEN_USER_ID"
+      ],
+      "expiry": "2026-06-02",
+      "dailyLimit": "TR슬림 월 10만원 정액 + 호출당 종량 (호출 단가 비공개. 비즈머니 110,000원 충전 시 첫 결제분 포함)",
+      "issueGuide": "1. https://hyphen.im 회원가입 (의뢰자 계정 anhong7749 사용)\n2. 마이페이지 → 비즈머니 충전 (TR슬림 1개월 = 10만원)\n3. API 마켓 → \"부동산 법원경매 정보(경매다)\" 상품 선택 → 신청\n4. 자동승인 → \"API 마켓 > 상품 상세\" 에서 Hkey 발급\n5. 환경변수 등록:\n   - HYPHEN_HKEY = (Hkey 값)\n   - HYPHEN_USER_ID = (회원 ID, 예: anhong7749)\n   - web/.env.local + Vercel 환경변수 둘 다 등록\n6. 결제 만료 → API 자동 차단 (errCd=HDM006). UI 가 사용자에게 결제 안내 배너 표시.\n   → 의뢰자가 직접 결제 갱신 필요. SECRETS.local.md 의 expiry 갱신.",
+      "usageExample": "# 진행물건검색 (면 단위 sweep — 우리 by-pnu 흐름의 기반)\nPOST https://api.hyphen.im/au0147001252\nHeaders:\n  Content-Type: application/json\n  Hkey: ${HYPHEN_HKEY}\n  User-Id: ${HYPHEN_USER_ID}\n  Hyphen-Gustation: Y\nBody:\n  {\n    \"sido\": \"41\",          # PNU 앞 2자리 (행안부 표준)\n    \"gugun\": \"41570\",      # PNU 앞 5자리\n    \"dong\": \"4157034033\",  # PNU 앞 10자리 (실제로는 면 단위 매칭)\n    \"page\": \"1\"\n  }\n\n# 사건상세보기 (단건 — product_id = 응답의 경매번호)\nPOST https://api.hyphen.im/au0147001254\nBody: { \"product_id\": \"1054811\" }",
+      "notes": "- ⚠️ **유료 API** — 의뢰자가 매월 직접 비즈머니 충전 (개발자 청구 X 합의)\n- ⚠️ **결제 만료 시 errCd=HDM006** (\"UserId 또는 HKey가 존재하지 않습니다\") 응답.\n  UI 가 `apiStatus=\"auth_failed\"` 배너로 의뢰자에게 결제 안내.\n- ⚠️ **명세서 응답 필드명 부정확**: 명세는 \"get○○\" 인데 실제 응답은 \"○○\" (get 접두사 없음).\n  실호출 검증 결과 기준으로 코드 작성됨 (lib/hyphen/types.ts).\n- ⚠️ **사건번호코드 ≠ product_id** — 상세 호출엔 응답의 `경매번호` 사용 (사건번호코드 X).\n- 검증 결과: docs/api_specs/하이픈_부동산법원경매정보/_test_v*.json (17건)\n- 페이지당 10건 고정 → 면 단위 sweep 시 totalpage 만큼 병렬 호출 (≤ 20페이지 cap)\n- 응답에 종결 매물(매각/취하)도 섞여 옴 — UI 에서 진행상태 배지로 구분\n- dong 필터는 행안부 리(里) 코드 입력해도 실제로는 \"면(面) 단위\" 매칭",
+      "sampleRequest": {
+        "method": "POST",
+        "url": "https://api.hyphen.im/au0147001246",
+        "description": "시도코드조회 — 가벼운 헬스체크용 (body 없음). errCd=200 정상 / HDM006 인증실패",
+        "headers": {
+          "Content-Type": "application/json",
+          "Hkey": "{HYPHEN_HKEY}",
+          "User-Id": "{HYPHEN_USER_ID}",
+          "Hyphen-Gustation": "Y"
+        }
+      },
+      "filePath": "app/admin/api-manager/_lib/services/hyphen.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "auction-by-pnu",
+        "auction-detail"
+      ]
+    },
+    {
       "id": "kakao",
       "name": "Kakao Developers",
       "category": "kakao",
@@ -1602,6 +1697,7 @@ export const MANIFEST: GeneratedManifest = {
   "warnings": [
     "/api/admin/external-test POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
     "/api/admin/health-check-all POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
+    "/api/auction/by-pnu GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
     "/api/onbid/by-pnu GET: externalDeps \"data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)\" 가 _lib/services/ 에 정의 안 됨",
     "/api/onbid/by-pnu GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
     "/api/onbid/by-pnu GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",

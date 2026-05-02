@@ -57,11 +57,17 @@ type: project
 - 호출 테스트: [crawler/test_onbid.py](../../crawler/test_onbid.py)
 - 현재 압류재산만 30,178건 진행 중
 
-### 경매 ✅ API 키 발급 완료 — 개발 착수 가능 (2026-05-02)
+### 경매 ✅ Phase 1+2 개발 완료 — 테스트모드 작동 확인 (2026-05-02)
 - 2026-04-25: 무상 서비스로 추가 합의됨 (개발만, 청구 X)
 - 2026-04-26: Hyphen API 비용 (월 10만원) 부담 거부 → 1차 보류
 - 2026-05-01: 의뢰자가 시연본 보고 "경매도 같이 진행해야할 것 같다" 재개 합의
-- **2026-05-02**: 의뢰자가 Hyphen 가입 + API 키 발급 완료 + 비즈머니 11만 충전 → **개발 착수 가능**
+- **2026-05-02 오전**: 의뢰자가 Hyphen 가입 + API 키 발급 완료 + 비즈머니 11만 충전
+- **2026-05-02 오후**: 백엔드 검증(11개 API) → Phase 1 백엔드 + Phase 2 UI 개발 완료
+  - lib/hyphen/ 5파일 + api/auction/{by-pnu,detail}/route.ts + components/map/auction/ 4파일
+  - 공매 OnbidTab 옆 [경매] 신규 탭 (별도 컴포넌트, 의뢰자 결정)
+  - 30분 캐시 + 20페이지 cap + 면 단위 sweep
+  - apiStatus 배너 (auth_failed/no_permission/rate_limited/unavailable)
+  - 관리자페이지 manifest 자동 등록 (services/hyphen.ts)
   - 계정: anhong7749 (의뢰자 본인), 키 = [docs/SECRETS.local.md](../../docs/SECRETS.local.md) Hyphen 섹션
   - 옥션원 ASP 검토 (5/1) 는 의뢰자가 Hyphen 으로 결정 → 옥션원 폐기
   - 무상 서비스 (이전 합의 그대로 — 개발 청구 X, 의뢰자가 API 비용만 부담)

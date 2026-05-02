@@ -62,9 +62,10 @@ import { FacilityCard } from "./FacilityCard";
 import SolarSection from "./SolarSection";
 import type { SolarMarker } from "@/lib/api/solar-permits";
 import OnbidTab from "./onbid/OnbidTab";
+import AuctionTab from "./auction/AuctionTab";
 import RegulationsCard from "@/components/quote/RegulationsCard";
 
-type TabKey = "parcel" | "electric" | "onbid" | "price" | "location" | "regulation";
+type TabKey = "parcel" | "electric" | "onbid" | "auction" | "price" | "location" | "regulation";
 
 interface Props {
   /**
@@ -137,6 +138,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "parcel", label: "필지" },
   { key: "electric", label: "전기" },
   { key: "onbid", label: "공매" },
+  { key: "auction", label: "경매" },
   { key: "price", label: "가격" },
   { key: "location", label: "입지" },
   { key: "regulation", label: "규제" },
@@ -320,6 +322,7 @@ export default function ParcelInfoPanel({
             />
           )}
           {tab === "onbid" && <OnbidTab pnu={pnu} onPnuChange={onPnuChange} />}
+          {tab === "auction" && <AuctionTab pnu={pnu} onPnuChange={onPnuChange} />}
           {tab === "price" && (
             <PriceTab
               jibun={jibun}

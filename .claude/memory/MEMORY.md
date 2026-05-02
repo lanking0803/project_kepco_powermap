@@ -16,7 +16,8 @@
 - [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 협상 맥락 + 진행 상태. 가격표 docs/견적_1차2차.md
 - 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
 - 🚀 [2차 착수 인덱스](project_phase2_kickoff.md) ⭐ — 700만 5개 항목 작업 분할 + 1순위=공매 통합(350만)
-- 🏛 [공매·경매 통합 의도](project_auction_intent.md) ⭐ — "저가 매입 기회 발굴". 경매 Hyphen API 키 발급 완료(2026-05-02) — 무상 서비스로 개발 착수 가능
+- 🏛 [공매·경매 통합 의도](project_auction_intent.md) ⭐ — "저가 매입 기회 발굴". 경매 Phase 1+2 개발 완료(2026-05-02). 테스트모드 시연 단계
+- 💰 [Hyphen 비용 구조 + 운영전환](project_hyphen_billing.md) ⭐ — 멤버십 11만/월 + 호출당 종량(단가 미공시). 의뢰자: 테스트 후 결제. HYPHEN_OPERATION_MODE=Y 토글
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
 - 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)
 - [3차 개발 — 태양광설치여부+이격거리](project_phase3_proposal.md) ⭐ — 전국태양광허가 API + 법제처 조례 API + 도로현황 SHP 연계 가능 검증 완료. 400~550만/10~12주. 의뢰자 확답 대기 (2026-04-17)

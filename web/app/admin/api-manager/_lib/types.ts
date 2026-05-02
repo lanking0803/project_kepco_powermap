@@ -84,7 +84,8 @@ export interface ExternalServiceMeta {
     | "supabase"
     | "github"
     | "vercel"
-    | "kepco";
+    | "kepco"
+    | "hyphen";
   consoleUrl: string;
   /** process.env 의 키 이름들 (서버 컴포넌트가 읽어 표시) */
   envKeys?: string[];
