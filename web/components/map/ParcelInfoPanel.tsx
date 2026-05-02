@@ -43,9 +43,11 @@ import {
 import {
   computeLandStats,
   computeNrgStats,
+  computeSimilarAreaMedian,
   type CategoryStats,
-  type MonthlyStat,
 } from "@/lib/rtms/trade-stats";
+import PriceCard from "./parcel/PriceCard";
+import PriceTrendChart from "./parcel/PriceTrendChart";
 import {
   classifyPurpose,
   classifyRoof,
@@ -1107,27 +1109,22 @@ function ElectricTab({
 }
 
 /**
- * 가격탭 — 영업담당자 시점.
+ * 가격 탭 — 영업담당자 시점, 공매탭 카드 패턴 미러 (파랑/회색 분리).
  *
- * 정보 흐름:
- *   1. 공시지가 + 추정가 (parcel API 에서 받은 값)
- *   2. TL;DR — 시군구 단위 최근 N개월 거래 건수 + 평당가 중앙값 + 추세 ▲▼
- *   3. Sparkline — 월별 거래 건수 (시장 활성도)
- *   4. 같은 지번 직접 거래 (있을 때만, 빨강 강조 — 협상 근거)
- *   5. 지목별 칩 — 클릭한 지번 지목 자동 강조 + 필터
- *   6. 거래 카드 리스트 — 면적 유사(±50%) ⭐ 표시 + 더보기
+ * 흐름 (위 → 아래):
+ *   1. 토지/건물 KindTabs        (영업 가장 먼저 선택)
+ *   2. 🔍 필터 (지역/지목·용도)   — 좁히면 모든 카드 동기 갱신
+ *   3. 💰 시세 요약 KPI           — 평당가/YoY/추정매매가/건수
+ *   4. 📈 가격·거래량 추이 차트    — 라인+IQR+막대 통합
+ *   5. 📊 시세 비교 표             — 시군구 / 유사면적⭐ / 최저~최고
+ *   6. 📋 거래 사례 리스트         — 직접거래 빨강 + 카드 + 더보기
+ *   7. ⚠️ 공시지가 (회색)          — 협상 floor 참고용 (보조)
  *
  * 데이터 흐름:
  *   - 탭 활성 시점 lazy fetch (1 atomic = 클라이언트→서버 1회)
- *   - 서버는 12회 fan-out (월별), 부분 실패 허용 (월별 catch)
- *   - 0건/일부 월 0건 모두 안전 (UI 폴백)
- */
-/**
- * 가격탭 — 토지/건물 sub-tab 분리 (영업담당자 시점).
- *
- * 정보 단위 시각 구분:
- *   📍 이 지번 단위  — 공시지가/추정가 (parcel/by-pnu, VWorld)
- *   📊 시군구 단위    — 실거래가 시세 (transactions/by-bjd, RTMS)
+ *   - 서버는 월별 fan-out, 부분 실패 허용
+ *   - 필터 변경 시 클라에서 즉시 stats 재계산 (추가 API 호출 0)
+ *   - 0건/부분 월 0건 모두 안전 (EmptyTrades 폴백)
  *
  * 토지(land)  default 자동 fetch — 시군구 평당가 시세 (부지 매수 영업)
  * 건물(nrg)   사용자 클릭 시 lazy fetch — 빌딩/오피스 (집합건축물 = 정확 지번)
@@ -1177,38 +1174,31 @@ function PriceTab({
   };
 
   return (
-    <div className="space-y-3">
-      {/* 📍 이 지번 단위 정보 */}
-      {geometry && <JibunInfoSection geometry={geometry} />}
+    <div className="space-y-2.5">
+      {/* 토지/건물 탭 — 가격 탭 진입 시 가장 먼저 보이는 분기 */}
+      <KindTabs kind={kind} onChange={setKind} />
 
-      {/* 📊 시군구 단위 시세 */}
-      <div className="border-t border-gray-200 pt-3 space-y-3">
-        <SectionHeader
-          icon="📊"
-          title="시군구 단위 시세"
-          subtitle={`${jibun.sig_nm} 전체 거래 비교`}
+      {kind === "land" ? (
+        <LandSection
+          key={`land:${jibun.pnu}`}
+          pnu={jibun.pnu}
+          jibun={jibun}
+          geometry={geometry}
+          clickedJibun={clickedJibun}
+          shared={sharedFilter}
         />
-        <KindTabs kind={kind} onChange={setKind} />
+      ) : (
+        <NrgSection
+          key={`nrg:${jibun.pnu}`}
+          pnu={jibun.pnu}
+          jibun={jibun}
+          clickedJibun={clickedJibun}
+          shared={sharedFilter}
+        />
+      )}
 
-        {kind === "land" ? (
-          <LandSection
-            key={`land:${jibun.pnu}`}
-            pnu={jibun.pnu}
-            jibun={jibun}
-            geometry={geometry}
-            clickedJibun={clickedJibun}
-            shared={sharedFilter}
-          />
-        ) : (
-          <NrgSection
-            key={`nrg:${jibun.pnu}`}
-            pnu={jibun.pnu}
-            jibun={jibun}
-            clickedJibun={clickedJibun}
-            shared={sharedFilter}
-          />
-        )}
-      </div>
+      {/* 공시지가 — 토지/건물 공통 보조 정보. 회색 카드로 시각 분리 (맨 아래) */}
+      {geometry && <JibunInfoSection geometry={geometry} />}
     </div>
   );
 }
@@ -1220,26 +1210,6 @@ interface SharedRegionFilter {
   selectedRi: string | null;
   onEmdChange: (v: string | null) => void;
   onRiChange: (v: string | null) => void;
-}
-
-function SectionHeader({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: string;
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="flex items-baseline gap-1.5">
-      <span className="text-sm">{icon}</span>
-      <span className="text-sm font-bold text-gray-900">{title}</span>
-      {subtitle && (
-        <span className="text-[11px] text-gray-500 truncate">— {subtitle}</span>
-      )}
-    </div>
-  );
 }
 
 function KindTabs({
@@ -1378,89 +1348,129 @@ function LandSection({
     filterLabelParts.length > 0 ? filterLabelParts.join(" · ") : null;
 
   return (
-    <div className="space-y-3">
-      <FilterPanel
-        sggLabel={sggLabel}
-        emdOptions={emdOptions}
-        riOptions={riOptions}
-        selectedEmd={selectedEmd}
-        selectedRi={selectedRi}
-        myEmd={myEmd}
-        myRi={myRi}
-        onEmdChange={(v) => {
-          onEmdChange(v);
-          setVisibleCount(5);
-        }}
-        onRiChange={(v) => {
-          onRiChange(v);
-          setVisibleCount(5);
-        }}
-        categoryItems={regionStats.byCategory}
-        selectedCategory={selectedCategory}
-        myCategory={geometry?.jimok ?? ""}
-        onCategoryChange={(v) => {
-          setCategoryOverride(v);
-          setVisibleCount(5);
-        }}
-        categoryLabel="지목"
-      />
-
-      <PriceTLDR
-        region={filterLabel ?? jibun.sig_nm}
-        months={months}
-        stats={displayStats}
-        kindLabel="토지 거래"
-      />
+    <div className="space-y-2.5">
+      {/* 카드 1 — 필터 (지역/지목). 의뢰자 1번 영업 도구. */}
+      <PriceCard title="🔍 필터" subtitle="좁히면 시세·차트·리스트 모두 갱신">
+        <FilterPanel
+          sggLabel={sggLabel}
+          emdOptions={emdOptions}
+          riOptions={riOptions}
+          selectedEmd={selectedEmd}
+          selectedRi={selectedRi}
+          myEmd={myEmd}
+          myRi={myRi}
+          onEmdChange={(v) => {
+            onEmdChange(v);
+            setVisibleCount(5);
+          }}
+          onRiChange={(v) => {
+            onRiChange(v);
+            setVisibleCount(5);
+          }}
+          categoryItems={regionStats.byCategory}
+          selectedCategory={selectedCategory}
+          myCategory={geometry?.jimok ?? ""}
+          onCategoryChange={(v) => {
+            setCategoryOverride(v);
+            setVisibleCount(5);
+          }}
+          categoryLabel="지목"
+        />
+      </PriceCard>
 
       {displayStats.total === 0 ? (
-        <EmptyTrades
-          months={months}
-          kindLabel={filterLabel ? `${filterLabel} 토지` : "토지"}
-          canExpand={months < 24}
-          onExpand={() => setMonths(24)}
-        />
+        <PriceCard title="💰 시세 요약" subtitle={filterLabel ?? jibun.sig_nm}>
+          <EmptyTrades
+            months={months}
+            kindLabel={filterLabel ? `${filterLabel} 토지` : "토지"}
+            canExpand={months < 24}
+            onExpand={() => setMonths(24)}
+          />
+        </PriceCard>
       ) : (
         <>
-          <Sparkline data={displayStats.monthly} />
-          {directMatches.length > 0 && (
-            <DirectMatchCardLand rows={directMatches} />
-          )}
-          <TradeListHeader
-            label="최근 거래"
-            filterLabel={filterLabel}
-            visibleCount={visible.length}
-            totalCount={fullyFilteredRows.length}
-          />
-          <div className="space-y-1.5">
-            {visible.map((row, i) => (
-              <LandTradeRow
-                key={`${row.dealYmd}-${row.jibun}-${i}`}
-                row={row}
-                isMyJibun={row.jibun === myJibun}
-                isSimilarArea={isSimilarArea(row.area_m2)}
-              />
-            ))}
-          </div>
-          {fullyFilteredRows.length > visibleCount && (
-            <button
-              onClick={() => setVisibleCount((v) => v + 5)}
-              className="w-full py-1.5 text-[11px] text-blue-600 hover:bg-blue-50 rounded border border-blue-200"
-            >
-              더보기 (+
-              {Math.min(5, fullyFilteredRows.length - visibleCount)}건)
-            </button>
-          )}
-          {months < 24 && (
-            <button
-              onClick={() => setMonths(24)}
-              className="w-full py-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
-            >
-              24개월로 확장 조회
-            </button>
-          )}
+          {/* 카드 2 — 시세 요약 KPI */}
+          <PriceCard
+            title="💰 시세 요약"
+            subtitle={filterLabel ?? jibun.sig_nm}
+          >
+            <PriceKpiBar
+              stats={displayStats}
+              months={months}
+              area_m2={geometry?.area_m2 ?? 0}
+              kindLabel="토지"
+            />
+          </PriceCard>
+
+          {/* 카드 3 — 가격·거래량 추이 차트 */}
+          <PriceCard
+            title="📈 가격·거래량 추이"
+            subtitle={`최근 ${months}개월`}
+          >
+            <PriceTrendChart
+              monthly={displayStats.monthly}
+              formatYm={formatYmShort}
+            />
+          </PriceCard>
+
+          {/* 카드 4 — 시세 비교 (협상 근거) */}
+          <PriceCard title="📊 시세 비교" subtitle="협상 근거">
+            <PriceComparisonTable
+              stats={displayStats}
+              area_m2={geometry?.area_m2 ?? 0}
+              rowsForSimilar={fullyFilteredRows.map((r) => ({
+                pricePerPyeong: r.pricePerPyeong,
+                area_m2: r.area_m2,
+              }))}
+            />
+          </PriceCard>
+
+          {/* 카드 5 — 거래 사례 */}
+          <PriceCard
+            title="📋 거래 사례"
+            subtitle={filterLabel ?? jibun.sig_nm}
+            rightSlot={
+              <span className="text-[10px] text-gray-500 tabular-nums font-semibold">
+                {visible.length} / {fullyFilteredRows.length}
+              </span>
+            }
+          >
+            {directMatches.length > 0 && (
+              <div className="mb-2">
+                <DirectMatchCardLand rows={directMatches} />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {visible.map((row, i) => (
+                <LandTradeRow
+                  key={`${row.dealYmd}-${row.jibun}-${i}`}
+                  row={row}
+                  isMyJibun={row.jibun === myJibun}
+                  isSimilarArea={isSimilarArea(row.area_m2)}
+                />
+              ))}
+            </div>
+            {fullyFilteredRows.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount((v) => v + 5)}
+                className="mt-2 w-full py-1.5 text-[11px] text-blue-700 hover:bg-blue-50 rounded border border-blue-200 font-semibold"
+              >
+                더보기 (+
+                {Math.min(5, fullyFilteredRows.length - visibleCount)}건)
+              </button>
+            )}
+            {months < 24 && (
+              <button
+                onClick={() => setMonths(24)}
+                className="mt-1 w-full py-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
+              >
+                24개월로 확장 조회
+              </button>
+            )}
+          </PriceCard>
         </>
       )}
-      <div className="text-[10px] text-gray-400 leading-snug">
+      <div className="text-[10px] text-gray-400 leading-snug px-1">
         출처: 국토부 토지 매매 실거래가 · 평당가 = 거래금액 ÷ (면적×0.3025)
         <br />※ 지번 끝자리는 개인정보 보호로 마스킹(예: <code>3*</code>) —
         시군구 시세 비교 용도
@@ -1566,90 +1576,127 @@ function NrgSection({
     filterLabelParts.length > 0 ? filterLabelParts.join(" · ") : null;
 
   return (
-    <div className="space-y-3">
-      <FilterPanel
-        sggLabel={sggLabel}
-        emdOptions={emdOptions}
-        riOptions={riOptions}
-        selectedEmd={selectedEmd}
-        selectedRi={selectedRi}
-        myEmd={myEmd}
-        myRi={myRi}
-        onEmdChange={(v) => {
-          onEmdChange(v);
-          setVisibleCount(5);
-        }}
-        onRiChange={(v) => {
-          onRiChange(v);
-          setVisibleCount(5);
-        }}
-        categoryItems={regionStats.byCategory}
-        selectedCategory={selectedCategory}
-        myCategory=""
-        onCategoryChange={(v) => {
-          setSelectedCategory(v);
-          setVisibleCount(5);
-        }}
-        categoryLabel="용도"
-      />
-
-      <PriceTLDR
-        region={filterLabel ?? jibun.sig_nm}
-        months={months}
-        stats={displayStats}
-        kindLabel="건물 거래"
-      />
+    <div className="space-y-2.5">
+      {/* 카드 1 — 필터 (지역/용도) */}
+      <PriceCard title="🔍 필터" subtitle="좁히면 시세·차트·리스트 모두 갱신">
+        <FilterPanel
+          sggLabel={sggLabel}
+          emdOptions={emdOptions}
+          riOptions={riOptions}
+          selectedEmd={selectedEmd}
+          selectedRi={selectedRi}
+          myEmd={myEmd}
+          myRi={myRi}
+          onEmdChange={(v) => {
+            onEmdChange(v);
+            setVisibleCount(5);
+          }}
+          onRiChange={(v) => {
+            onRiChange(v);
+            setVisibleCount(5);
+          }}
+          categoryItems={regionStats.byCategory}
+          selectedCategory={selectedCategory}
+          myCategory=""
+          onCategoryChange={(v) => {
+            setSelectedCategory(v);
+            setVisibleCount(5);
+          }}
+          categoryLabel="용도"
+        />
+      </PriceCard>
 
       {displayStats.total === 0 ? (
-        <EmptyTrades
-          months={months}
-          kindLabel={filterLabel ? `${filterLabel} 건물` : "건물"}
-          canExpand={months < 24}
-          onExpand={() => setMonths(24)}
-        />
+        <PriceCard title="💰 시세 요약" subtitle={filterLabel ?? jibun.sig_nm}>
+          <EmptyTrades
+            months={months}
+            kindLabel={filterLabel ? `${filterLabel} 건물` : "건물"}
+            canExpand={months < 24}
+            onExpand={() => setMonths(24)}
+          />
+        </PriceCard>
       ) : (
         <>
-          <Sparkline data={displayStats.monthly} />
-          {directMatches.length > 0 && (
-            <DirectMatchCardNrg rows={directMatches} />
-          )}
-          <TradeListHeader
-            label="최근 거래"
-            filterLabel={filterLabel}
-            visibleCount={visible.length}
-            totalCount={fullyFilteredRows.length}
-          />
-          <div className="space-y-1.5">
-            {visible.map((row, i) => (
-              <NrgTradeRow
-                key={`${row.dealYmd}-${row.jibun}-${i}`}
-                row={row}
-                isMyJibun={
-                  row.buildingType === "집합" && row.jibun === myJibun
-                }
-              />
-            ))}
-          </div>
-          {fullyFilteredRows.length > visibleCount && (
-            <button
-              onClick={() => setVisibleCount((v) => v + 5)}
-              className="w-full py-1.5 text-[11px] text-blue-600 hover:bg-blue-50 rounded border border-blue-200"
-            >
-              더보기 (+
-              {Math.min(5, fullyFilteredRows.length - visibleCount)}건)
-            </button>
-          )}
-          {months < 24 && (
-            <button
-              onClick={() => setMonths(24)}
-              className="w-full py-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
-            >
-              24개월로 확장 조회
-            </button>
-          )}
+          {/* 카드 2 — 시세 요약 KPI */}
+          <PriceCard
+            title="💰 시세 요약"
+            subtitle={filterLabel ?? jibun.sig_nm}
+          >
+            <PriceKpiBar
+              stats={displayStats}
+              months={months}
+              area_m2={0}
+              kindLabel="건물"
+            />
+          </PriceCard>
+
+          {/* 카드 3 — 가격·거래량 추이 차트 */}
+          <PriceCard
+            title="📈 가격·거래량 추이"
+            subtitle={`최근 ${months}개월`}
+          >
+            <PriceTrendChart
+              monthly={displayStats.monthly}
+              formatYm={formatYmShort}
+            />
+          </PriceCard>
+
+          {/* 카드 4 — 시세 비교 */}
+          <PriceCard title="📊 시세 비교" subtitle="협상 근거">
+            <PriceComparisonTable
+              stats={displayStats}
+              area_m2={0}
+              rowsForSimilar={[]}
+            />
+          </PriceCard>
+
+          {/* 카드 5 — 거래 사례 */}
+          <PriceCard
+            title="📋 거래 사례"
+            subtitle={filterLabel ?? jibun.sig_nm}
+            rightSlot={
+              <span className="text-[10px] text-gray-500 tabular-nums font-semibold">
+                {visible.length} / {fullyFilteredRows.length}
+              </span>
+            }
+          >
+            {directMatches.length > 0 && (
+              <div className="mb-2">
+                <DirectMatchCardNrg rows={directMatches} />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {visible.map((row, i) => (
+                <NrgTradeRow
+                  key={`${row.dealYmd}-${row.jibun}-${i}`}
+                  row={row}
+                  isMyJibun={
+                    row.buildingType === "집합" && row.jibun === myJibun
+                  }
+                />
+              ))}
+            </div>
+            {fullyFilteredRows.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount((v) => v + 5)}
+                className="mt-2 w-full py-1.5 text-[11px] text-blue-700 hover:bg-blue-50 rounded border border-blue-200 font-semibold"
+              >
+                더보기 (+
+                {Math.min(5, fullyFilteredRows.length - visibleCount)}건)
+              </button>
+            )}
+            {months < 24 && (
+              <button
+                onClick={() => setMonths(24)}
+                className="mt-1 w-full py-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
+              >
+                24개월로 확장 조회
+              </button>
+            )}
+          </PriceCard>
         </>
       )}
-      <div className="text-[10px] text-gray-400 leading-snug">
+      <div className="text-[10px] text-gray-400 leading-snug px-1">
         출처: 국토부 상업·업무용 부동산 매매 · 평당가 = 거래금액 ÷
         (건물면적×0.3025)
         <br />※ <b>집합건축물</b>(빌딩/오피스) = 지번 정확 ·{" "}
@@ -1660,153 +1707,250 @@ function NrgSection({
   );
 }
 
-function TradeListHeader({
-  label,
-  filterLabel,
-  visibleCount,
-  totalCount,
-}: {
-  label: string;
-  filterLabel: string | null;
-  visibleCount: number;
-  totalCount: number;
-}) {
-  return (
-    <div className="flex items-baseline justify-between border-b border-gray-200 pb-1.5">
-      <div className="text-sm font-bold text-gray-900">
-        {label}
-        {filterLabel && (
-          <span className="text-gray-500 font-normal ml-1 text-xs">
-            ({filterLabel}만)
-          </span>
-        )}
-      </div>
-      <div className="text-[11px] text-gray-500 tabular-nums font-medium">
-        {visibleCount} / {totalCount}
-      </div>
-    </div>
-  );
-}
-
+/**
+ * 공시지가 카드 — 회색 톤으로 실거래 정보(파랑)와 시각 분리.
+ * 정부 발표값 — 협상 floor 참고용 (실거래 시세보다 후순위).
+ */
 function JibunInfoSection({ geometry }: { geometry: ParcelGeometry }) {
   const hasJiga = geometry.jiga != null && geometry.jiga > 0;
+  const pyeongPrice =
+    hasJiga && geometry.jiga != null
+      ? Math.round(geometry.jiga / M2_TO_PYEONG)
+      : null;
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
-      <SectionHeader
-        icon="📍"
-        title="이 지번 정보"
-        subtitle="공시지가 (개별)"
-      />
+    <PriceCard
+      title="⚠️ 공시지가"
+      subtitle="정부 발표값 · 협상 floor 참고용"
+      accent="gray"
+    >
       {!hasJiga || geometry.jiga == null ? (
-        <div className="text-xs text-gray-500 mt-2">
-          공시지가 데이터 없음
-        </div>
+        <div className="text-xs text-gray-500">공시지가 데이터 없음</div>
       ) : (
-        <div className="mt-2.5 space-y-2.5">
-          {/* 추정가 — 영업 핵심 KPI 로 큰 글씨 강조 */}
-          <div>
-            <div className="text-[11px] text-gray-600 font-medium mb-0.5">
-              추정가{" "}
-              <span className="text-[10px] text-gray-400 font-normal">
-                (공시지가 × 면적)
+        <dl className="space-y-1.5">
+          <div className="flex items-baseline gap-2">
+            <dt className="text-[11px] w-24 shrink-0 text-gray-600 font-medium">
+              공시지가
+            </dt>
+            <dd className="flex-1 text-xs font-semibold text-gray-800 tabular-nums">
+              {geometry.jiga.toLocaleString()}
+              <span className="text-[10px] text-gray-500 font-normal ml-0.5">
+                원/㎡
               </span>
+            </dd>
+          </div>
+          {pyeongPrice != null && (
+            <div className="flex items-baseline gap-2">
+              <dt className="text-[11px] w-24 shrink-0 text-gray-600 font-medium">
+                평당 환산
+              </dt>
+              <dd className="flex-1 text-xs font-semibold text-gray-800 tabular-nums">
+                ₩{Math.round(pyeongPrice / 10000).toLocaleString()}
+                <span className="text-[10px] text-gray-500 font-normal ml-0.5">
+                  만/평
+                </span>
+              </dd>
             </div>
-            <div className="text-2xl font-bold text-blue-700 tabular-nums leading-tight">
+          )}
+          <div className="flex items-baseline gap-2">
+            <dt className="text-[11px] w-24 shrink-0 text-gray-600 font-medium">
+              참고 추정가
+            </dt>
+            <dd className="flex-1 text-xs font-semibold text-gray-800 tabular-nums">
+              ₩
               {Math.round(
                 (geometry.jiga * geometry.area_m2) / 10000,
               ).toLocaleString()}
-              <span className="text-base font-bold text-blue-700 ml-0.5">만원</span>
-            </div>
+              <span className="text-[10px] text-gray-500 font-normal ml-0.5">
+                만 (공시지가 × 면적)
+              </span>
+            </dd>
           </div>
-          {/* 공시지가 — 보조 정보 */}
-          <div className="flex items-baseline justify-between border-t border-blue-200/70 pt-2">
-            <span className="text-xs text-gray-600 font-medium">공시지가</span>
-            <span className="text-sm font-semibold text-gray-900 tabular-nums">
-              {geometry.jiga.toLocaleString()}
-              <span className="text-[11px] text-gray-500 font-normal ml-0.5">원/㎡</span>
-            </span>
-          </div>
-        </div>
+        </dl>
       )}
-    </div>
+    </PriceCard>
   );
 }
 
-function PriceTLDR({
-  region,
-  months,
+/**
+ * 시세 요약 KPI 띠 — 가격 탭 카드 2 컨텐츠.
+ *
+ * 영업담당자가 5초 안에 파악:
+ *   - 시세 (평당가 중앙값) — 메인 큰 숫자
+ *   - YoY 변화율 — "지금 진입할까?" 직답
+ *   - 추정 매매가 (시세 × 면적) — 의뢰자가 진짜 알고 싶은 숫자
+ *   - 신뢰도: 거래 건수 + 기간
+ */
+function PriceKpiBar({
   stats,
+  months,
+  area_m2,
   kindLabel,
 }: {
-  region: string;
-  months: number;
   stats: TradeStats;
+  months: number;
+  /** 클릭 필지 면적 (㎡) — 추정 매매가 = 시세 × 면적. 0 이면 추정가 안 표시. */
+  area_m2: number;
   kindLabel: string;
 }) {
+  const pricePerPyeong = stats.medianPricePerPyeong;
+  const estimatedTotal =
+    pricePerPyeong != null && area_m2 > 0
+      ? Math.round((pricePerPyeong * area_m2 * M2_TO_PYEONG) / 10000)
+      : null;
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
-      {/* 메타: 기간 / 지역 / 건수 */}
-      <div className="flex items-baseline gap-1.5 flex-wrap">
-        <span className="text-[11px] text-gray-500 font-medium">
-          최근 {months}개월
-        </span>
-        <span className="text-[10px] text-gray-300">·</span>
-        <span className="text-[11px] text-gray-700 font-semibold truncate">
-          {region}
-        </span>
-        <span className="text-[10px] text-gray-400">시군구 단위</span>
-        <span className="ml-auto text-base font-bold text-blue-700 tabular-nums">
-          {stats.total}
-          <span className="text-[11px] font-semibold text-blue-600 ml-0.5">건</span>
-        </span>
-      </div>
-      {/* 메인 KPI: 중앙값 — 가격탭의 핵심 숫자라 큼지막하게 */}
-      {stats.medianPricePerPyeong != null ? (
-        <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
-          <span className="text-2xl font-extrabold text-gray-900 tabular-nums leading-tight">
-            ₩{Math.round(stats.medianPricePerPyeong / 10000).toLocaleString()}
-            <span className="text-base font-bold text-gray-900 ml-0.5">만/평</span>
+    <div className="space-y-2">
+      {/* 메인: 시세 평당가 + YoY */}
+      {pricePerPyeong != null ? (
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="text-2xl font-extrabold text-blue-700 tabular-nums leading-tight">
+            ₩{Math.round(pricePerPyeong / 10000).toLocaleString()}
+            <span className="text-sm font-bold text-blue-700 ml-0.5">
+              만/평
+            </span>
           </span>
           <span className="text-[11px] text-gray-500 font-medium">
             {kindLabel} 중앙값
           </span>
-          {stats.trend && <TrendBadge trend={stats.trend} />}
+          {stats.yoy && <YoyBadge yoy={stats.yoy} />}
         </div>
-      ) : null}
+      ) : (
+        <div className="text-xs text-gray-500">시세 데이터 없음</div>
+      )}
+
+      {/* 보조: 추정 매매가 + 신뢰도 */}
+      <div className="flex items-baseline gap-2 flex-wrap text-[11px] text-gray-600 border-t border-gray-100 pt-2">
+        {estimatedTotal != null && (
+          <>
+            <span className="font-medium">추정 매매가</span>
+            <span className="text-sm font-bold text-gray-900 tabular-nums">
+              ₩{estimatedTotal.toLocaleString()}
+              <span className="text-[10px] font-semibold ml-0.5">만</span>
+            </span>
+            <span className="text-[10px] text-gray-400">(시세 × 면적)</span>
+            <span className="text-gray-300">·</span>
+          </>
+        )}
+        <span className="ml-auto text-gray-500 tabular-nums">
+          <span className="font-bold text-gray-700">{stats.total}건</span> ·{" "}
+          {months}개월
+        </span>
+      </div>
     </div>
   );
 }
 
-function TrendBadge({
-  trend,
-}: {
-  trend: NonNullable<TradeStats["trend"]>;
-}) {
-  if (trend.direction === "flat") {
+/** 전년 동기 대비 (YoY) 배지 — 추세 ▲▼━ */
+function YoyBadge({ yoy }: { yoy: NonNullable<TradeStats["yoy"]> }) {
+  if (yoy.direction === "flat") {
     return (
       <span
-        className="text-[10px] text-gray-500 font-medium tabular-nums"
-        title="최근 6개월 vs 그 전 6개월 평당가 변화"
+        className="text-[10px] text-gray-500 font-bold tabular-nums px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200"
+        title="전년 동기 대비 평당가 거의 변화 없음"
       >
-        ━ {Math.abs(trend.pct)}%
+        ━ YoY {Math.abs(yoy.pct)}%
       </span>
     );
   }
-  const isUp = trend.direction === "up";
+  const isUp = yoy.direction === "up";
   const cls = isUp
-    ? "text-red-600 bg-red-50 border-red-200"
-    : "text-blue-600 bg-blue-50 border-blue-200";
+    ? "text-red-700 bg-red-50 border-red-200"
+    : "text-blue-700 bg-blue-50 border-blue-200";
   return (
     <span
       className={`text-[10px] font-bold px-1.5 py-0.5 rounded border tabular-nums ${cls}`}
       title={
         isUp
-          ? "최근 6개월 vs 그 전 6개월 — 오름세 (토지주 협상력 ↑)"
-          : "최근 6개월 vs 그 전 6개월 — 내림세 (매수자 우위)"
+          ? "전년 동기 대비 ↑ — 토지주 협상력 우위"
+          : "전년 동기 대비 ↓ — 매수자 우위"
       }
     >
-      {isUp ? "▲" : "▼"} {Math.abs(trend.pct)}%
+      {isUp ? "▲" : "▼"} YoY {Math.abs(yoy.pct)}%
     </span>
+  );
+}
+
+/**
+ * 시세 비교 표 — 가격 탭 카드 4 컨텐츠.
+ * 영업담당자가 협상 근거로 쓸 4가지 평당가 비교:
+ *   - 시군구 중앙값 (필터 적용 후 전체)
+ *   - 유사 면적 (±50%) ⭐ 가장 영업적
+ *   - 최저~최고 (협상 룸)
+ */
+function PriceComparisonTable({
+  stats,
+  area_m2,
+  rowsForSimilar,
+}: {
+  stats: TradeStats;
+  area_m2: number;
+  rowsForSimilar: ReadonlyArray<{ pricePerPyeong: number; area_m2: number }>;
+}) {
+  const similarMedian =
+    area_m2 > 0
+      ? computeSimilarAreaMedian(rowsForSimilar, area_m2)
+      : null;
+
+  const fmt = (v: number | null) =>
+    v == null
+      ? "—"
+      : `₩${Math.round(v / 10000).toLocaleString()}만/평`;
+
+  const rows: Array<{
+    label: string;
+    value: string;
+    highlight?: boolean;
+    note?: string;
+  }> = [
+    {
+      label: "시군구 중앙값",
+      value: fmt(stats.medianPricePerPyeong),
+    },
+  ];
+  if (area_m2 > 0) {
+    rows.push({
+      label: "⭐ 유사 면적(±50%)",
+      value: fmt(similarMedian),
+      highlight: true,
+      note: "내 필지와 비슷한 면적 거래만",
+    });
+  }
+  if (stats.priceMin != null && stats.priceMax != null) {
+    rows.push({
+      label: "최저 ~ 최고",
+      value: `${fmt(stats.priceMin)} ~ ${fmt(stats.priceMax)}`,
+      note: "협상 룸",
+    });
+  }
+
+  return (
+    <dl className="space-y-1.5">
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-baseline gap-2">
+          <dt
+            className={`text-[11px] w-32 shrink-0 ${
+              r.highlight
+                ? "text-amber-700 font-bold"
+                : "text-gray-600 font-medium"
+            }`}
+          >
+            {r.label}
+          </dt>
+          <dd
+            className={`flex-1 min-w-0 text-xs tabular-nums ${
+              r.highlight ? "font-bold text-gray-900" : "font-semibold text-gray-800"
+            }`}
+          >
+            {r.value}
+            {r.note && (
+              <span className="text-[10px] text-gray-400 font-normal ml-1.5">
+                ({r.note})
+              </span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -1834,124 +1978,6 @@ function EmptyTrades({
           24개월로 확장
         </button>
       )}
-    </div>
-  );
-}
-
-/**
- * 월별 거래 건수 — 꺽은선 + 영역 채움 (2026-05-02 의뢰자 결정).
- * - 모든 점 표시 + SVG <title> 으로 마우스 hover 시 월/건수 툴팁
- * - Y축 간결 표기 — 좌측 상단에 max 값만 (격자선 없음)
- * - 마지막 점은 큰 원으로 강조 (현재 시점)
- */
-function Sparkline({ data }: { data: MonthlyStat[] }) {
-  if (data.length === 0) return null;
-  const max = Math.max(1, ...data.map((d) => d.count));
-  const W = 100;
-  const H = 28;
-  const padX = 1.5;
-  const padTop = 1; // Y축 max 라벨 자리
-  const innerW = W - padX * 2;
-  const innerH = H - padTop - 1;
-  const stepX = data.length > 1 ? innerW / (data.length - 1) : innerW;
-
-  // 좌표 계산 — y 는 바닥(H)에서 위로
-  const points = data.map((d, i) => {
-    const x = padX + i * stepX;
-    const y = H - (d.count / max) * innerH - 1;
-    return { x, y, count: d.count, ym: d.ym };
-  });
-
-  // 꺽은선 path
-  const linePath = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
-    .join(" ");
-  // 영역 채움 path (선 아래로 내려가서 닫음)
-  const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(2)},${H} L${points[0].x.toFixed(2)},${H} Z`;
-  const last = points[points.length - 1];
-
-  return (
-    <div className="w-full">
-      {/* Y축 max 라벨 + 차트 — flex 로 좌측에 작은 라벨 한 줄 */}
-      <div className="flex items-stretch gap-1.5">
-        <div className="flex flex-col justify-between text-[9px] text-gray-400 tabular-nums font-medium leading-none py-0.5 select-none">
-          <span>{max}</span>
-          <span>0</span>
-        </div>
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className="w-full h-14 block"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
-          {/* 영역 채움 */}
-          <path d={areaPath} fill="url(#spark-grad)" />
-          {/* 꺽은선 */}
-          <path
-            d={linePath}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-          {/* 모든 점 + hover 툴팁 (브라우저 기본 <title>).
-              마지막 점은 r=2 로 강조, 나머지는 r=1.4 */}
-          {points.map((p, i) => {
-            const isLast = i === points.length - 1;
-            return (
-              <circle
-                key={p.ym}
-                cx={p.x}
-                cy={p.y}
-                r={isLast ? 2 : 1.4}
-                fill="#2563eb"
-                stroke="white"
-                strokeWidth="0.8"
-                vectorEffect="non-scaling-stroke"
-              >
-                <title>{`${formatYmShort(p.ym)} · ${p.count}건`}</title>
-              </circle>
-            );
-          })}
-          {/* 호버 영역 확장용 투명 원 — 점이 작아 hover 잘 잡히도록 */}
-          {points.map((p) => (
-            <circle
-              key={`hit-${p.ym}`}
-              cx={p.x}
-              cy={p.y}
-              r="3"
-              fill="transparent"
-              style={{ cursor: "default" }}
-            >
-              <title>{`${formatYmShort(p.ym)} · ${p.count}건`}</title>
-            </circle>
-          ))}
-          {/* 마지막 점 외곽 강조 (선택사항 — 현재 시점 시각 단서) */}
-          <circle
-            cx={last.x}
-            cy={last.y}
-            r="3"
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="0.6"
-            strokeOpacity="0.4"
-            vectorEffect="non-scaling-stroke"
-            pointerEvents="none"
-          />
-        </svg>
-      </div>
-      <div className="flex justify-between text-[10px] text-gray-500 mt-0.5 tabular-nums font-medium pl-3">
-        <span>{formatYmShort(data[0].ym)}</span>
-        <span className="text-gray-400">월별 거래 건수 (점에 마우스)</span>
-        <span>{formatYmShort(data[data.length - 1].ym)}</span>
-      </div>
     </div>
   );
 }
