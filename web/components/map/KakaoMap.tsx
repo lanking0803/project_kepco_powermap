@@ -938,8 +938,20 @@ export default function KakaoMap({
   }, [loaded, highlightedParcel]);
 
   // ─────────────────────────────────────────────
-  // 마을(리/읍면동) 행정구역 음영 — 옅은 파란 채움
-  // 같은 패턴이지만 ref 분리: 필지 폴리곤(주황)과 독립 표시
+  // 시각 위계 (마을 / 자연취락지구 / 필지)
+  //
+  // 의뢰자 컨펌 (2026-05-02): 마을은 약한 가이드, 자연취락지구는 영업 주인공,
+  // 필지는 강한 핀포인트. 한 화면에 셋이 떠 있을 때 위계가 한눈에 보여야 함.
+  //
+  //   zIndex 5 — 필지 클릭 (주황)
+  //   zIndex 3 — 마을 외곽선 (또렷한 파란 선, fill 0)  ← 자연취락지구 위로 올려 경계 명확
+  //   zIndex 2 — 자연취락지구 (진한 보라)              ← 영업 주인공
+  //   zIndex 1 — 마을 채우기 (거의 투명한 파란)        ← 약한 배경 가이드
+  //
+  // 마을 폴리곤을 "채우기 only" 와 "외곽선 only" 두 객체로 분리한 이유:
+  // 자연취락지구가 마을 경계 너머로 확장되는 케이스(주산리 84% / 무창리 16% 등)
+  // 가 실제 데이터의 정상 모습이라 booleanIntersects 로 통째 표시 중. 이때
+  // 마을 외곽선만 자연취락지구 위에 또렷이 보여야 "이 마을 안 / 밖" 즉시 분간 가능.
   // ─────────────────────────────────────────────
   const villagePolygonsRef = useRef<any[]>([]);
   useEffect(() => {
@@ -955,25 +967,38 @@ export default function KakaoMap({
       const path = ring.map(
         ([lng, lat]) => new window.kakao.maps.LatLng(lat, lng),
       );
-      const polygon = new window.kakao.maps.Polygon({
+      // (1) 채우기 — 약한 배경 (zIndex 1)
+      const fill = new window.kakao.maps.Polygon({
+        path,
+        strokeWeight: 0,
+        strokeOpacity: 0,
+        fillColor: "#2563eb", // blue-600
+        fillOpacity: 0.03,
+        zIndex: 1,
+      });
+      fill.setMap(map);
+      villagePolygonsRef.current.push(fill);
+
+      // (2) 외곽선 — 또렷한 경계 (zIndex 3, 자연취락지구 위)
+      const outline = new window.kakao.maps.Polygon({
         path,
         strokeWeight: 2,
-        strokeColor: "#2563eb", // blue-600
-        strokeOpacity: 0.85,
+        strokeColor: "#2563eb",
+        strokeOpacity: 0.95,
         strokeStyle: "solid",
-        fillColor: "#2563eb",
-        fillOpacity: 0.08,
-        zIndex: 1, // 필지 폴리곤(5) 아래 — 가려지지 않게
+        fillOpacity: 0,
+        zIndex: 3,
       });
-      polygon.setMap(map);
-      villagePolygonsRef.current.push(polygon);
+      outline.setMap(map);
+      villagePolygonsRef.current.push(outline);
     });
   }, [loaded, villagePolygon]);
 
   // ─────────────────────────────────────────────
-  // 자연취락지구 폴리곤 (보라) — 마을 폴리곤 안에 들어오는 0~N개.
-  // MapClient 가 Turf 로 이미 솎아낸 결과만 받음.
-  // 마을 폴리곤(파랑) 위, 필지(주황) 아래 — zIndex 2.
+  // 자연취락지구 폴리곤 (보라) — 영업 주인공.
+  // MapClient 가 booleanIntersects 로 솎아낸 결과만 받음 (마을 경계 살짝 넘는
+  // 케이스 그대로 표시 — 자연취락지구의 실제 모양 보존).
+  // 마을 외곽선(zIndex 3) 아래, 마을 채우기(zIndex 1) 위 — zIndex 2.
   // ─────────────────────────────────────────────
   const uqPolygonsRef = useRef<any[]>([]);
   useEffect(() => {
@@ -992,13 +1017,13 @@ export default function KakaoMap({
         );
         const polygon = new window.kakao.maps.Polygon({
           path,
-          strokeWeight: 1.5,
+          strokeWeight: 2,
           strokeColor: "#a855f7", // purple-500
-          strokeOpacity: 0.9,
+          strokeOpacity: 1,
           strokeStyle: "solid",
           fillColor: "#a855f7",
-          fillOpacity: 0.25,
-          zIndex: 2, // 마을(1) 위, 필지(5) 아래
+          fillOpacity: 0.35,
+          zIndex: 2,
         });
         polygon.setMap(map);
         uqPolygonsRef.current.push(polygon);
