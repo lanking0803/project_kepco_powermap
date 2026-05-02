@@ -31,13 +31,14 @@ import {
   type UqVillageWithMatches,
   type NearVillage,
 } from "@/lib/uq/match-village";
+import type { LatIndex } from "@/lib/uq/sorted-by-lat";
 import type { MapSummaryRow } from "@/lib/types";
 
 const MODE_ID = "uq";
 
 interface Props {
-  /** 마을 후보 풀 — 시군구 prefix 필터 후 KNN 매칭에 사용 */
-  totalRows: MapSummaryRow[];
+  /** 위도순 정렬된 마을 인덱스 — 백그라운드 빌드, BBox 매칭용. */
+  latIndex: LatIndex | null;
   /** 칩(매칭 마을명) 클릭 — MapClient 가 마을 마커 클릭 핸들러로 위임 */
   onItemClick?: (row: MapSummaryRow) => void;
   /**
@@ -56,7 +57,7 @@ function formatSigungu(si: string | null, gu: string): string {
 }
 
 export default function UqVillageSearchPanel({
-  totalRows,
+  latIndex,
   onItemClick,
   onPolygonFocus,
 }: Props) {
@@ -146,11 +147,7 @@ export default function UqVillageSearchPanel({
       const queryCodes = getUqQuerySggCodes(params.sigunguCode);
       const items = await fetchVworldUqVillagesByQuery(queryCodes);
       const sorted = [...items].sort((a, b) => b.area_m2 - a.area_m2);
-      const matched = matchUqWithNearestVillages(
-        sorted,
-        totalRows,
-        params.sigunguCode,
-      );
+      const matched = matchUqWithNearestVillages(sorted, latIndex);
       setResults(matched);
       saveModeState<UqPersistedState>(MODE_ID, { params, results: matched });
     } catch (e) {

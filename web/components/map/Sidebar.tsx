@@ -13,6 +13,7 @@ import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
 import UqVillageSearchPanel from "./UqVillageSearchPanel";
+import type { LatIndex } from "@/lib/uq/sorted-by-lat";
 import AuctionSearchPanel from "./AuctionSearchPanel";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import ModeSelector from "./ModeSelector";
@@ -53,6 +54,8 @@ interface Props {
   onOnbidResults?: (items: OnbidListItem[]) => void;
   /** 공매 매물 카드 클릭 콜백 */
   onOnbidItemClick?: (item: OnbidListItem) => void;
+  /** 자연취락지구 — 마을 매칭용 위도순 인덱스 (앱 마운트 시 1회 빌드). */
+  uqLatIndex?: LatIndex | null;
   /** 자연취락지구 — 칩(매칭 마을명) 클릭. 마을 진입 흐름. */
   onUqVillagePick?: (row: MapSummaryRow) => void;
   /** 자연취락지구 — 카드 본체 클릭. 그 폴리곤 1개만 시각 강조. */
@@ -143,6 +146,7 @@ export default function Sidebar({
   onModeChange,
   onOnbidResults,
   onOnbidItemClick,
+  uqLatIndex = null,
   onUqVillagePick,
   onUqPolygonFocus,
 }: Props) {
@@ -352,7 +356,7 @@ export default function Sidebar({
         ) : mode === "uq" ? (
           <div className="flex-1 min-h-0">
             <UqVillageSearchPanel
-              totalRows={totalRows}
+              latIndex={uqLatIndex}
               onItemClick={onUqVillagePick}
               onPolygonFocus={onUqPolygonFocus}
             />

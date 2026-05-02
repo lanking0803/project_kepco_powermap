@@ -53,6 +53,7 @@ import {
 } from "@/lib/api/vworld";
 import type { UqVillage } from "@/lib/vworld/uq-villages";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
+import { buildLatIndex, type LatIndex } from "@/lib/uq/sorted-by-lat";
 import {
   emptyFilters,
   type ColumnFilters,
@@ -81,6 +82,22 @@ export default function MapClient({ isAdmin, email }: Props) {
       .catch(() => setError("지도 데이터를 불러오지 못했어요."))
       .finally(() => setLoading(false));
   }, []);
+
+  // ─────────────────── 자연취락지구 ↔ 마을 매칭 인덱스 ───────────────────
+  // 130만 행 위도순 정렬은 ~1.6초. 메인 렌더 끝난 후 idle 시점에 빌드해서
+  // 사용자가 정렬 시간 체감 X. 검색 시 binary search 로 BBox 안 ~수천 행만
+  // 거리 계산 → 30ms 수준.
+  const [latIndex, setLatIndex] = useState<LatIndex | null>(null);
+  useEffect(() => {
+    if (allRows.length === 0) {
+      setLatIndex(null);
+      return;
+    }
+    const handle = setTimeout(() => {
+      setLatIndex(buildLatIndex(allRows));
+    }, 0);
+    return () => clearTimeout(handle);
+  }, [allRows]);
 
   // ─────────────────── 새로고침 (MV refresh → map-summary) ───────────────────
   const [refreshing, setRefreshing] = useState(false);
@@ -754,6 +771,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         onModeChange={handleModeChange}
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
+        uqLatIndex={latIndex}
         onUqVillagePick={handleTopRankingPick}
         onUqPolygonFocus={handleUqPolygonFocus}
       />
