@@ -50,3 +50,4 @@
 - 🪤 [VWorld lt_c_uq128 함정 5종](reference_vworld_uq128.md) ⚠️ — OGC FILTER 전용/일반시 등록 단위 불일치/uname 자연·집단 혼재/sigg_name 부정확/bbox 함정. 회피=sgg-strategy + uname 필터
 - 🪤 [캠코 lctnSggnm 표기 규칙](reference_onbid_sigungu_format.md) — 일반시 일반구는 "성남시 분당구" 통합. 광역시 자치구/일반 군은 단독. 분당구 단독 검색 0건 사고(2026-05-02)
 - ⚠️ [정부 공공 API 행정구역 단위 가정 금지](feedback_govdata_unit_mismatch.md) — bjd_master 표준 ≠ 외부 등록 단위. 일반시 일반구 시·구 따로 등록 흔함. 실 호출 검증 필수, 추측 금지(2026-05-02)
+- 🗺 [시군구 atomic — 모드 공통](project_regions_atomic.md) — `/api/regions/sigungu` (bjd_master 250개) 모든 모드 공유. 취락지구·공매 적용
