@@ -26,10 +26,15 @@ export interface TradeStats {
    * 양쪽 모두 거래 있을 때만 계산. 부족하면 null.
    */
   trend: { pct: number; direction: TrendDirection } | null;
+  /** YoY — 마지막 1개월 vs 12개월 전 1개월 평당가 중앙값 변화율. 양쪽 데이터 부족 시 null */
+  yoy: { pct: number; direction: TrendDirection } | null;
+  /** 평당가 최저/최고 (원/평) — 협상 룸 표시용. 0건 시 null */
+  priceMin: number | null;
+  priceMax: number | null;
   /** 카테고리별 집계 (count 내림차순) — 토지=지목 / 건물=용도 */
   byCategory: CategoryStats[];
-  /** 월별 거래 건수 (sparkline 용, 과거 → 최신 정렬) */
-  monthly: MonthlyCount[];
+  /** 월별 통계 (차트용, 과거 → 최신 정렬). 건수 + 평당가 중앙값 + IQR. */
+  monthly: MonthlyStat[];
 }
 
 export interface CategoryStats {
@@ -38,10 +43,17 @@ export interface CategoryStats {
   medianPricePerPyeong: number;
 }
 
-export interface MonthlyCount {
+export interface MonthlyStat {
   /** "YYYY-MM" */
   ym: string;
+  /** 그 달 거래 건수 */
   count: number;
+  /** 그 달 평당가 중앙값 (원/평). 0건 시 null */
+  median: number | null;
+  /** 1사분위 (원/평). 1건 이하 시 null (IQR 의미 없음) */
+  q1: number | null;
+  /** 3사분위 (원/평). 1건 이하 시 null */
+  q3: number | null;
 }
 
 interface BaseTradeRow {
@@ -77,17 +89,60 @@ function computeStatsImpl<T extends BaseTradeRow>(
       total: 0,
       medianPricePerPyeong: null,
       trend: null,
+      yoy: null,
+      priceMin: null,
+      priceMax: null,
       byCategory: [],
       monthly: emptyMonthly(months),
     };
   }
 
-  const medianPricePerPyeong = median(rows.map((r) => r.pricePerPyeong));
+  const prices = rows.map((r) => r.pricePerPyeong);
+  const medianPricePerPyeong = median(prices);
   const trend = computeTrend(rows, months);
+  const yoy = computeYoy(rows, months);
   const byCategory = computeByCategory(rows, categoryOf);
   const monthly = computeMonthly(rows, months);
 
-  return { total, medianPricePerPyeong, trend, byCategory, monthly };
+  return {
+    total,
+    medianPricePerPyeong,
+    trend,
+    yoy,
+    priceMin: Math.min(...prices),
+    priceMax: Math.max(...prices),
+    byCategory,
+    monthly,
+  };
+}
+
+/**
+ * YoY (전년 동기 대비) — 마지막 달 vs 12개월 전 달 평당가 중앙값.
+ * 양쪽 모두 거래 있을 때만 계산. months < 13 이면 의미 없어서 null.
+ */
+function computeYoy<T extends BaseTradeRow>(
+  rows: T[],
+  months: number,
+): TradeStats["yoy"] {
+  if (months < 13) return null;
+  const yms = recentYearMonths(months);
+  if (yms.length < 13) return null;
+  // recentYearMonths 는 최신 → 과거 정렬
+  const latestYm = `${yms[0].slice(0, 4)}-${yms[0].slice(4, 6)}`;
+  const yearAgoYm = `${yms[12].slice(0, 4)}-${yms[12].slice(4, 6)}`;
+  const latestRows = rows.filter((r) => r.dealYmd === latestYm);
+  const yearAgoRows = rows.filter((r) => r.dealYmd === yearAgoYm);
+  if (latestRows.length === 0 || yearAgoRows.length === 0) return null;
+
+  const latestMed = median(latestRows.map((r) => r.pricePerPyeong));
+  const yearAgoMed = median(yearAgoRows.map((r) => r.pricePerPyeong));
+  if (yearAgoMed <= 0) return null;
+
+  const pct = ((latestMed - yearAgoMed) / yearAgoMed) * 100;
+  const rounded = Math.round(pct * 10) / 10;
+  const direction: TrendDirection =
+    rounded > 1 ? "up" : rounded < -1 ? "down" : "flat";
+  return { pct: rounded, direction };
 }
 
 /**
@@ -143,27 +198,39 @@ function computeByCategory<T extends BaseTradeRow>(
 function computeMonthly<T extends BaseTradeRow>(
   rows: T[],
   months: number,
-): MonthlyCount[] {
+): MonthlyStat[] {
   const yms = recentYearMonths(months);
-  const map = new Map<string, number>();
+  const buckets = new Map<string, number[]>();
   for (const ym of yms) {
-    map.set(`${ym.slice(0, 4)}-${ym.slice(4, 6)}`, 0);
+    buckets.set(`${ym.slice(0, 4)}-${ym.slice(4, 6)}`, []);
   }
   for (const r of rows) {
-    if (map.has(r.dealYmd)) {
-      map.set(r.dealYmd, (map.get(r.dealYmd) ?? 0) + 1);
-    }
+    const list = buckets.get(r.dealYmd);
+    if (list) list.push(r.pricePerPyeong);
   }
-  return Array.from(map.entries())
-    .map(([ym, count]) => ({ ym, count }))
+  return Array.from(buckets.entries())
+    .map(([ym, prices]) => {
+      const count = prices.length;
+      if (count === 0) {
+        return { ym, count, median: null, q1: null, q3: null };
+      }
+      const sorted = [...prices].sort((a, b) => a - b);
+      const med = median(sorted);
+      // IQR 은 2건 이상일 때만 의미. 1건이면 분포 없음.
+      const { q1, q3 } = count >= 2 ? quartiles(sorted) : { q1: null, q3: null };
+      return { ym, count, median: med, q1, q3 };
+    })
     .sort((a, b) => a.ym.localeCompare(b.ym));
 }
 
-function emptyMonthly(months: number): MonthlyCount[] {
+function emptyMonthly(months: number): MonthlyStat[] {
   return recentYearMonths(months)
     .map((ym) => ({
       ym: `${ym.slice(0, 4)}-${ym.slice(4, 6)}`,
       count: 0,
+      median: null,
+      q1: null,
+      q3: null,
     }))
     .sort((a, b) => a.ym.localeCompare(b.ym));
 }
@@ -175,4 +242,42 @@ function median(nums: number[]): number {
   return sorted.length % 2 === 0
     ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
     : sorted[mid];
+}
+
+/**
+ * 사분위수 (linear interpolation) — 정렬된 배열 입력 가정.
+ * 토지/건물 거래는 outlier 영향이 커서 표준편차 대신 IQR 사용 (의뢰자 결정).
+ */
+function quartiles(sorted: number[]): { q1: number; q3: number } {
+  return { q1: percentile(sorted, 0.25), q3: percentile(sorted, 0.75) };
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const frac = idx - lo;
+  return Math.round(sorted[lo] * (1 - frac) + sorted[hi] * frac);
+}
+
+/**
+ * 유사 면적 (±50%) 거래만 골라 평당가 중앙값.
+ * 영업담당자 핵심 지표 — "내 필지와 비슷한 면적의 토지가 평당 얼마에 거래됐는가".
+ *
+ * 클라이언트에서 필터된 rows + 클릭 필지 면적을 받아 즉시 계산.
+ * 매칭 0건이면 null.
+ */
+export function computeSimilarAreaMedian(
+  rows: ReadonlyArray<{ pricePerPyeong: number; area_m2: number }>,
+  clickedArea_m2: number,
+): number | null {
+  if (clickedArea_m2 <= 0) return null;
+  const lo = clickedArea_m2 * 0.5;
+  const hi = clickedArea_m2 * 1.5;
+  const filtered = rows.filter((r) => r.area_m2 >= lo && r.area_m2 <= hi);
+  if (filtered.length === 0) return null;
+  return median(filtered.map((r) => r.pricePerPyeong));
 }

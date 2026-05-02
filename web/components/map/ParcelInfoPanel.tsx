@@ -44,7 +44,7 @@ import {
   computeLandStats,
   computeNrgStats,
   type CategoryStats,
-  type MonthlyCount,
+  type MonthlyStat,
 } from "@/lib/rtms/trade-stats";
 import {
   classifyPurpose,
@@ -1233,10 +1233,10 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-baseline gap-1.5">
-      <span className="text-[12px]">{icon}</span>
-      <span className="text-[11px] font-bold text-gray-700">{title}</span>
+      <span className="text-sm">{icon}</span>
+      <span className="text-sm font-bold text-gray-900">{title}</span>
       {subtitle && (
-        <span className="text-[10px] text-gray-400 truncate">— {subtitle}</span>
+        <span className="text-[11px] text-gray-500 truncate">— {subtitle}</span>
       )}
     </div>
   );
@@ -1254,15 +1254,15 @@ function KindTabs({
     { k: "nrg" as const, label: "건물(상업·업무)" },
   ];
   return (
-    <div className="flex gap-1 p-0.5 bg-gray-100 rounded-lg">
+    <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
       {tabs.map((t) => (
         <button
           key={t.k}
           onClick={() => onChange(t.k)}
-          className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${
+          className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${
             kind === t.k
-              ? "bg-white text-blue-700 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+              ? "bg-white text-blue-700 shadow ring-1 ring-blue-200"
+              : "text-gray-600 hover:text-gray-800 hover:bg-white/60"
           }`}
         >
           {t.label}
@@ -1672,16 +1672,16 @@ function TradeListHeader({
   totalCount: number;
 }) {
   return (
-    <div className="flex items-baseline justify-between">
-      <div className="text-[11px] font-semibold text-gray-700">
+    <div className="flex items-baseline justify-between border-b border-gray-200 pb-1.5">
+      <div className="text-sm font-bold text-gray-900">
         {label}
         {filterLabel && (
-          <span className="text-gray-500 font-normal ml-1">
+          <span className="text-gray-500 font-normal ml-1 text-xs">
             ({filterLabel}만)
           </span>
         )}
       </div>
-      <div className="text-[10px] text-gray-400 tabular-nums">
+      <div className="text-[11px] text-gray-500 tabular-nums font-medium">
         {visibleCount} / {totalCount}
       </div>
     </div>
@@ -1691,35 +1691,42 @@ function TradeListHeader({
 function JibunInfoSection({ geometry }: { geometry: ParcelGeometry }) {
   const hasJiga = geometry.jiga != null && geometry.jiga > 0;
   return (
-    <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-2.5">
+    <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
       <SectionHeader
         icon="📍"
         title="이 지번 정보"
-        subtitle="공시지가 (개별, 원/㎡)"
+        subtitle="공시지가 (개별)"
       />
       {!hasJiga || geometry.jiga == null ? (
-        <div className="text-[11px] text-gray-500 mt-1.5">
+        <div className="text-xs text-gray-500 mt-2">
           공시지가 데이터 없음
         </div>
       ) : (
-        <dl className="space-y-1 mt-1.5">
-          <Row label="공시지가">
-            <span className="text-gray-900 tabular-nums text-xs font-semibold">
-              {geometry.jiga.toLocaleString()}원/㎡
-            </span>
-          </Row>
-          <Row label="추정가">
-            <span className="text-gray-900 tabular-nums text-xs">
+        <div className="mt-2.5 space-y-2.5">
+          {/* 추정가 — 영업 핵심 KPI 로 큰 글씨 강조 */}
+          <div>
+            <div className="text-[11px] text-gray-600 font-medium mb-0.5">
+              추정가{" "}
+              <span className="text-[10px] text-gray-400 font-normal">
+                (공시지가 × 면적)
+              </span>
+            </div>
+            <div className="text-2xl font-bold text-blue-700 tabular-nums leading-tight">
               {Math.round(
                 (geometry.jiga * geometry.area_m2) / 10000,
               ).toLocaleString()}
-              만원
+              <span className="text-base font-bold text-blue-700 ml-0.5">만원</span>
+            </div>
+          </div>
+          {/* 공시지가 — 보조 정보 */}
+          <div className="flex items-baseline justify-between border-t border-blue-200/70 pt-2">
+            <span className="text-xs text-gray-600 font-medium">공시지가</span>
+            <span className="text-sm font-semibold text-gray-900 tabular-nums">
+              {geometry.jiga.toLocaleString()}
+              <span className="text-[11px] text-gray-500 font-normal ml-0.5">원/㎡</span>
             </span>
-            <span className="text-gray-400 text-[10px] ml-1.5">
-              (공시지가×면적)
-            </span>
-          </Row>
-        </dl>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1737,24 +1744,32 @@ function PriceTLDR({
   kindLabel: string;
 }) {
   return (
-    <div>
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      {/* 메타: 기간 / 지역 / 건수 */}
       <div className="flex items-baseline gap-1.5 flex-wrap">
-        <span className="text-[10px] text-gray-500">최근 {months}개월</span>
-        <span className="text-[10px] text-gray-400">·</span>
-        <span className="text-[11px] text-gray-700 font-medium truncate">
+        <span className="text-[11px] text-gray-500 font-medium">
+          최근 {months}개월
+        </span>
+        <span className="text-[10px] text-gray-300">·</span>
+        <span className="text-[11px] text-gray-700 font-semibold truncate">
           {region}
         </span>
         <span className="text-[10px] text-gray-400">시군구 단위</span>
-        <span className="ml-auto text-sm font-bold text-blue-700 tabular-nums">
-          {stats.total}건
+        <span className="ml-auto text-base font-bold text-blue-700 tabular-nums">
+          {stats.total}
+          <span className="text-[11px] font-semibold text-blue-600 ml-0.5">건</span>
         </span>
       </div>
+      {/* 메인 KPI: 중앙값 — 가격탭의 핵심 숫자라 큼지막하게 */}
       {stats.medianPricePerPyeong != null ? (
-        <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-          <span className="text-base font-bold text-gray-900 tabular-nums">
-            ₩{Math.round(stats.medianPricePerPyeong / 10000).toLocaleString()}만/평
+        <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
+          <span className="text-2xl font-extrabold text-gray-900 tabular-nums leading-tight">
+            ₩{Math.round(stats.medianPricePerPyeong / 10000).toLocaleString()}
+            <span className="text-base font-bold text-gray-900 ml-0.5">만/평</span>
           </span>
-          <span className="text-[10px] text-gray-500">{kindLabel} 중앙값</span>
+          <span className="text-[11px] text-gray-500 font-medium">
+            {kindLabel} 중앙값
+          </span>
           {stats.trend && <TrendBadge trend={stats.trend} />}
         </div>
       ) : null}
@@ -1823,43 +1838,118 @@ function EmptyTrades({
   );
 }
 
-function Sparkline({ data }: { data: MonthlyCount[] }) {
+/**
+ * 월별 거래 건수 — 꺽은선 + 영역 채움 (2026-05-02 의뢰자 결정).
+ * - 모든 점 표시 + SVG <title> 으로 마우스 hover 시 월/건수 툴팁
+ * - Y축 간결 표기 — 좌측 상단에 max 값만 (격자선 없음)
+ * - 마지막 점은 큰 원으로 강조 (현재 시점)
+ */
+function Sparkline({ data }: { data: MonthlyStat[] }) {
   if (data.length === 0) return null;
   const max = Math.max(1, ...data.map((d) => d.count));
   const W = 100;
-  const H = 24;
-  const gap = 0.6;
-  const barW = (W - gap * (data.length - 1)) / data.length;
+  const H = 28;
+  const padX = 1.5;
+  const padTop = 1; // Y축 max 라벨 자리
+  const innerW = W - padX * 2;
+  const innerH = H - padTop - 1;
+  const stepX = data.length > 1 ? innerW / (data.length - 1) : innerW;
+
+  // 좌표 계산 — y 는 바닥(H)에서 위로
+  const points = data.map((d, i) => {
+    const x = padX + i * stepX;
+    const y = H - (d.count / max) * innerH - 1;
+    return { x, y, count: d.count, ym: d.ym };
+  });
+
+  // 꺽은선 path
+  const linePath = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
+    .join(" ");
+  // 영역 채움 path (선 아래로 내려가서 닫음)
+  const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(2)},${H} L${points[0].x.toFixed(2)},${H} Z`;
+  const last = points[points.length - 1];
 
   return (
     <div className="w-full">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-12 block"
-        preserveAspectRatio="none"
-      >
-        {data.map((d, i) => {
-          const h = d.count === 0 ? 0.6 : (d.count / max) * H;
-          const x = i * (barW + gap);
-          const y = H - h;
-          const isLast = i === data.length - 1;
-          return (
-            <rect
-              key={d.ym}
-              x={x}
-              y={y}
-              width={barW}
-              height={h}
-              fill={
-                d.count === 0 ? "#e5e7eb" : isLast ? "#2563eb" : "#93c5fd"
-              }
-            />
-          );
-        })}
-      </svg>
-      <div className="flex justify-between text-[9px] text-gray-400 mt-0.5 tabular-nums">
+      {/* Y축 max 라벨 + 차트 — flex 로 좌측에 작은 라벨 한 줄 */}
+      <div className="flex items-stretch gap-1.5">
+        <div className="flex flex-col justify-between text-[9px] text-gray-400 tabular-nums font-medium leading-none py-0.5 select-none">
+          <span>{max}</span>
+          <span>0</span>
+        </div>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full h-14 block"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          {/* 영역 채움 */}
+          <path d={areaPath} fill="url(#spark-grad)" />
+          {/* 꺽은선 */}
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          {/* 모든 점 + hover 툴팁 (브라우저 기본 <title>).
+              마지막 점은 r=2 로 강조, 나머지는 r=1.4 */}
+          {points.map((p, i) => {
+            const isLast = i === points.length - 1;
+            return (
+              <circle
+                key={p.ym}
+                cx={p.x}
+                cy={p.y}
+                r={isLast ? 2 : 1.4}
+                fill="#2563eb"
+                stroke="white"
+                strokeWidth="0.8"
+                vectorEffect="non-scaling-stroke"
+              >
+                <title>{`${formatYmShort(p.ym)} · ${p.count}건`}</title>
+              </circle>
+            );
+          })}
+          {/* 호버 영역 확장용 투명 원 — 점이 작아 hover 잘 잡히도록 */}
+          {points.map((p) => (
+            <circle
+              key={`hit-${p.ym}`}
+              cx={p.x}
+              cy={p.y}
+              r="3"
+              fill="transparent"
+              style={{ cursor: "default" }}
+            >
+              <title>{`${formatYmShort(p.ym)} · ${p.count}건`}</title>
+            </circle>
+          ))}
+          {/* 마지막 점 외곽 강조 (선택사항 — 현재 시점 시각 단서) */}
+          <circle
+            cx={last.x}
+            cy={last.y}
+            r="3"
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth="0.6"
+            strokeOpacity="0.4"
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        </svg>
+      </div>
+      <div className="flex justify-between text-[10px] text-gray-500 mt-0.5 tabular-nums font-medium pl-3">
         <span>{formatYmShort(data[0].ym)}</span>
-        <span>월별 거래 건수</span>
+        <span className="text-gray-400">월별 거래 건수 (점에 마우스)</span>
         <span>{formatYmShort(data[data.length - 1].ym)}</span>
       </div>
     </div>
@@ -2006,34 +2096,35 @@ function LandTradeRow({
   const isCancelled = !!row.cdealDay;
   return (
     <div
-      className={`p-2 rounded border ${
+      className={`p-2.5 rounded-md border ${
         isMyJibun
-          ? "border-red-300 bg-red-50/30"
+          ? "border-red-300 bg-red-50/40"
           : isCancelled
             ? "border-gray-200 bg-gray-50 opacity-70"
-            : "border-gray-200 bg-white"
+            : "border-gray-200 bg-white hover:border-gray-300"
       }`}
     >
+      {/* 윗줄: 메타 (날짜/지번/지목/뱃지) ↔ 거래총액 (큼) */}
       <div className="flex items-baseline gap-1.5 flex-wrap">
-        <span className="text-[11px] font-semibold text-gray-800 tabular-nums">
+        <span className="text-xs font-bold text-gray-900 tabular-nums">
           {formatYmShort(row.dealYmd)}
         </span>
         {row.dealDate && (
-          <span className="text-[9px] text-gray-400 tabular-nums">
+          <span className="text-[10px] text-gray-500 tabular-nums">
             {row.dealDate.slice(8)}일
           </span>
         )}
-        <span className="text-[11px] text-gray-700 font-mono">
+        <span className="text-xs text-gray-700 font-mono">
           {row.jibun || "-"}
         </span>
         {row.jimok && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+          <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded font-semibold">
             {row.jimok}
           </span>
         )}
         {isSimilarArea && (
           <span
-            className="text-[10px] text-amber-700 font-bold"
+            className="text-xs text-amber-600 font-bold"
             title="이 필지와 면적 ±50% 이내 — 가격 비교에 가장 유효"
           >
             ⭐
@@ -2041,7 +2132,7 @@ function LandTradeRow({
         )}
         {isCancelled && (
           <span
-            className="text-[9px] px-1 py-0.5 bg-red-100 text-red-700 rounded font-semibold"
+            className="text-[10px] px-1 py-0.5 bg-red-100 text-red-700 rounded font-bold"
             title={`${row.cdealType ?? "정정"} ${row.cdealDay}`}
           >
             정정
@@ -2049,23 +2140,28 @@ function LandTradeRow({
         )}
         {row.shareDealingType && (
           <span
-            className="text-[9px] px-1 py-0.5 bg-amber-100 text-amber-700 rounded font-semibold"
+            className="text-[10px] px-1 py-0.5 bg-amber-100 text-amber-700 rounded font-bold"
             title="공유 지분 거래 — 평당가 왜곡 가능"
           >
             공유
           </span>
         )}
-        <span className="ml-auto text-[11px] text-gray-900 font-semibold tabular-nums">
-          ₩{(row.price_won / 10000).toLocaleString()}만
+        <span className="ml-auto text-sm font-bold text-gray-900 tabular-nums">
+          ₩{(row.price_won / 10000).toLocaleString()}
+          <span className="text-[11px] font-semibold ml-0.5">만</span>
         </span>
       </div>
-      <div className="flex items-baseline gap-2 mt-0.5 text-[10px] text-gray-500 tabular-nums">
-        <span>
-          {row.area_m2.toLocaleString()}㎡ (
-          {Math.round(row.area_m2 * M2_TO_PYEONG).toLocaleString()}평)
+      {/* 아랫줄: 면적 ↔ 평당가 (강조) */}
+      <div className="flex items-baseline gap-2 mt-1 text-[11px] text-gray-600 tabular-nums">
+        <span className="font-medium">
+          {row.area_m2.toLocaleString()}㎡{" "}
+          <span className="text-gray-500">
+            ({Math.round(row.area_m2 * M2_TO_PYEONG).toLocaleString()}평)
+          </span>
         </span>
-        <span className="ml-auto text-gray-700 font-semibold">
-          ₩{Math.round(row.pricePerPyeong / 10000).toLocaleString()}만/평
+        <span className="ml-auto text-blue-700 font-bold text-xs">
+          ₩{Math.round(row.pricePerPyeong / 10000).toLocaleString()}
+          <span className="text-[10px] font-semibold ml-0.5">만/평</span>
         </span>
       </div>
       {(row.zoning || row.dealType || row.estateAgentSggNm) && (
