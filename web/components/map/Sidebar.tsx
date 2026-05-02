@@ -260,7 +260,7 @@ export default function Sidebar({
         className="w-80 max-w-[85vw] bg-white
           flex flex-col h-full"
       >
-        {/* ── 헤더 ── 모드별 배경색 (전기=파랑, 공매=빨강 계열) */}
+        {/* ── 헤더 ── 공매 ON 시에만 빨강 강조 (전기는 항상 기본 상태) */}
         <div
           className={`px-3 py-2 border-b space-y-1.5 transition-colors ${
             onbidActive
@@ -268,18 +268,16 @@ export default function Sidebar({
               : "bg-blue-50 border-blue-200"
           }`}
         >
-          {/* 줄 1: 서비스명 + 모드 부제목 */}
+          {/* 줄 1: 서비스명 + 공매 ON 시 표시 */}
           <div className="flex items-baseline gap-2">
             <h1 className="text-sm font-bold text-gray-900">
               배전선로 여유용량 지도
             </h1>
-            <span
-              className={`text-[11px] font-bold ${
-                onbidActive ? "text-rose-700" : "text-blue-700"
-              }`}
-            >
-              · {onbidActive ? "🟥 공매" : "⚡ 전기"}
-            </span>
+            {onbidActive && (
+              <span className="text-[11px] font-bold text-rose-700">
+                · 🟥 공매 ON
+              </span>
+            )}
           </div>
           {/* 줄 2: 사용 안내 + 새로고침 */}
           <div className="flex items-center gap-1.5">

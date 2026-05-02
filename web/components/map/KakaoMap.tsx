@@ -521,8 +521,8 @@ export default function KakaoMap({
       overlayRef.current = [];
       markersByAddrRef.current.clear();
 
-      // 공매 모드일 때는 전기 마커 숨김
-      if (onbidActive) return;
+      // 전기 마커는 공매 토글과 무관하게 항상 표시 (2026-05-02 의뢰자 결정)
+      // 공매 마커는 z-index 가 위(50/100)라 자연스럽게 겹쳐 표시됨
 
       const bounds = map.getBounds();
       const level = map.getLevel();
@@ -593,7 +593,7 @@ export default function KakaoMap({
         });
       }
     };
-  }, [rows, colorFilter, visibleAddrs, selectedAddr, onMarkerClick, onbidActive]);
+  }, [rows, colorFilter, visibleAddrs, selectedAddr, onMarkerClick]);
 
   // 클러스터러 1회 생성 + idle 리스너 (debounce 200ms)
   useEffect(() => {
@@ -718,7 +718,7 @@ export default function KakaoMap({
   useEffect(() => {
     if (!loaded || !mapInstanceRef.current || !clustererRef.current) return;
     rebuildRef.current();
-  }, [rows, colorFilter, visibleAddrs, selectedAddr, loaded, onbidActive]);
+  }, [rows, colorFilter, visibleAddrs, selectedAddr, loaded]);
 
   // 선택 변경 시 펄스 링 (마커 자체는 rebuild 가 강조 처리)
   useEffect(() => {
