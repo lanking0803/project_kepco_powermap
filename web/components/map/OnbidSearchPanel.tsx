@@ -26,7 +26,7 @@ import {
   ONBID_EMPTY_PARAMS,
   type OnbidPersistedState,
 } from "@/lib/modes/modes/onbid";
-import { SIDOS } from "@/lib/modes/region";
+import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
 
 /** 모드 ID — registry 에 등록된 안정 키. sessionStorage 키는 storage 헬퍼가 자동 처리. */
 const MODE_ID = "onbid";
@@ -80,6 +80,58 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
     // 마운트 1회만 — persisted 는 ref 라서 deps 변경 X
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 시군구 마스터 — 모든 모드 공통 atomic. 모듈 캐시 hit 시 외부 호출 0.
+  const [allSigungus, setAllSigungus] = useState<SigunguEntry[]>([]);
+  const [regionsLoading, setRegionsLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    fetchSigungus()
+      .then((items) => {
+        if (alive) setAllSigungus(items);
+      })
+      .catch((e) => {
+        console.error("[OnbidSearchPanel] 시군구 로드 실패", e);
+      })
+      .finally(() => {
+        if (alive) setRegionsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /** 시도 목록 — atomic 응답 unique. */
+  const sidos = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allSigungus) set.add(r.sido);
+    return [...set];
+  }, [allSigungus]);
+
+  /**
+   * 선택 시도의 시군구 옵션 — { label: 표시 한글, value: 캠코 송신값 }.
+   * 캠코 lctnSggnm 은 자치구/행정구/군 단독 표기 — 일반시 일반구도
+   * "권선구" 단독으로 보낸다 (수원시 권선구 통합 X). 일반시 일반구만
+   * 사용자에겐 "수원시 권선구" 로 보여주고 송신은 gu 단독.
+   */
+  const sigunguOptions = useMemo(() => {
+    if (!params.sido) return [] as Array<{ label: string; value: string }>;
+    return allSigungus
+      .filter((r) => r.sido === params.sido)
+      .map((r) => ({
+        label: r.si ? `${r.si} ${r.gu}` : r.gu,
+        value: r.gu, // 캠코는 gu 단독
+      }));
+  }, [allSigungus, params.sido]);
+
+  /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구 자동 초기화. */
+  useEffect(() => {
+    if (!params.sigungu) return;
+    const stillValid = sigunguOptions.some((o) => o.value === params.sigungu);
+    if (!stillValid) {
+      setParams((p) => ({ ...p, sigungu: "" }));
+    }
+  }, [sigunguOptions, params.sigungu]);
 
   // params/results/totalCountAll 변경 시 sessionStorage 자동 저장
   useEffect(() => {
@@ -167,13 +219,20 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
             <Field label="시도">
               <select
                 value={params.sido}
+                disabled={regionsLoading}
                 onChange={(e) =>
-                  setParams((p) => ({ ...p, sido: e.target.value }))
+                  setParams((p) => ({
+                    ...p,
+                    sido: e.target.value,
+                    sigungu: "",
+                  }))
                 }
-                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-rose-500 focus:outline-none"
+                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-rose-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
               >
-                <option value="">전체</option>
-                {SIDOS.map((sd) => (
+                <option value="">
+                  {regionsLoading ? "불러오는 중…" : "전체"}
+                </option>
+                {sidos.map((sd) => (
                   <option key={sd} value={sd}>
                     {sd}
                   </option>
@@ -181,15 +240,23 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
               </select>
             </Field>
             <Field label="시군구">
-              <input
-                type="text"
-                placeholder="예: 나주시"
+              <select
                 value={params.sigungu}
+                disabled={!params.sido || regionsLoading}
                 onChange={(e) =>
                   setParams((p) => ({ ...p, sigungu: e.target.value }))
                 }
-                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-rose-500 focus:outline-none"
-              />
+                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-rose-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">
+                  {params.sido ? "전체" : "(시도 먼저 선택)"}
+                </option>
+                {sigunguOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="읍면동">
               <input
