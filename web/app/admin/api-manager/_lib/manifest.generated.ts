@@ -668,7 +668,7 @@ export const MANIFEST: GeneratedManifest = {
                 "description": "PNU 19자리 (지번 코드)"
               }
             ],
-            "outputSchema": "{ ok: true, pnu, items: OnbidDetail[], fetchedAt } — 매물 없으면 items 빈 배열",
+            "outputSchema": "{ ok: true, pnu, items: OnbidDetail[], fallback, village_empty, fetchedAt }",
             "externalDeps": [
               "data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)",
               "supabase (bjd_master)"
@@ -678,7 +678,7 @@ export const MANIFEST: GeneratedManifest = {
               "kind": "BinaryExpression"
             }
           },
-          "metaLine": 38,
+          "metaLine": 47,
           "metaExportName": "meta"
         }
       ]

@@ -319,7 +319,7 @@ export default function ParcelInfoPanel({
               onPnuChange={onPnuChange}
             />
           )}
-          {tab === "onbid" && <OnbidTab pnu={pnu} />}
+          {tab === "onbid" && <OnbidTab pnu={pnu} onPnuChange={onPnuChange} />}
           {tab === "price" && (
             <PriceTab
               jibun={jibun}

@@ -32,8 +32,17 @@ import {
 } from "@/lib/onbid/client";
 import { enrichDetail, enrichRawItems } from "@/lib/onbid/enrich";
 import { pnuFromOnbidItem } from "@/lib/onbid/pnu-fix";
-import type { OnbidDetail } from "@/lib/onbid/types";
+import { jibunFromPnu } from "@/lib/geo/pnu";
+import type { OnbidDetail, OnbidListItem } from "@/lib/onbid/types";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
+
+/** by-pnu 응답의 fallback 필드 — KEPCO 패턴 미러.
+ *  - exact 매칭 0건 + 마을에 매물 있음 → used:true + 마을 매물 목록 첨부
+ *  - exact 매칭 0건 + 마을 전체 0건  → used:false (별도 village_empty=true 필드)
+ *  - 정상 매칭 (1건↑)               → used:false (fallback 미발동) */
+type OnbidByPnuFallback =
+  | { used: false }
+  | { used: true; target_jibun: string; villageItems: OnbidListItem[] };
 
 export const meta: EndpointMeta = {
   source:
@@ -50,7 +59,7 @@ export const meta: EndpointMeta = {
     },
   ],
   outputSchema:
-    "{ ok: true, pnu, items: OnbidDetail[], fetchedAt } — 매물 없으면 items 빈 배열",
+    "{ ok: true, pnu, items: OnbidDetail[], fallback, village_empty, fetchedAt }",
   externalDeps: ["data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)", "supabase (bjd_master)"],
   notes:
     "PNU 만으로 상세 조회 불가 (캠코는 cltrMngNo 키). " +
@@ -99,6 +108,8 @@ export async function GET(req: NextRequest) {
           ok: true,
           pnu,
           items: [],
+          fallback: { used: false } as OnbidByPnuFallback,
+          village_empty: true, // 마을 정보 자체가 없으면 fallback 도 불가능 → empty 처리
           fetchedAt: new Date().toISOString(),
           warning: `bjd_master 에 ${bjdCode} 미수록`,
         },
@@ -128,12 +139,29 @@ export async function GET(req: NextRequest) {
       (it) => pnuFromOnbidItem(it) === pnu,
     );
     const baseItems = await enrichRawItems(matchedAll);
+
+    // ── exact 매칭 0건 fallback (KEPCO 패턴 미러) ───────────────
+    // 같은 마을(동) 안의 모든 공매 매물을 표시 — 갯수 cap 없음 (의뢰자 결정 2026-05-02).
+    // listRes 는 이미 "이 동" 단위로 받아온 응답이라 추가 외부 호출 불필요 →
+    // enrichRawItems 한 번 더 돌려서 회차 dedup + 좌표 보강만 하면 끝.
+    // village_empty: listRes 자체가 0건 = 마을 전체에 공매 매물 없음.
     if (baseItems.length === 0) {
+      const villageItems = await enrichRawItems(listRes.items);
+      const villageEmpty = villageItems.length === 0;
+      const fallback: OnbidByPnuFallback = villageEmpty
+        ? { used: false }
+        : {
+            used: true,
+            target_jibun: jibunFromPnu(pnu) ?? "",
+            villageItems,
+          };
       return NextResponse.json(
         {
           ok: true,
           pnu,
           items: [],
+          fallback,
+          village_empty: villageEmpty,
           fetchedAt: new Date().toISOString(),
         },
         { headers: { "Cache-Control": "no-store" } },
@@ -166,6 +194,8 @@ export async function GET(req: NextRequest) {
         ok: true,
         pnu,
         items,
+        fallback: { used: false } as OnbidByPnuFallback,
+        village_empty: false,
         fetchedAt: new Date().toISOString(),
       },
       { headers: { "Cache-Control": "no-store" } },

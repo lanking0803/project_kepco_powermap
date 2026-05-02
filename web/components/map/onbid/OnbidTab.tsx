@@ -23,10 +23,23 @@
 import { useEffect, useState, useCallback } from "react";
 import type { AppraisalRecord, OnbidDetail } from "@/lib/onbid/types";
 import { OUR_CATEGORY_LABEL } from "@/lib/onbid/types";
-import { fetchOnbidByPnu } from "@/lib/onbid/by-pnu";
+import {
+  fetchOnbidByPnu,
+  type OnbidByPnuFallback,
+} from "@/lib/onbid/by-pnu";
+import OnbidItemCard from "./OnbidItemCard";
 
-export default function OnbidTab({ pnu }: { pnu: string }) {
+export default function OnbidTab({
+  pnu,
+  onPnuChange,
+}: {
+  pnu: string;
+  /** fallback 카드 클릭 → 그 매물의 PNU 로 패널 자체를 갈아끼움 (ElectricTab 패턴 미러) */
+  onPnuChange?: (pnu: string) => void;
+}) {
   const [items, setItems] = useState<OnbidDetail[] | null>(null);
+  const [fallback, setFallback] = useState<OnbidByPnuFallback>({ used: false });
+  const [villageEmpty, setVillageEmpty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,8 +48,12 @@ export default function OnbidTab({ pnu }: { pnu: string }) {
     setLoading(true);
     setError(null);
     fetchOnbidByPnu(pnu)
-      .then((rows) => {
-        if (alive) setItems(rows);
+      .then((res) => {
+        if (alive) {
+          setItems(res.items);
+          setFallback(res.fallback);
+          setVillageEmpty(res.villageEmpty);
+        }
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e));
@@ -64,7 +81,46 @@ export default function OnbidTab({ pnu }: { pnu: string }) {
       </div>
     );
   }
+
+  // ── 분기 1: 마을 전체에 공매 매물 0건 (KEPCO village_empty 패턴 미러) ──
+  if (villageEmpty) {
+    return (
+      <div className="text-center py-10 text-xs text-gray-500 bg-gray-50 rounded border border-dashed border-gray-200 leading-relaxed">
+        이 마을에 진행 중인 공매 매물이 없습니다
+      </div>
+    );
+  }
+
+  // ── 분기 2: 이 지번 매물 없음 + 같은 마을 매물 있음 (KEPCO fallback 패턴 미러) ──
+  // 마을 매물 전체 표시 (갯수 cap 없음, 의뢰자 결정 2026-05-02). 스크롤 영역 잘 잡기.
+  if (fallback.used) {
+    return (
+      <div className="space-y-2">
+        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-900 leading-relaxed">
+          이 지번(<b>{fallback.target_jibun}</b>)은 공매 매물이 없어
+          같은 마을의 공매 매물 <b>{fallback.villageItems.length}건</b>을 표시합니다.
+        </div>
+        <div className="-mx-4 max-h-[55vh] overflow-y-auto px-4 space-y-2">
+          {fallback.villageItems.map((it) => (
+            <OnbidItemCard
+              key={it.cltrMngNo}
+              item={it}
+              onClick={() => {
+                // OnbidListItem.ltnoPnu 는 이미 PNU 19자리(행안부 표준) — 직접 사용.
+                if (onPnuChange && /^\d{19}$/.test(it.ltnoPnu)) {
+                  onPnuChange(it.ltnoPnu);
+                }
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 분기 3: 정상 매칭 — 이 지번 매물 표시 ──
   if (!items || items.length === 0) {
+    // 안전 가드 (이론상 도달 X — fallback/villageEmpty 둘 중 하나로 잡혀야 함)
     return (
       <div className="text-center py-10 text-xs text-gray-500 bg-gray-50 rounded border border-dashed border-gray-200">
         이 필지에 진행 중인 공매 매물이 없습니다
