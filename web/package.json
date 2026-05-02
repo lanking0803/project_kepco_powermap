@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2.102.1",
     "@turf/area": "^7.3.5",
     "@turf/bbox": "^7.3.5",
+    "@turf/boolean-intersects": "^7.3.5",
     "@turf/boolean-point-in-polygon": "^7.3.5",
     "@turf/centroid": "^7.3.5",
     "@turf/destination": "^7.3.5",
