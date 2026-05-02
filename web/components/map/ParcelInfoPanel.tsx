@@ -261,15 +261,31 @@ export default function ParcelInfoPanel({
           <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="text-gray-400 hover:text-gray-600 text-base leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100"
+              className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 leading-none w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:border-blue-400 transition-colors"
               aria-label={expanded ? "축소" : "확대"}
               title={expanded ? "원래 크기로" : "크게 보기"}
             >
-              {expanded ? "⤣" : "⤢"}
+              {expanded ? (
+                // 축소 (대각선 안쪽으로) — SVG
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9,3 9,7 13,7" />
+                  <line x1="14" y1="2" x2="9" y2="7" />
+                  <polyline points="7,13 7,9 3,9" />
+                  <line x1="2" y1="14" x2="7" y2="9" />
+                </svg>
+              ) : (
+                // 확장 (대각선 바깥쪽으로) — SVG
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="10,2 14,2 14,6" />
+                  <line x1="14" y1="2" x2="9" y2="7" />
+                  <polyline points="6,14 2,14 2,10" />
+                  <line x1="2" y1="14" x2="7" y2="9" />
+                </svg>
+              )}
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-xl leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100"
+              className="text-gray-700 hover:text-red-600 hover:bg-red-50 text-xl leading-none w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:border-red-400 transition-colors font-bold"
               aria-label="닫기"
             >
               ×
