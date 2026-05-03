@@ -656,6 +656,51 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/buildings/list/by-bjd",
+      "id": "buildings-list-by-bjd",
+      "filePath": "app/api/buildings/list/by-bjd/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "건축HUB getBrTitleInfo (국토부 BldRgstHubService) — 법정동 단위 일괄",
+            "cache": "public, s-maxage=86400, stale-while-revalidate=604800",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "bjd_code",
+                "type": "string",
+                "required": true,
+                "sample": "1168010100",
+                "description": "법정동 10자리 (시군구5+동5). /api/regions/eupmyeondong 의 code."
+              },
+              {
+                "name": "page_no",
+                "type": "number",
+                "required": false,
+                "sample": "1",
+                "description": "페이지 번호 (1-base, 기본 1)"
+              },
+              {
+                "name": "num_of_rows",
+                "type": "number",
+                "required": false,
+                "sample": "100",
+                "description": "페이지당 행수 (기본 100). 외부 API 가 100 hard cap — 큰 값 보내도 100 만 응답."
+              }
+            ],
+            "outputSchema": "{ ok, bjd_code, page_no, num_of_rows, total_count, has_more, rows: BuildingTitleInfo[] }",
+            "externalDeps": [
+              "bldg-register"
+            ],
+            "notes": "외부 API 가 sigunguCd+bjdongCd 둘 다 필수 — bjd_code 10자리 입력 필수. atomic endpoint 는 1페이지만 응답, 자동 순회는 호출자(적재 스크립트) 담당. 시설 모드 영업 발굴용 핵심 endpoint."
+          },
+          "metaLine": 24,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/buildings/polygons/by-pnu",
       "id": "buildings-polygons-by-pnu",
       "filePath": "app/api/buildings/polygons/by-pnu/route.ts",
@@ -1152,6 +1197,35 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/regions/eupmyeondong",
+      "id": "regions-eupmyeondong",
+      "filePath": "app/api/regions/eupmyeondong/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "Supabase bjd_master (행안부 법정동 코드, 월 1회 갱신).",
+            "cache": "public, s-maxage=2592000, stale-while-revalidate=86400",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "sigungu_code",
+                "type": "string",
+                "required": true,
+                "sample": "11680",
+                "description": "시군구 5자리 (bjd_code 앞 5자리). /api/regions/sigungu 의 code 와 동일."
+              }
+            ],
+            "outputSchema": "{ ok, sigungu_code, count, items: Array<{ code, label, sido, si, gu, hasChildren, children: Array<{ code, label }> }> }",
+            "externalDeps": [],
+            "notes": "시군구 안의 동/면 + 그 아래 리까지 1번 호출에 모두 포함. 도시 동 = hasChildren:false, 농촌 면 = hasChildren:true + children(리들). 외부 건축HUB API 가 도시는 동 코드, 농촌은 리 코드로만 응답하기 때문(2026-05-03 실측). 30일 CDN + 클라이언트 모듈 캐시."
+          },
+          "metaLine": 24,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/regions/sigungu",
       "id": "regions-sigungu",
       "filePath": "app/api/regions/sigungu/route.ts",
@@ -1165,10 +1239,7 @@ export const MANIFEST: GeneratedManifest = {
             "inputs": [],
             "outputSchema": "{ ok, count, items: Array<{ sido: string, si: string|null, gu: string|null, label: string, code: string }> }",
             "externalDeps": [],
-            "notes": {
-              "__nonLiteral": true,
-              "kind": "BinaryExpression"
-            }
+            "notes": "약 250건 — 한국 전체 시군구. bjd_code 끝 5자리가 00000 인 시군구 대표 행만. label = sep_2 + sep_3 trim. 일반시 자체(여수시 등)는 si=시명, gu=null. 30일 CDN 캐시 + 클라이언트 모듈 캐시 병행."
           },
           "metaLine": 23,
           "metaExportName": "meta"
@@ -1455,7 +1526,8 @@ export const MANIFEST: GeneratedManifest = {
       "filePath": "app/admin/api-manager/_lib/services/bldg-register.ts",
       "metaLine": 3,
       "consumedBy": [
-        "buildings-by-pnu"
+        "buildings-by-pnu",
+        "buildings-list-by-bjd"
       ]
     },
     {
@@ -1898,7 +1970,6 @@ export const MANIFEST: GeneratedManifest = {
   ],
   "warnings": [
     "/api/admin/external-test POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
-    "/api/admin/health-check-all POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
-    "/api/regions/sigungu GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능"
+    "/api/admin/health-check-all POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능"
   ]
 } as GeneratedManifest;

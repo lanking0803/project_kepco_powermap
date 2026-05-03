@@ -14,7 +14,7 @@
  * 카테고리/진행상태/고급필터는 시각 확인 후 단계적 추가.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadModeState,
   saveModeState,
@@ -46,14 +46,14 @@ const MODE_ID = "auction";
 const PROGRESS_STATUS_OPTIONS = ["신건", "진행", "유찰", "매각", "취하"];
 
 interface Props {
-  /** 검색 결과 변경 — 지도 마커 갱신용 (현재 단계는 호출되지 않음) */
+  /** 검색 결과 변경 — 지도 마커 갱신용. 마운트 시 복원된 결과도 흘림. */
   onResults?: (items: AuctionListItem[]) => void;
-  /** 매물 카드 클릭 — 지도 강조 + 상세 진입 (현재 단계는 호출되지 않음) */
+  /** 매물 카드 클릭 — 지도 강조 + 상세 진입 (D4-2 단계에서 사용 예정) */
   onItemClick?: (item: AuctionListItem) => void;
 }
 
 
-export default function AuctionSearchPanel({ onResults: _onResults, onItemClick: _onItemClick }: Props) {
+export default function AuctionSearchPanel({ onResults, onItemClick: _onItemClick }: Props) {
   // ─── 상태 복원 ─────────────────────────────────────────────
   const persisted =
     typeof window !== "undefined"
@@ -66,6 +66,17 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
   const [results, setResults] = useState<AuctionListItem[]>(
     persisted?.results ?? [],
   );
+
+  // 마운트 시 — 복원된 결과를 부모(MapClient)로 올려서 지도 마커도 즉시 복원
+  const onResultsRef = useRef(onResults);
+  onResultsRef.current = onResults;
+  useEffect(() => {
+    if (persisted && persisted.results.length > 0) {
+      onResultsRef.current?.(persisted.results);
+    }
+    // 마운트 1회만 — persisted 는 클로저 캡처라 deps 변경 X
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── 시군구 마스터 (모든 모드 공통 atomic) ──────────────────
   const [allSigungus, setAllSigungus] = useState<SigunguEntry[]>([]);
@@ -197,12 +208,12 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
       setResults(items);
       setTotalCountAll(json.totalCountAll ?? null);
       setTruncated(Boolean(json.truncated));
-      _onResults?.(items);
+      onResults?.(items);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       setResults([]);
-      _onResults?.([]);
+      onResults?.([]);
     } finally {
       setSearching(false);
     }
@@ -216,6 +227,7 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
     setTotalCountAll(null);
     setTruncated(false);
     setPanelCollapsed(false); // 초기화 = 검색창 다시 펼침
+    onResults?.([]);
     clearModeState(MODE_ID);
   };
 

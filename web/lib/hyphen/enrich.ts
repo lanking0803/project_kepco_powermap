@@ -194,7 +194,7 @@ export async function enrichRawItems(
   }
 
   // 3) 매물별 enrich
-  return sepInfo.map(({ raw, sep_4, sep_5 }) => {
+  const enriched = sepInfo.map(({ raw, sep_4, sep_5 }) => {
     const key = sep_4 ? `${sep_4}|${sep_5 ?? ""}` : "";
     const bjd = bjdMap.get(key);
     return enrichOne(
@@ -203,6 +203,25 @@ export async function enrichRawItems(
       { lat: bjd?.lat ?? null, lng: bjd?.lng ?? null },
     );
   });
+
+  // 진단 로그 — 매핑 실패 비율 (lat/lng 누락 = 지도 마커 미표시 원인)
+  const total = enriched.length;
+  const mappedCount = enriched.filter((it) => it.lat != null && it.lng != null).length;
+  if (total > 0 && mappedCount < total) {
+    const sample = enriched
+      .filter((it) => it.lat == null)
+      .slice(0, 3)
+      .map((it) => ({
+        addr: it.리스트지번주소 || it.대표소재지,
+        pnu: it.pnuStandard,
+      }));
+    console.warn(
+      `[hyphen/enrich] 좌표 매핑 ${mappedCount}/${total} (${total - mappedCount}건 누락). 샘플:`,
+      sample,
+    );
+  }
+
+  return enriched;
 }
 
 // ─── 헬퍼 ─────────────────────────────────────────────────

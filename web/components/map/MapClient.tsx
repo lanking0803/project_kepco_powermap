@@ -38,6 +38,7 @@ import {
   type AuctionVillageGroup,
 } from "@/lib/hyphen/group";
 import AuctionVillageCard from "./auction/AuctionVillageCard";
+import AuctionVillageModal from "./auction/AuctionVillageModal";
 import type { DataModeId } from "@/lib/modes/registry";
 import LocationSummaryCard from "./LocationSummaryCard";
 import LocationDetailModal from "./LocationDetailModal";
@@ -59,6 +60,7 @@ import {
 } from "@/lib/api/vworld";
 import type { UqVillage } from "@/lib/vworld/uq-villages";
 import type { UqVillageWithMatches } from "@/lib/uq/match-village";
+import type { FacilitySearchResult } from "@/lib/modes/modes/facility";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import { buildLatIndex, type LatIndex } from "@/lib/uq/sorted-by-lat";
 import {
@@ -255,6 +257,8 @@ export default function MapClient({ isAdmin, email }: Props) {
   /** 노랑 마을 마커 클릭으로 선택된 그룹 — AuctionVillageCard 표시 출처 */
   const [selectedAuctionVillage, setSelectedAuctionVillage] =
     useState<AuctionVillageGroup | null>(null);
+  /** [매물 N건 보기] 클릭 시 AuctionVillageModal 표시 토글 */
+  const [auctionModalOpen, setAuctionModalOpen] = useState(false);
   /** 매물 → BJD 단위 그룹화 결과. 지도 마커 + 카드 데이터 출처. */
   const auctionVillages = useMemo(
     () => groupAuctionItemsByVillage(auctionItems),
@@ -266,10 +270,14 @@ export default function MapClient({ isAdmin, email }: Props) {
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
     setSelectedAuctionVillage(null);
+    setAuctionModalOpen(false);
     // uq 외 모드로 전환 시 화면에 남은 자연취락지구 폴리곤/마커 정리
     if (next !== "uq") {
       setUqVillagePolygons([]);
       setUqSearchResults([]);
+    }
+    if (next !== "facility") {
+      setFacilitySearchResults([]);
     }
   }, []);
 
@@ -330,6 +338,10 @@ export default function MapClient({ isAdmin, email }: Props) {
   const [uqSearchResults, setUqSearchResults] = useState<UqVillageWithMatches[]>(
     [],
   );
+  /** 시설 모드 검색 결과 — 마커 표시용. */
+  const [facilitySearchResults, setFacilitySearchResults] = useState<
+    FacilitySearchResult[]
+  >([]);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const villageReqSeqRef = useRef(0);
   const villageAbortRef = useRef<AbortController | null>(null);
@@ -629,6 +641,18 @@ export default function MapClient({ isAdmin, email }: Props) {
     [moveMapTo],
   );
 
+  /**
+   * 시설 모드 — 결과 카드/마커 클릭. PNU → 필지 폴리곤/centroid 받아 카메라 이동.
+   * Phase 4 마커 작업 시 추가 강조 처리. 지금은 카메라 이동만.
+   */
+  const handleFacilityItemClick = useCallback(
+    (result: FacilitySearchResult) => {
+      // Phase 4 에서 마커 + 카메라 이동 + 강조 추가. 지금은 클릭 로깅만.
+      console.log("[Facility] item click:", result.building.platPlc, result.building.mgmBldrgstPk);
+    },
+    [],
+  );
+
   // 검색 결과 클릭 — ri (마을) → 마을 흐름, ji (지번) → 지번 흐름 으로 분기
   const handleSearchResultPick = useCallback(
     async (pick: SearchPick) => {
@@ -702,6 +726,22 @@ export default function MapClient({ isAdmin, email }: Props) {
     [openParcelPanelByPnu],
   );
 
+  // 경매 매물 카드 클릭 — 공매 미러. 모달 닫고 PNU 로 ParcelPanel 오픈.
+  const openParcelPanelOnAuctionItemClick = useCallback(
+    async (auction: AuctionListItem) => {
+      const pnu = auction.pnuStandard;
+      if (!pnu || !/^\d{19}$/.test(pnu)) {
+        setSimpleToast("이 매물의 PNU 를 만들 수 없습니다.");
+        return;
+      }
+      setAuctionModalOpen(false);
+      await openParcelPanelByPnu(pnu, {
+        onNotFound: () => setSimpleToast("⚠️ 매물 필지 정보를 찾을 수 없어요"),
+      });
+    },
+    [openParcelPanelByPnu],
+  );
+
   // 공매 마을 마커 클릭 — 동 폴리곤 음영 + OnbidVillageCard 표시.
   // 전기와 동일한 폴리곤 호출 재활용. 매물 데이터는 이미 그룹에 있음 (별도 fetch 없음).
   const openOnbidVillage = useCallback(
@@ -763,6 +803,7 @@ export default function MapClient({ isAdmin, email }: Props) {
 
   const closeAuctionVillage = useCallback(() => {
     setSelectedAuctionVillage(null);
+    setAuctionModalOpen(false);
     clearPolygons();
   }, [clearPolygons]);
 
@@ -849,6 +890,8 @@ export default function MapClient({ isAdmin, email }: Props) {
         onUqVillagePick={handleTopRankingPick}
         onUqPolygonFocus={handleUqPolygonFocus}
         onUqResults={setUqSearchResults}
+        onFacilityResults={setFacilitySearchResults}
+        onFacilityItemClick={handleFacilityItemClick}
       />
 
       <main className="flex-1 flex min-w-0">
@@ -1176,17 +1219,22 @@ export default function MapClient({ isAdmin, email }: Props) {
             />
           )}
 
-          {/* 경매 마을 요약 카드 — 노랑 마커 클릭, 지번 패널 떠있으면 숨김.
-              상세 모달은 D4 단계에서 추가 — 일단 onShowDetail 은 콘솔만. */}
+          {/* 경매 마을 요약 카드 — 노랑 마커 클릭, 지번 패널 떠있으면 숨김. */}
           {selectedAuctionVillage && !selectedPnu && (
             <AuctionVillageCard
               key={selectedAuctionVillage.key}
               group={selectedAuctionVillage}
-              onShowDetail={() => {
-                // TODO(D4): AuctionVillageModal 표시
-                console.log("[auction] show detail", selectedAuctionVillage);
-              }}
+              onShowDetail={() => setAuctionModalOpen(true)}
               onClose={closeAuctionVillage}
+            />
+          )}
+
+          {/* 경매 마을 매물 리스트 모달 */}
+          {auctionModalOpen && selectedAuctionVillage && (
+            <AuctionVillageModal
+              group={selectedAuctionVillage}
+              onClose={() => setAuctionModalOpen(false)}
+              onItemClick={openParcelPanelOnAuctionItemClick}
             />
           )}
 

@@ -148,6 +148,11 @@ export async function fetchAuctionListPage(
  * 20페이지 cap 적용 (= 최대 200건). Cap 초과 시 응답 객체에 truncated 표시.
  *
  * 첫 페이지가 비정상(apiStatus !== "ok") 이면 즉시 그 status 반환.
+ *
+ * ⚠️ 테스트 모드(HYPHEN_OPERATION_MODE !== 'Y')에선 page 1 만 호출.
+ *    Hyphen 테스트 모드는 호출 간격 20초 강제 — 병렬 sweep 시 page 2~N 전부
+ *    HDM016 으로 실패해 로그만 더럽힘. 페이지당 10건 고정이라 10건만 보이지만
+ *    truncated=true 로 UI 가 안내. 운영 모드 전환 후 자동 풀 sweep.
  */
 export interface AuctionVillageSweepResult {
   apiStatus: HyphenApiStatus;
@@ -185,8 +190,15 @@ export async function fetchAuctionVillageSweep(
   }
 
   const totalpage = Math.max(1, page1.totalpage);
-  const cappedTotal = Math.min(totalpage, HYPHEN_MAX_PAGES);
-  const truncated = totalpage > HYPHEN_MAX_PAGES;
+  const isOperationMode = process.env.HYPHEN_OPERATION_MODE === "Y";
+  // 테스트 모드: page 1 만 (병렬 호출 시 20초 레이트리밋으로 전부 실패).
+  // 운영 모드: 20페이지 cap 까지 병렬.
+  const cappedTotal = isOperationMode
+    ? Math.min(totalpage, HYPHEN_MAX_PAGES)
+    : 1;
+  const truncated = isOperationMode
+    ? totalpage > HYPHEN_MAX_PAGES
+    : totalpage > 1;
 
   if (cappedTotal === 1) {
     return {
@@ -200,7 +212,7 @@ export async function fetchAuctionVillageSweep(
     };
   }
 
-  // page 2 ~ cappedTotal 병렬 호출
+  // page 2 ~ cappedTotal 병렬 호출 (운영 모드에서만 도달)
   const restPageNumbers = Array.from(
     { length: cappedTotal - 1 },
     (_, i) => i + 2,
