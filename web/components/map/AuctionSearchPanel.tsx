@@ -51,10 +51,6 @@ interface Props {
   onItemClick?: (item: AuctionListItem) => void;
 }
 
-/** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 (일반시 자체는 gu=null) */
-function formatSigungu(si: string | null, gu: string | null): string {
-  return `${si ?? ""} ${gu ?? ""}`.trim();
-}
 
 export default function AuctionSearchPanel({ onResults: _onResults, onItemClick: _onItemClick }: Props) {
   // ─── 상태 복원 ─────────────────────────────────────────────
@@ -101,8 +97,8 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
   const sigungus = useMemo(() => {
     if (!params.sido) return [] as Array<{ label: string; code: string }>;
     return allSigungus
-      .filter((r) => r.sido === params.sido)
-      .map((r) => ({ label: formatSigungu(r.si, r.gu), code: r.code }));
+      .filter((r) => r.sido === params.sido && r.label !== "")
+      .map((r) => ({ label: r.label, code: r.code }));
   }, [allSigungus, params.sido]);
 
   /** 시도 변경 시 무효 시군구 자동 초기화 */

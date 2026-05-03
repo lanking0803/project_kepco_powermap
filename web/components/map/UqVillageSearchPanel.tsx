@@ -111,7 +111,7 @@ export default function UqVillageSearchPanel({
   const sigungus = useMemo(() => {
     if (!params.sido) return [] as Array<{ label: string; code: string }>;
     return allSigungus
-      .filter((r) => r.sido === params.sido)
+      .filter((r) => r.sido === params.sido && r.label !== "")
       .map((r) => ({ label: r.label, code: r.code }));
   }, [allSigungus, params.sido]);
 

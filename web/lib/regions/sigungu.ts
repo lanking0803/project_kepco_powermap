@@ -41,10 +41,12 @@ interface BjdMasterRow {
 }
 
 /**
- * bjd_master 에서 시군구 단위 unique 행을 가져온다.
+ * bjd_master 에서 시도/시군구 대표 행을 모두 가져온다.
  *
- * 시군구는 bjd_code 끝 5자리가 모두 0 인 행이 대표 (예: 4613000000).
- * sep_2/sep_3 둘 다 null 인 행(세종 시도 자체 대표)은 시군구가 아니므로 제외.
+ * bjd_code 끝 5자리가 00000 = 시도(시도코드+0000000000) + 시군구 행 모두 포함.
+ * label = sep_2 + sep_3 trim. 시도 자체 행(세종 등)은 label="" 로 응답되며,
+ * 클라이언트가 시도 드롭다운엔 sep_1 distinct 로 사용하고 시군구 드롭다운은
+ * label 비어있는 항목을 제외하는 방식으로 분리해 쓴다.
  */
 export async function listSigungus(): Promise<SigunguEntry[]> {
   const supabase = createAdminClient();
@@ -63,16 +65,14 @@ export async function listSigungus(): Promise<SigunguEntry[]> {
   }
 
   const rows = (data ?? []) as BjdMasterRow[];
-  return rows
-    .map((r) => {
-      const label = `${r.sep_2 ?? ""} ${r.sep_3 ?? ""}`.trim();
-      return {
-        sido: r.sep_1,
-        si: r.sep_2,
-        gu: r.sep_3,
-        label,
-        code: r.bjd_code.slice(0, 5),
-      };
-    })
-    .filter((e) => e.label !== "");
+  return rows.map((r) => {
+    const label = `${r.sep_2 ?? ""} ${r.sep_3 ?? ""}`.trim();
+    return {
+      sido: r.sep_1,
+      si: r.sep_2,
+      gu: r.sep_3,
+      label,
+      code: r.bjd_code.slice(0, 5),
+    };
+  });
 }
