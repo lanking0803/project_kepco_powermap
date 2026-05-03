@@ -147,6 +147,13 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
   const [truncated, setTruncated] = useState(false);
   const canSearch = params.sigunguCode !== "" && !searching;
 
+  /**
+   * 검색창 접힘/펼침 — 사용자가 명시적으로 토글.
+   * 결과 헤더 위 가로 버튼([▴ 접기] / [▾ 펼치기])으로 제어.
+   * 자동 접힘 안 함 — 사용자 의도 우선.
+   */
+  const [panelCollapsed, setPanelCollapsed] = useState<boolean>(false);
+
   const runSearch = async () => {
     if (!canSearch) return;
     setSearching(true);
@@ -208,6 +215,7 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
     setApiStatus(null);
     setTotalCountAll(null);
     setTruncated(false);
+    setPanelCollapsed(false); // 초기화 = 검색창 다시 펼침
     clearModeState(MODE_ID);
   };
 
@@ -249,7 +257,8 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
   // ─── 렌더 ────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
-      {/* 검색 입력 */}
+      {/* 검색 입력 — panelCollapsed=false 일 때만 렌더 */}
+      {!panelCollapsed && (
       <div className="p-3 space-y-3 overflow-y-auto flex-shrink-0 border-b border-gray-100">
         {/* 지역 */}
         <Section title="지역">
@@ -582,6 +591,27 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
           </button>
         </div>
       </div>
+      )}
+
+      {/* 검색창 접기/펼치기 토글 — 가로 길게. 사용자가 결과 영역 확보용으로 직접 조작. */}
+      <button
+        type="button"
+        onClick={() => setPanelCollapsed((v) => !v)}
+        title={panelCollapsed ? "검색조건 펼치기" : "검색조건 접기"}
+        className="w-full py-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border-y border-amber-200 transition-colors flex items-center justify-center gap-1.5"
+      >
+        {panelCollapsed ? (
+          <>
+            <span className="text-[13px] leading-none">▾</span>
+            <span>검색조건 펼치기</span>
+          </>
+        ) : (
+          <>
+            <span className="text-[13px] leading-none">▴</span>
+            <span>검색조건 접기</span>
+          </>
+        )}
+      </button>
 
       {/* 결과 영역 — 매물 카드 리스트 */}
       <div className="flex-1 flex flex-col min-h-0">
@@ -764,6 +794,35 @@ function rangeFromToday(months: number): { bidStart: string; bidEnd: string } {
   return { bidStart: start, bidEnd: end };
 }
 
+/**
+ * `대표소재지` 도로명주소에서 호수/동 정보 추출.
+ *
+ * 예시:
+ *   "경기도 고양시 일산서구 주엽로 80, 1층비146호 (대화동, ...)"
+ *     → "1층비146호"
+ *   "서울특별시 강남구 테헤란로 152, 강남파이낸스센터 5층502호"
+ *     → "강남파이낸스센터 5층502호"
+ *   "경기도 김포시 월곶면 고막리 144-11" (지번주소만, 호수 없음)
+ *     → null
+ *
+ * 규칙: 첫 콤마 다음 ~ 괄호(또는 끝) 전. 호수 키워드(층/호/동) 가 없으면 null.
+ */
+function extractUnitFromAddress(addr: string | null | undefined): string | null {
+  if (!addr) return null;
+  // 첫 콤마 위치
+  const commaIdx = addr.indexOf(",");
+  if (commaIdx === -1) return null;
+  // 콤마 이후
+  const afterComma = addr.slice(commaIdx + 1);
+  // 괄호 전까지
+  const parenIdx = afterComma.indexOf("(");
+  const segment = (parenIdx === -1 ? afterComma : afterComma.slice(0, parenIdx)).trim();
+  if (!segment) return null;
+  // 호수 키워드 검증 — 층/호/동/호실 중 하나라도 포함해야 의미 있는 호수 정보
+  if (!/[층호동]/.test(segment)) return null;
+  return segment;
+}
+
 // ───────────────────────────────────────────────
 // 결과 카드 — 영업담당자 한눈 평가 가능 형식
 // ───────────────────────────────────────────────
@@ -791,6 +850,21 @@ function ResultCard({
   const lowMan = Math.round(item.최저가 / 10000);
   const discountPct = Math.round(item.discountRatio * 100);
   const jibun = item.pnuStandard ? jibunFromPnu(item.pnuStandard) ?? null : null;
+
+  /**
+   * 호수/동 정보 — 같은 빌딩 다른 호수 매물 구분 핵심.
+   *
+   * Hyphen 응답 검증(2026-05-03): 한 사건에 5개 호수 매물이 들어오는 케이스 발견.
+   * 사건명칭/지번/면적/감정가가 모두 같고 호수만 다르면 카드 시각상 구분 불가.
+   *
+   * 추출 규칙 — `대표소재지` 도로명주소에서 호수 부분 분리:
+   *   "경기도 고양시 일산서구 주엽로 80, 1층비146호 (대화동, ...)"
+   *   → 콤마 다음 ~ 괄호 전 = "1층비146호"
+   *   호수 정보 없는 매물(토지 등)은 null 반환.
+   */
+  const unitText = extractUnitFromAddress(item.대표소재지);
+  /** 한 사건에 여러 물건일 때만 [N/M] 배지 — 단일 물건이면 노이즈라 숨김 */
+  const showUnitBadge = (item.물건번호갯수 ?? 1) > 1;
 
   // 면적: 토지/건물 중 큰 쪽 우선. 둘 다 없으면 생략.
   const areaText = (() => {
@@ -865,10 +939,24 @@ function ResultCard({
             </span>
           </div>
 
-          {/* 2줄: 사건명칭 (영업 키, 큰 글씨) */}
-          <div className="text-[12px] text-gray-900 font-bold leading-tight mb-1">
-            {item.사건명칭}
+          {/* 2줄: 사건명칭 + 물건번호 배지 (한 사건에 다물건일 때만) */}
+          <div className="flex items-baseline gap-1.5 mb-0.5">
+            <span className="text-[12px] text-gray-900 font-bold leading-tight">
+              {item.사건명칭}
+            </span>
+            {showUnitBadge && (
+              <span className="text-[9px] font-semibold px-1 py-px rounded bg-gray-100 text-gray-600 border border-gray-200 leading-none">
+                물건 {item.물건번호}/{item.물건번호갯수}
+              </span>
+            )}
           </div>
+
+          {/* 호수 정보 — 같은 빌딩 다른 호수 매물 시각 구분 (도로명 빌딩 매물만) */}
+          {unitText && (
+            <div className="text-[11px] text-amber-700 font-semibold leading-tight mb-1">
+              🏢 {unitText}
+            </div>
+          )}
 
           {/* 3줄: 감정가 (큰 글씨) + 할인율 % */}
           <div className="flex items-baseline gap-2 mb-1">
