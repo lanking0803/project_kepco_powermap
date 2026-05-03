@@ -500,6 +500,13 @@ export const MANIFEST: GeneratedManifest = {
                 "description": "행안부 5자리. 비용 가드 — 시도만 검색 거부"
               },
               {
+                "name": "sidoName",
+                "type": "string",
+                "required": false,
+                "sample": "경기도",
+                "description": "시도 한글명 — enrich 동명이리 충돌 방지용 (sep_1 매칭). 비우면 매칭 생략"
+              },
+              {
                 "name": "emdong",
                 "type": "string",
                 "required": false,

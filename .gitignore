@@ -51,3 +51,9 @@ crawler/test_*.py
 
 # 편집기 tmp 파일
 *.tmp.*
+
+# Claude Code 로컬 런타임 (세션 캐시 등)
+.claude/cp.json
+
+# Windows bash crash dump
+*.stackdump

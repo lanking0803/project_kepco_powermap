@@ -28,10 +28,7 @@ export const meta: EndpointMeta = {
   outputSchema:
     "{ ok, count, items: Array<{ sido: string, si: string|null, gu: string|null, label: string, code: string }> }",
   externalDeps: [],
-  notes:
-    "약 250건 — 한국 전체 시군구. bjd_code 끝 5자리가 00000 인 시군구 대표 행만. " +
-    "label = sep_2 + sep_3 trim. 일반시 자체(여수시 등)는 si=시명, gu=null. " +
-    "30일 CDN 캐시 + 클라이언트 모듈 캐시 병행.",
+  notes: "약 250건 — 한국 전체 시군구. bjd_code 끝 5자리가 00000 인 시군구 대표 행만. label = sep_2 + sep_3 trim. 일반시 자체(여수시 등)는 si=시명, gu=null. 30일 CDN 캐시 + 클라이언트 모듈 캐시 병행.",
 };
 
 export async function GET() {
