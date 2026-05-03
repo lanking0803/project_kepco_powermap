@@ -147,6 +147,25 @@ export function filterAndClassifyBuildings(
   return out;
 }
 
+/**
+ * 이미 분류된 FacilityListItem[] (서버 atomic 응답) → 카테고리/평수 클라이언트 재필터.
+ *
+ * 서버에서 카테고리 필터 없이 전체를 받아오고, 사이드바 토글 시 useMemo 가
+ * 이 함수로 즉시 재필터 — 호출 0회.
+ */
+export function filterClassifiedItems<
+  T extends { category: FacilityCategory; pyeong: number | null },
+>(items: T[], opts: FacilityFilterOptions): T[] {
+  return items.filter((it) => {
+    if (!opts.categories.has(it.category)) return false;
+    if (opts.minPyeong > 0) {
+      if (it.pyeong == null) return false;
+      if (it.pyeong < opts.minPyeong) return false;
+    }
+    return true;
+  });
+}
+
 /* ────────────────────────────────────────────────────────────
  *  평수 헬퍼
  * ──────────────────────────────────────────────────────────── */

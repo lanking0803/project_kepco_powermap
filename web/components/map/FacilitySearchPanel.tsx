@@ -35,14 +35,12 @@ import {
   type SigunguEntry,
   type EupmyeondongEntry,
 } from "@/lib/api/regions";
-import {
-  fetchAllBuildingsByBjd,
-  fetchAllBuildingsByBjdMulti,
-} from "@/lib/api/buildings";
+import { fetchFacilitySearch } from "@/lib/api/buildings";
+import type { FacilityListItem } from "@/lib/facility/enrich";
 import {
   FACILITY_CATEGORIES,
   FACILITY_CATEGORY_ORDER,
-  filterAndClassifyBuildings,
+  filterClassifiedItems,
   type FacilityCategory,
 } from "@/lib/facility/classify";
 
@@ -68,23 +66,18 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
     persisted?.params ?? FACILITY_EMPTY_PARAMS,
   );
   /**
-   * 검색으로 받은 원본 건물 (필터 전).
+   * 검색으로 받은 결과 (분류·좌표 박힌 FacilityListItem[]).
    * 카테고리/평수 변경 시 이걸 클라이언트 메모리에서 즉시 재필터 — 추가 API 호출 0.
    */
-  const [rawBuildings, setRawBuildings] = useState<
-    import("@/lib/building-hub/title").BuildingTitleInfo[]
-  >(persisted?.rawBuildings ?? []);
+  const [rawItems, setRawItems] = useState<FacilityListItem[]>(
+    persisted?.rawItems ?? [],
+  );
   const [totalCount, setTotalCount] = useState<number>(persisted?.totalCount ?? 0);
   const [capped, setCapped] = useState<boolean>(persisted?.capped ?? false);
   const [hasSearched, setHasSearched] = useState(
-    (persisted?.rawBuildings?.length ?? 0) > 0,
+    (persisted?.rawItems?.length ?? 0) > 0,
   );
   const [searching, setSearching] = useState(false);
-  const [searchProgress, setSearchProgress] = useState<{
-    pageNo: number;
-    receivedSoFar: number;
-    totalCount: number;
-  } | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   /**
@@ -94,16 +87,16 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
   const [panelCollapsed, setPanelCollapsed] = useState<boolean>(false);
 
   /**
-   * 표시 결과 — rawBuildings + 카테고리/평수 필터 클라이언트 적용.
-   * params.categories / params.minPyeong 또는 rawBuildings 가 변하면 즉시 재계산.
+   * 표시 결과 — rawItems + 카테고리/평수 필터 클라이언트 적용.
+   * params.categories / params.minPyeong 또는 rawItems 가 변하면 즉시 재계산.
    */
   const results = useMemo<FacilitySearchResult[]>(
     () =>
-      filterAndClassifyBuildings(rawBuildings, {
+      filterClassifiedItems(rawItems, {
         categories: new Set(params.categories),
         minPyeong: params.minPyeong,
       }),
-    [rawBuildings, params.categories, params.minPyeong],
+    [rawItems, params.categories, params.minPyeong],
   );
 
   /** 결과 변경 시 부모로 forward (마커 그릴 때 같이 갱신) */
@@ -218,81 +211,53 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
   const canSearch = canFacilitySearch(params) && !searching;
 
   /**
-   * 검색 — 3가지 케이스로 분기:
-   *   1. 도시 (hasRi=false)         → 동 코드 단건 fetchAllBuildingsByBjd
-   *   2. 농촌 + 특정 리 (riCode 10자리) → 리 코드 단건 fetchAllBuildingsByBjd
-   *   3. 농촌 + 전체 (riCode="ALL")  → 해당 면의 모든 리 코드 병렬 호출
+   * 검색 — atomic endpoint (/api/facility/search) 한 번 호출.
+   *
+   * 3 가지 케이스 모두 BJD 코드 N개를 조립해서 한 번에 보냄:
+   *   1. 도시 (hasRi=false)         → [eupmyeondongCode]
+   *   2. 농촌 + 특정 리 (riCode 10자리) → [riCode]
+   *   3. 농촌 + 전체 (riCode="ALL")  → 해당 면의 모든 리 코드
+   *
+   * 카테고리/평수 필터는 클라이언트 useMemo 가 즉시 처리 — 서버는 분류·좌표만 박아 응답.
    */
   const runSearch = async () => {
     if (!canSearch) return;
     setSearching(true);
     setSearchError(null);
     setHasSearched(true);
-    setSearchProgress(null);
     try {
-      let buildingRows: import("@/lib/building-hub/title").BuildingTitleInfo[] = [];
-      let serverTotal = 0;
-      let cappedFlag = false;
-
+      let bjdCodes: string[];
       if (params.hasRi && params.riCode === "ALL") {
-        // 케이스 3: 농촌 "전체" — 면의 모든 리 병렬 호출
-        const childCodes = (selectedEupm?.children ?? []).map((c) => c.code);
-        if (childCodes.length === 0) throw new Error("이 면 아래 리 정보가 없습니다.");
-        const multi = await fetchAllBuildingsByBjdMulti(childCodes, {
-          maxPages: 20,
-          concurrency: 5,
-          onBjdComplete: (info) => {
-            setSearchProgress({
-              pageNo: info.completed,
-              receivedSoFar: info.totalRowsSoFar,
-              totalCount: info.total, // 여기선 "전체 리 개수" 의미로 재사용
-            });
-          },
-        });
-        buildingRows = multi.rows;
-        serverTotal = multi.totalCountSum;
-        cappedFlag = multi.anyCapped;
+        bjdCodes = (selectedEupm?.children ?? []).map((c) => c.code);
+        if (bjdCodes.length === 0)
+          throw new Error("이 면 아래 리 정보가 없습니다.");
       } else {
-        // 케이스 1·2: 단일 코드 (도시 동 or 농촌 특정 리)
-        const targetCode = params.hasRi ? params.riCode : params.eupmyeondongCode;
-        const all = await fetchAllBuildingsByBjd(targetCode, {
-          maxPages: 20,
-          onProgress: (info) => {
-            setSearchProgress({
-              pageNo: info.pageNo,
-              receivedSoFar: info.receivedSoFar,
-              totalCount: info.totalCount,
-            });
-          },
-        });
-        buildingRows = all.rows;
-        serverTotal = all.totalCount;
-        cappedFlag = all.capped;
+        bjdCodes = [params.hasRi ? params.riCode : params.eupmyeondongCode];
       }
 
-      // rawBuildings 보관 — 카테고리/평수 필터는 useMemo 가 즉시 적용
-      setRawBuildings(buildingRows);
-      setTotalCount(serverTotal);
-      setCapped(cappedFlag);
+      const r = await fetchFacilitySearch(bjdCodes);
+
+      setRawItems(r.items);
+      setTotalCount(r.totalCount);
+      setCapped(r.capped);
       saveModeState<FacilityPersistedState>(MODE_ID, {
         params,
-        rawBuildings: buildingRows,
-        totalCount: serverTotal,
-        capped: cappedFlag,
+        rawItems: r.items,
+        totalCount: r.totalCount,
+        capped: r.capped,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setSearchError(msg);
-      setRawBuildings([]);
+      setRawItems([]);
     } finally {
       setSearching(false);
-      setSearchProgress(null);
     }
   };
 
   const reset = () => {
     setParams(FACILITY_EMPTY_PARAMS);
-    setRawBuildings([]);
+    setRawItems([]);
     setTotalCount(0);
     setCapped(false);
     setSearchError(null);
@@ -493,19 +458,13 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
         <span className="text-xs font-bold text-gray-700">결과</span>
         <span className="text-xs text-gray-500">
           {searching ? (
-            searchProgress ? (
-              params.riCode === "ALL" ? (
-                <>조회중 {searchProgress.pageNo}/{searchProgress.totalCount}·{searchProgress.receivedSoFar.toLocaleString()}건</>
-              ) : (
-                <>조회중 {searchProgress.pageNo}/20·{searchProgress.receivedSoFar.toLocaleString()}건</>
-              )
-            ) : (
-              "조회중…"
-            )
-          ) : rawBuildings.length > 0 ? (
+            "조회중…"
+          ) : rawItems.length > 0 ? (
             <>
               {results.length.toLocaleString()}건
-              <span className="text-gray-400"> / 전체 {rawBuildings.length.toLocaleString()}건</span>
+              <span className="text-gray-400">
+                {" "}/ 전체 {rawItems.length.toLocaleString()}건
+              </span>
             </>
           ) : (
             "—"
@@ -520,7 +479,7 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
       )}
 
       {/* 필터 — 검색 결과를 클라이언트에서 즉시 좁히는 영역 (호출 X) */}
-      {hasSearched && rawBuildings.length > 0 && (
+      {hasSearched && rawItems.length > 0 && (
         <div className="px-3 py-2 border-b border-gray-100 space-y-2 bg-violet-50/30">
           <div>
             <div className="text-[11px] font-bold text-violet-800 mb-1">시설 종류 (다중 선택)</div>
@@ -587,7 +546,7 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
           <p className="text-xs text-gray-400 text-center py-8 leading-relaxed">
             {!hasSearched ? (
               "지역을 선택하고 [검색] 버튼을 눌러주세요."
-            ) : rawBuildings.length === 0 ? (
+            ) : rawItems.length === 0 ? (
               <>
                 이 지역에 등록된 건축물이 없습니다.
                 <br />

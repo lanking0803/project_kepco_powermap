@@ -51,6 +51,18 @@ export interface AuctionVillageMarkerData {
   minDaysLeft: number | null;
 }
 
+/** 필지 마을 마커 1개 — 같은 BJD(10자리)의 시설 N건을 묶은 그룹. */
+export interface FacilityVillageMarkerData {
+  /** 그룹 키 (BJD 10자리) — 클릭 콜백 식별자 */
+  key: string;
+  lat: number;
+  lng: number;
+  /** 그룹 내 시설 수 — 마커 안 숫자 + 카드 배지 */
+  count: number;
+  /** 그룹 내 최대 평수 — 마커 라벨 메인 표기 */
+  maxPyeong: number;
+}
+
 interface Props {
   rows: MapSummaryRow[];
   /** 현재 활성화된 색상 필터 */
@@ -155,6 +167,15 @@ interface Props {
   auctionVillages?: AuctionVillageMarkerData[];
   /** 경매 마을 마커 클릭 콜백 — group key (BJD 10자리) 전달 */
   onAuctionVillageClick?: (key: string) => void;
+  /**
+   * 필지 모드 ON 여부. true 일 때 시설 마을 마커 표시.
+   * 공매·경매와 단일 라디오 (registry 정책).
+   */
+  facilityActive?: boolean;
+  /** 필지 마을 마커 — BJD 10자리 단위로 그룹화한 결과. 빈 배열이면 표시 X. */
+  facilityVillages?: FacilityVillageMarkerData[];
+  /** 필지 마을 마커 클릭 콜백 — group key (BJD 10자리) 전달 */
+  onFacilityVillageClick?: (key: string) => void;
   /**
    * 솔라 발전소 마커 — 입지 탭 활성 시 같은 리(BJD)의 좌표 보유 발전소들.
    * 같은 PNU 는 1 마커 + 갯수 배지.
@@ -455,6 +476,34 @@ function makeAuctionCardHtml(
   </div>`;
 }
 
+/**
+ * 필지 카드 마커 HTML — globals.css 의 .facility-card-marker 와 동작.
+ *
+ * 영업담당자 시각 위계 (의뢰자 의도 = 타겟 시설 발굴):
+ *   - 메인 (큰 글씨): 최대 평수 (예: "120평")
+ *   - 보조 (작은 글씨): 시설 수 (예: "5건")
+ *   - 우측 배지: 시설 수 (count > 1)
+ */
+function makeFacilityCardHtml(
+  bjdKey: string,
+  pyeongLabel: string,
+  countLabel: string,
+  count: number,
+): string {
+  const showBadge = count > 1;
+  const badgeText = count > 9999 ? "9999+" : String(count);
+  const badge = showBadge ? `<span class="badge">${badgeText}</span>` : "";
+  const safeId = bjdKey.replace(/"/g, "&quot;");
+  return `<div class="facility-card-marker" data-facility-id="${safeId}">
+    <div class="card">
+      <div class="pyeong">${pyeongLabel}</div>
+      <div class="cnt">${countLabel}</div>
+    </div>
+    <div class="arrow"></div>
+    ${badge}
+  </div>`;
+}
+
 export default function KakaoMap({
   rows,
   colorFilter,
@@ -484,6 +533,9 @@ export default function KakaoMap({
   auctionVillages = [],
   onOnbidVillageClick,
   onAuctionVillageClick,
+  facilityActive = false,
+  facilityVillages = [],
+  onFacilityVillageClick,
   solarMarkers = [],
   onSolarMarkerClick,
 }: Props) {
@@ -528,6 +580,11 @@ export default function KakaoMap({
   const auctionRebuildRef = useRef<() => void>(() => {});
   const onAuctionClickRef = useRef(onAuctionVillageClick);
   onAuctionClickRef.current = onAuctionVillageClick;
+
+  const facilityOverlaysRef = useRef<any[]>([]);
+  const facilityRebuildRef = useRef<() => void>(() => {});
+  const onFacilityClickRef = useRef(onFacilityVillageClick);
+  onFacilityClickRef.current = onFacilityVillageClick;
   // 마커 참조 맵 (geocode_address → kakao.maps.Marker) — 선택 변경 시 이미지 교체용
   const markersByAddrRef = useRef<Map<string, { marker: any; row: MapSummaryRow }>>(
     new Map()
@@ -1378,6 +1435,69 @@ export default function KakaoMap({
     auctionRebuildRef.current();
   }, [loaded, auctionActive, auctionVillages]);
 
+  // ─────────────────── 필지 마을 마커 (onbid/auction 패턴 미러) ───────────────────
+  useEffect(() => {
+    facilityRebuildRef.current = () => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      facilityOverlaysRef.current.forEach((o) => o.setMap(null));
+      facilityOverlaysRef.current = [];
+
+      if (!facilityActive || !facilityVillages || facilityVillages.length === 0)
+        return;
+
+      const level = map.getLevel();
+      const showCard = level <= LABEL_VISIBLE_LEVEL;
+
+      facilityVillages.forEach((v) => {
+        const position = new window.kakao.maps.LatLng(v.lat, v.lng);
+        const safeKey = v.key.replace(/"/g, "&quot;");
+
+        if (showCard) {
+          // 가까운 줌 — 카드. 평수 메인 + 시설 수 보조.
+          const pyeongLabel =
+            v.maxPyeong > 0
+              ? `${Math.round(v.maxPyeong).toLocaleString()}평`
+              : "—";
+          const countLabel = `${v.count}건`;
+          const html = makeFacilityCardHtml(
+            safeKey,
+            pyeongLabel,
+            countLabel,
+            v.count,
+          );
+          const overlay = new window.kakao.maps.CustomOverlay({
+            position,
+            content: html,
+            yAnchor: 1,
+            xAnchor: 0.5,
+            zIndex: 100,
+          });
+          overlay.setMap(map);
+          facilityOverlaysRef.current.push(overlay);
+        } else {
+          // 먼 줌 — 보라 원. 안에 시설 수.
+          const dotHtml = `<div class="facility-dot" data-facility-id="${safeKey}">${v.count > 1 ? v.count : ""}</div>`;
+          const dotOverlay = new window.kakao.maps.CustomOverlay({
+            position,
+            content: dotHtml,
+            yAnchor: 0.5,
+            xAnchor: 0.5,
+            zIndex: 50,
+          });
+          dotOverlay.setMap(map);
+          facilityOverlaysRef.current.push(dotOverlay);
+        }
+      });
+    };
+  }, [facilityActive, facilityVillages]);
+
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    facilityRebuildRef.current();
+  }, [loaded, facilityActive, facilityVillages]);
+
   // ─────────────────── 솔라 발전소 마커 ───────────────────
   // 입지 탭 활성 시 같은 리(BJD) 발전소들을 마커로 표시.
   // 같은 PNU 의 발전소는 1개 마커 + 갯수 배지로 그룹화.
@@ -1480,6 +1600,17 @@ export default function KakaoMap({
     };
   }, [loaded]);
 
+  // 줌 변경 시 필지 rebuild (카드 ↔ 클러스터 전환)
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const onIdle = () => facilityRebuildRef.current();
+    window.kakao.maps.event.addListener(map, "idle", onIdle);
+    return () => {
+      window.kakao.maps.event.removeListener(map, "idle", onIdle);
+    };
+  }, [loaded]);
+
   // 공매 마커 클릭 — 컨테이너 위임 (data-onbid-id)
   useEffect(() => {
     const container = mapRef.current;
@@ -1505,6 +1636,21 @@ export default function KakaoMap({
       if (!marker) return;
       const id = marker.getAttribute("data-auction-id");
       if (id) onAuctionClickRef.current?.(id);
+    };
+    container.addEventListener("click", onClick);
+    return () => container.removeEventListener("click", onClick);
+  }, []);
+
+  // 필지 마커 클릭 — 컨테이너 위임 (data-facility-id) (공매·경매 패턴 미러)
+  useEffect(() => {
+    const container = mapRef.current;
+    if (!container) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const marker = target?.closest("[data-facility-id]") as HTMLElement | null;
+      if (!marker) return;
+      const id = marker.getAttribute("data-facility-id");
+      if (id) onFacilityClickRef.current?.(id);
     };
     container.addEventListener("click", onClick);
     return () => container.removeEventListener("click", onClick);

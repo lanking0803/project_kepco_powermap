@@ -381,6 +381,67 @@ export function clearBuildingsCache(): void {
   buildingPolygonsByPnuCache.clear();
   buildingsByBjdCache.clear();
   fetchAllByBjdCache.clear();
+  facilitySearchCache.clear();
+}
+
+// ────────────────────────────────────────────────────────────
+//  필지(시설) atomic — /api/facility/search
+//  공매·경매 search 패턴 미러. 좌표 박힌 결과를 한방에 받음.
+// ────────────────────────────────────────────────────────────
+
+import type { FacilityListItem } from "@/lib/facility/enrich";
+
+interface FacilitySearchApiResponse {
+  ok: boolean;
+  items?: FacilityListItem[];
+  totalCount?: number;
+  capped?: boolean;
+  fetchedAt?: string;
+  error?: string;
+}
+
+export interface FetchFacilitySearchResult {
+  items: FacilityListItem[];
+  totalCount: number;
+  capped: boolean;
+}
+
+/** key = bjdCodes 정렬+조인. 같은 조합 재호출 0회 fetch (sessionStorage 와 별도 메모리 캐시) */
+const facilitySearchCache = new Map<string, FetchFacilitySearchResult>();
+
+/**
+ * /api/facility/search — 시설 모드 atomic.
+ *
+ * categories 는 빈 셋(전체) 가 기본 — 카테고리 토글은 클라이언트 useMemo 가 즉시 재필터링.
+ * min_pyeong 도 0 이 기본 (클라이언트 필터). 서버 호출은 BJD 코드 조합만 변하면 충분.
+ */
+export async function fetchFacilitySearch(
+  bjdCodes: string[],
+  options?: FetchOptions,
+): Promise<FetchFacilitySearchResult> {
+  const sorted = [...bjdCodes].sort();
+  const cacheKey = sorted.join(",");
+  const cached = facilitySearchCache.get(cacheKey);
+  if (cached) return cached;
+
+  const params = new URLSearchParams({
+    bjd_codes: sorted.join(","),
+  });
+  const res = await fetch(`/api/facility/search?${params.toString()}`, {
+    cache: "default",
+    signal: options?.signal,
+  });
+  if (!res.ok) throw new Error(`facility/search HTTP ${res.status}`);
+  const data = (await res.json()) as FacilitySearchApiResponse;
+  if (!data.ok) throw new Error(data.error ?? "facility/search 오류");
+
+  const result: FetchFacilitySearchResult = {
+    items: data.items ?? [],
+    totalCount: data.totalCount ?? 0,
+    capped: !!data.capped,
+  };
+  facilitySearchCache.set(cacheKey, result);
+  return result;
 }
 
 export type { BuildingTitleInfo, BuildingPolygon };

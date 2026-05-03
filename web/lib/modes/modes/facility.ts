@@ -10,6 +10,7 @@
  * 본 파일은 "모드 디테일" 만 담당 — UI/검색 로직은 FacilitySearchPanel.
  */
 import type { BuildingTitleInfo } from "@/lib/building-hub/title";
+import type { FacilityListItem } from "@/lib/facility/enrich";
 import {
   type FacilityCategory,
   defaultSelectedCategories,
@@ -46,22 +47,26 @@ export interface FacilitySearchParams {
   minPyeong: number;
 }
 
-/** 검색 결과 1건 — 화면 마커/카드용 */
-export interface FacilitySearchResult {
-  building: BuildingTitleInfo;
-  category: FacilityCategory;
-  pyeong: number | null;
-}
+/**
+ * 검색 결과 1건 — 화면 마커/카드용.
+ *
+ * FacilityListItem 의 alias. 서버 atomic endpoint(/api/facility/search) 가
+ * bjd_master JOIN 으로 lat/lng 까지 박아 내려주므로 클라이언트는 이걸 그대로 사용.
+ */
+export type FacilitySearchResult = FacilityListItem;
 
 /** sessionStorage 저장 상태 */
 export interface FacilityPersistedState {
   params: FacilitySearchParams;
   /**
-   * 검색으로 받은 원본 건물 (필터 전 전체).
-   * 사용자가 카테고리/평수 토글 시 이걸 클라이언트에서 즉시 재필터.
+   * 검색으로 받은 결과 (분류·좌표·평수 박힌 FacilityListItem[]).
+   * 사용자가 카테고리/평수 토글 시 이걸 클라이언트에서 즉시 재필터 — 호출 0.
    * 새로고침 시 복원하면 호출 없이 필터 바로 가능.
+   *
+   * 기존 필드명 `rawBuildings` (BuildingTitleInfo[]) 와 호환 안 됨 — 이전 세션
+   * sessionStorage 가 남아있으면 빈 배열로 fallback.
    */
-  rawBuildings: BuildingTitleInfo[];
+  rawItems: FacilityListItem[];
   /** 외부 API 매치 전체 건수 (capped 시 우리가 받은 것보다 큼) */
   totalCount: number;
   /** 캡 도달로 잘렸는지 — UI 안내용 */

@@ -62,6 +62,12 @@ import type { UqVillage } from "@/lib/vworld/uq-villages";
 import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 import type { FacilitySearchResult } from "@/lib/modes/modes/facility";
 import { buildPnuFromRawItem } from "@/lib/facility/pnu";
+import {
+  groupFacilityItemsByVillage,
+  type FacilityVillageGroup,
+} from "@/lib/facility/group";
+import FacilityVillageCard from "./facility/FacilityVillageCard";
+import FacilityVillageModal from "./facility/FacilityVillageModal";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import { buildLatIndex, type LatIndex } from "@/lib/uq/sorted-by-lat";
 import {
@@ -253,6 +259,8 @@ export default function MapClient({ isAdmin, email }: Props) {
 
   // ─────── 경매(Hyphen) — 공매 패턴 미러 ───────
   const auctionActive = mode === "auction";
+  /** 필지 모드 — 공매·경매와 동일 패턴 (마을 마커/카드/모달) */
+  const facilityActive = mode === "facility";
   /** 경매 검색 결과 매물. AuctionSearchPanel 의 onResults 콜백으로 채움. */
   const [auctionItems, setAuctionItems] = useState<AuctionListItem[]>([]);
   /** 노랑 마을 마커 클릭으로 선택된 그룹 — AuctionVillageCard 표시 출처 */
@@ -279,6 +287,8 @@ export default function MapClient({ isAdmin, email }: Props) {
     }
     if (next !== "facility") {
       setFacilitySearchResults([]);
+      setSelectedFacilityKey(null);
+      setFacilityModalOpen(false);
     }
   }, []);
 
@@ -339,10 +349,36 @@ export default function MapClient({ isAdmin, email }: Props) {
   const [uqSearchResults, setUqSearchResults] = useState<UqVillageWithMatches[]>(
     [],
   );
-  /** 시설 모드 검색 결과 — 마커 표시용. */
+  /**
+   * 필지 모드 — 좌표 박힌 시설 (서버 atomic endpoint 응답).
+   * 사이드바 카드 forwarding + 마을 마커 그룹화 양쪽 모두에 사용 (단일 원천).
+   */
   const [facilitySearchResults, setFacilitySearchResults] = useState<
     FacilitySearchResult[]
   >([]);
+  /**
+   * 보라 마을 마커 클릭으로 선택된 그룹 — FacilityVillageCard 표시 출처.
+   * 그룹 스냅샷 대신 BJD 키만 보관 → 사이드바 필터로 facilityVillages 가
+   * 재계산되면 카드/모달도 같은 키 lookup 으로 자동 동적 갱신.
+   */
+  const [selectedFacilityKey, setSelectedFacilityKey] = useState<string | null>(
+    null,
+  );
+  /** [시설 N건 보기] 클릭 시 FacilityVillageModal 표시 토글 */
+  const [facilityModalOpen, setFacilityModalOpen] = useState(false);
+  /** 마을 마커 그룹화 — 결과 변경 시 메모이즈 (BJD 10자리 단위) */
+  const facilityVillages = useMemo(
+    () => groupFacilityItemsByVillage(facilitySearchResults),
+    [facilitySearchResults],
+  );
+  /** 선택된 마을 그룹 — 매 렌더마다 facilityVillages 에서 lookup (동적 갱신) */
+  const selectedFacilityVillage = useMemo<FacilityVillageGroup | null>(
+    () =>
+      selectedFacilityKey
+        ? facilityVillages.find((g) => g.key === selectedFacilityKey) ?? null
+        : null,
+    [selectedFacilityKey, facilityVillages],
+  );
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const villageReqSeqRef = useRef(0);
   const villageAbortRef = useRef<AbortController | null>(null);
@@ -553,6 +589,10 @@ export default function MapClient({ isAdmin, email }: Props) {
         setDetailModalOpen(false);
         setOnbidModalOpen(false);
         setSelectedOnbidVillage(null);
+        setAuctionModalOpen(false);
+        setSelectedAuctionVillage(null);
+        setFacilityModalOpen(false);
+        setSelectedFacilityKey(null);
         villageReqSeqRef.current++;
         villageAbortRef.current?.abort();
         setSelectedVillage(null);
@@ -769,6 +809,7 @@ export default function MapClient({ isAdmin, email }: Props) {
       // 지번 패널 닫기 (열려있으면)
       closeParcelPanelRef.current?.();
 
+      setSelectedFacilityKey(null);
       setSelectedOnbidVillage(group);
       moveMapToRef.current?.(group.lat, group.lng);
 
@@ -802,6 +843,7 @@ export default function MapClient({ isAdmin, email }: Props) {
       setSelectedOnbidVillage(null);
       closeParcelPanelRef.current?.();
 
+      setSelectedFacilityKey(null);
       setSelectedAuctionVillage(group);
       moveMapToRef.current?.(group.lat, group.lng);
 
@@ -818,6 +860,48 @@ export default function MapClient({ isAdmin, email }: Props) {
     setAuctionModalOpen(false);
     clearPolygons();
   }, [clearPolygons]);
+
+  // 필지 마을 마커 클릭 — 동 폴리곤 + FacilityVillageCard 표시 (공매·경매 미러)
+  const openFacilityVillage = useCallback(
+    async (key: string) => {
+      const group = facilityVillages.find((g) => g.key === key);
+      if (!group) return;
+
+      // 다른 패널 정리
+      villageReqSeqRef.current++;
+      villageAbortRef.current?.abort();
+      setSelectedVillage(null);
+      setDetailModalOpen(false);
+      setSelectedOnbidVillage(null);
+      setSelectedAuctionVillage(null);
+      closeParcelPanelRef.current?.();
+
+      setSelectedFacilityKey(group.key);
+      moveMapToRef.current?.(group.lat, group.lng);
+
+      // group.key = BJD 10자리
+      if (/^\d{10}$/.test(group.key)) {
+        void loadVillageAndUqPolygons(group.key);
+      }
+    },
+    [facilityVillages, loadVillageAndUqPolygons],
+  );
+
+  const closeFacilityVillage = useCallback(() => {
+    setSelectedFacilityKey(null);
+    setFacilityModalOpen(false);
+    clearPolygons();
+  }, [clearPolygons]);
+
+  /**
+   * 사이드바 필터로 선택된 마을이 통째로 사라지면(0건) 모달도 닫는다.
+   * 카드 자체는 selectedFacilityVillage === null 이라 자동 비표시.
+   */
+  useEffect(() => {
+    if (selectedFacilityKey && !selectedFacilityVillage) {
+      setFacilityModalOpen(false);
+    }
+  }, [selectedFacilityKey, selectedFacilityVillage]);
 
   /**
    * 지도 좌표 클릭 — VWorld BBOX → point-in-polygon 으로 정확 1필지 선별 → PNU 로 통합 진입.
@@ -1012,6 +1096,15 @@ export default function MapClient({ isAdmin, email }: Props) {
               minDaysLeft: g.minDaysLeft,
             }))}
             onAuctionVillageClick={openAuctionVillage}
+            facilityActive={facilityActive}
+            facilityVillages={facilityVillages.map((g) => ({
+              key: g.key,
+              lat: g.lat,
+              lng: g.lng,
+              count: g.items.length,
+              maxPyeong: g.maxPyeong,
+            }))}
+            onFacilityVillageClick={openFacilityVillage}
             solarMarkers={solarMarkers}
             onSolarMarkerClick={(marker) => {
               // 기존 Sidebar 지번 클릭 흐름 그대로 재사용 — marker.pnu 직접 사용 (좌표 변환 X)
@@ -1248,6 +1341,25 @@ export default function MapClient({ isAdmin, email }: Props) {
               group={selectedAuctionVillage}
               onClose={() => setAuctionModalOpen(false)}
               onItemClick={openParcelPanelOnAuctionItemClick}
+            />
+          )}
+
+          {/* 필지 마을 요약 카드 — 보라 마커 클릭, 지번 패널 떠있으면 숨김. */}
+          {selectedFacilityVillage && !selectedPnu && (
+            <FacilityVillageCard
+              key={selectedFacilityVillage.key}
+              group={selectedFacilityVillage}
+              onShowDetail={() => setFacilityModalOpen(true)}
+              onClose={closeFacilityVillage}
+            />
+          )}
+
+          {/* 필지 마을 시설 리스트 모달 */}
+          {facilityModalOpen && selectedFacilityVillage && (
+            <FacilityVillageModal
+              group={selectedFacilityVillage}
+              onClose={() => setFacilityModalOpen(false)}
+              onItemClick={handleFacilityItemClick}
             />
           )}
 

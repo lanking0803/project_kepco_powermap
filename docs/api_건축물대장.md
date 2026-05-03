@@ -147,6 +147,58 @@ PNU(19) = sigunguCd(5) + bjdongCd(5) + 산구분(1) + bun(4) + ji(4)
 
 ---
 
+## 🗺 마을 마커 — 좌표 출처 = bjd_master JOIN
+
+**건축HUB 응답에 위경도 없음** (78개 필드 검증, lat/lng/coord 류 0개). 그래서 시설 모드 마을 마커는 **공매·경매와 동일한 패턴**으로 좌표를 보강합니다.
+
+### 좌표 보강 흐름 (공매와 동일)
+
+```
+1. 응답에서 sigunguCd(5) + bjdongCd(5) = BJD 10자리 추출
+2. unique BJD 코드 셋 → supabase.from("bjd_master").select("bjd_code,lat,lng").in("bjd_code",[...])
+   → PostgreSQL 한 방 IN 쿼리 (RPC 아님 — generic plan trap 회피)
+3. 좌표 박은 FacilityListItem[] 리턴
+```
+
+- **외부 API 호출 0회** (좌표 보강 단계)
+- DB 호출 1회 (검색당, IN 절 단일 쿼리)
+- egress: 검색당 ~1~2KB (row 1개 ≈ 65B × unique BJD 5~30개)
+
+### Atomic endpoint — `/api/facility/search`
+
+공매(`/api/onbid/search`)·경매(`/api/auction/search`)와 같은 단일 책임 패턴.
+
+**입력**: `bjd_codes` (콤마 구분 10자리 N개) + `categories` (옵션) + `min_pyeong` (옵션)
+
+**서버 흐름**:
+1. 각 BJD 자동 페이지 순회 (max 20p = 2,000건/BJD, 외부 API 100 hard cap)
+2. `enrichFacilities`: 분류(부속건축물 제외) + 평수 계산 + bjd_master JOIN
+3. categories/min_pyeong 사후 필터
+
+**클라이언트 흐름**:
+- `FacilitySearchPanel` 이 endpoint 한 번 호출 → 결과 보관
+- 카테고리/평수 토글은 클라이언트 useMemo 가 즉시 재필터 (서버 호출 0)
+- 부모(`MapClient`) 가 `groupFacilityItemsByVillage` → 마을 단위 1 마커
+
+### 마커 / 카드 / 모달 (공매·경매 미러)
+
+| 컴포넌트 | 역할 | 모델 |
+|---|---|---|
+| `KakaoMap` `FacilityVillageMarkerData` | 마을 마커 1개 (BJD 10자리 + count + maxPyeong) | `OnbidVillageMarkerData` |
+| `.facility-card-marker` (violet) | 가까운 줌 카드 — 평수 메인 + 시설 수 보조 | `.auction-card-marker` |
+| `.facility-dot` (violet) | 먼 줌 원형 마커 | `.onbid-dot` |
+| `FacilityVillageCard` | 마커 클릭 시 우측 카드 (카테고리 분포 + 평수 통계) | `OnbidVillageCard` |
+| `FacilityVillageModal` | [시설 N건 보기] 모달 | `OnbidVillageModal` |
+| `FacilityItemCard` | 모달 안 시설 1건 카드 (좌측 지번 컬럼 + 우측 본문) | `AuctionItemCard` |
+
+**zIndex 100/50** — 공매·경매와 동일. 전기 마커(3/10) 위에 떠야 한다는 의뢰자 요구 충족.
+
+**동적 갱신**: `selectedFacilityKey` (BJD 키만 보관) + `useMemo` lookup 으로 카드/모달이 매 렌더마다 현재 필터 결과를 반영. 사이드바에서 카테고리 토글하면 마을 카드의 시설 수/평수/카테고리 분포가 즉시 바뀜.
+
+**모달 닫힘**: 시설 카드 클릭 → `handleFacilityItemClick` → PNU 합성 → `openParcelPanelByPnu` 매칭 성공 시 모달과 마을 카드 자동 정리 (공매·경매와 동일 진입점에서 일괄 cleanup).
+
+---
+
 ## 🧪 테스트 스크립트
 
 [scripts/test_bldg_api/test_brtitle.mjs](../scripts/test_bldg_api/test_brtitle.mjs)

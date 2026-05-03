@@ -447,6 +447,97 @@ body.roadview-mode * {
   50% { box-shadow: 0 0 0 6px rgba(180, 83, 9, 0), 0 1px 3px rgba(0, 0, 0, 0.3); }
 }
 
+/* ───────────────────────────────────────────────────────────────
+ * 필지 카드 마커 (가까운 줌, level ≤ 7)
+ * 공매(.onbid-card-marker) 와 동일 골격, violet 톤 + 영업 핵심 = 최대 평수.
+ * 라벨(동·평수) 미사용 — 카드 본체에 평수 큼지막하게 표시.
+ * ─────────────────────────────────────────────────────────────── */
+.facility-card-marker {
+  position: relative;
+  width: 36px;
+  font-family: Arial, sans-serif;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.facility-card-marker .card {
+  width: 36px;
+  height: 32px;
+  background: #fff;
+  border: 1px solid rgba(124, 58, 237, 0.75); /* violet-600 */
+  border-radius: 3px;
+  padding: 3px 2px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+/* 최대 평수 (예: 120평) — 영업 핵심 지표, 가장 큰 글씨 */
+.facility-card-marker .pyeong {
+  font-size: 11px;
+  font-weight: 800;
+  color: #7c3aed; /* violet-600 */
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+/* 시설 수 (작은 글씨, 보조 정보) */
+.facility-card-marker .cnt {
+  font-size: 8px;
+  font-weight: 700;
+  color: #5b21b6; /* violet-800 */
+  line-height: 1;
+  margin-top: 1px;
+}
+.facility-card-marker .arrow {
+  width: 0;
+  height: 0;
+  margin: -1px auto 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #fff;
+  filter: drop-shadow(0 1px 0 rgba(124, 58, 237, 0.75));
+}
+.facility-card-marker .badge {
+  position: absolute;
+  top: 8px;
+  left: 38px;
+  height: 14px;
+  padding: 0 5px;
+  background: #4c1d95; /* violet-900 */
+  color: #fff;
+  border: 1.5px solid #fff;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 11px;
+  white-space: nowrap;
+}
+
+/* ─── 필지 보라 원 마커 (먼 줌) ─── */
+.facility-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.92); /* violet-600 */
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease;
+}
+.facility-dot:hover {
+  transform: scale(1.15);
+  background: rgba(91, 33, 182, 0.95);
+}
+
 /* ──────────────── 솔라 발전소 마커 (입지 탭 활성 시) ──────────────── */
 /* 태양 아이콘 ☀ + 지번(본번-부번) 라벨. 클릭 = 그 PNU 의 ParcelInfoPanel 이동. */
 .solar-card-marker {
