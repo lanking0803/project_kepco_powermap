@@ -794,6 +794,8 @@ export default function KakaoMap({
     // 빨간 원 오버레이로 직접 그리는 게 SDK 기본 파란 핀 회피에 단순.
 
     // idle: 팬/줌 종료. 200ms debounce + bounds 동일 시 skip 으로 자기 루프 차단.
+    // 통합 핸들러 — 전기/공매/경매/필지 4개 rebuild 를 단일 idle 에서 순차 호출.
+    // 이전: 모드별 idle 리스너 4개 → 줌 1번에 4번 풀 리빌드 (4,958ms 스크립트 시간).
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const runRebuild = () => {
       // 200ms 안에 끝나면 인디케이터 안 보여줌
@@ -803,6 +805,10 @@ export default function KakaoMap({
       }, 200);
       try {
         rebuildRef.current();
+        // 모드별 rebuild 도 같은 사이클에서 실행 (각 ref 는 비활성 모드일 때 자체 가드로 즉시 return)
+        onbidRebuildRef.current();
+        auctionRebuildRef.current();
+        facilityRebuildRef.current();
       } finally {
         if (renderingTimerRef.current) {
           clearTimeout(renderingTimerRef.current);
@@ -1578,38 +1584,8 @@ export default function KakaoMap({
     };
   }, [loaded, solarMarkers]);
 
-  // 줌 변경 시 공매 rebuild (카드 ↔ 클러스터 전환)
-  useEffect(() => {
-    if (!loaded || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    const onIdle = () => onbidRebuildRef.current();
-    window.kakao.maps.event.addListener(map, "idle", onIdle);
-    return () => {
-      window.kakao.maps.event.removeListener(map, "idle", onIdle);
-    };
-  }, [loaded]);
-
-  // 줌 변경 시 경매 rebuild (카드 ↔ 클러스터 전환) — 공매와 동일 패턴
-  useEffect(() => {
-    if (!loaded || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    const onIdle = () => auctionRebuildRef.current();
-    window.kakao.maps.event.addListener(map, "idle", onIdle);
-    return () => {
-      window.kakao.maps.event.removeListener(map, "idle", onIdle);
-    };
-  }, [loaded]);
-
-  // 줌 변경 시 필지 rebuild (카드 ↔ 클러스터 전환)
-  useEffect(() => {
-    if (!loaded || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    const onIdle = () => facilityRebuildRef.current();
-    window.kakao.maps.event.addListener(map, "idle", onIdle);
-    return () => {
-      window.kakao.maps.event.removeListener(map, "idle", onIdle);
-    };
-  }, [loaded]);
+  // 줌 변경 시 공매/경매/필지 rebuild — 통합 idle 핸들러(전기 useEffect)로 이전.
+  // 별도 리스너 3개 제거 (idle 4번 호출 → 1번으로 압축).
 
   // 공매 마커 클릭 — 컨테이너 위임 (data-onbid-id)
   useEffect(() => {
