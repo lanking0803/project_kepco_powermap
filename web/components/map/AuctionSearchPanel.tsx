@@ -51,9 +51,9 @@ interface Props {
   onItemClick?: (item: AuctionListItem) => void;
 }
 
-/** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 */
-function formatSigungu(si: string | null, gu: string): string {
-  return si && si.trim() !== "" ? `${si} ${gu}` : gu;
+/** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 (일반시 자체는 gu=null) */
+function formatSigungu(si: string | null, gu: string | null): string {
+  return `${si ?? ""} ${gu ?? ""}`.trim();
 }
 
 export default function AuctionSearchPanel({ onResults: _onResults, onItemClick: _onItemClick }: Props) {

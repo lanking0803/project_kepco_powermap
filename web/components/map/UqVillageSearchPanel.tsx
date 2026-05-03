@@ -51,11 +51,6 @@ interface Props {
   }) => void;
 }
 
-/** "수원시" + "권선구" → "수원시 권선구" / 한쪽만 있으면 그것만 */
-function formatSigungu(si: string | null, gu: string): string {
-  return si && si.trim() !== "" ? `${si} ${gu}` : gu;
-}
-
 export default function UqVillageSearchPanel({
   latIndex,
   onItemClick,
@@ -112,12 +107,12 @@ export default function UqVillageSearchPanel({
     return [...set];
   }, [allSigungus]);
 
-  /** 선택 시도의 시군구 목록 — { label: 한글, code: 5자리 } */
+  /** 선택 시도의 시군구 목록 — label 은 백엔드 통합 표기값. */
   const sigungus = useMemo(() => {
     if (!params.sido) return [] as Array<{ label: string; code: string }>;
     return allSigungus
       .filter((r) => r.sido === params.sido)
-      .map((r) => ({ label: formatSigungu(r.si, r.gu), code: r.code }));
+      .map((r) => ({ label: r.label, code: r.code }));
   }, [allSigungus, params.sido]);
 
   /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구는 자동 초기화. */
