@@ -17,6 +17,7 @@ import AuctionSearchPanel from "./AuctionSearchPanel";
 import type { LatIndex } from "@/lib/uq/sorted-by-lat";
 import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 import type { OnbidListItem } from "@/lib/onbid/types";
+import type { AuctionListItem } from "@/lib/hyphen/types";
 import ModeSelector from "./ModeSelector";
 import { getDataMode, type DataModeId } from "@/lib/modes/registry";
 
@@ -55,6 +56,8 @@ interface Props {
   onOnbidResults?: (items: OnbidListItem[]) => void;
   /** 공매 매물 카드 클릭 콜백 */
   onOnbidItemClick?: (item: OnbidListItem) => void;
+  /** 경매 검색 결과 변경 콜백 (지도 마커용) */
+  onAuctionResults?: (items: AuctionListItem[]) => void;
   /** 자연취락지구 — 마을 매칭용 위도순 인덱스 (앱 마운트 시 1회 빌드). */
   uqLatIndex?: LatIndex | null;
   /** 자연취락지구 — 칩(매칭 마을명) 클릭. 마을 진입 흐름. */
@@ -149,6 +152,7 @@ export default function Sidebar({
   onModeChange,
   onOnbidResults,
   onOnbidItemClick,
+  onAuctionResults,
   uqLatIndex = null,
   onUqVillagePick,
   onUqPolygonFocus,
@@ -368,7 +372,7 @@ export default function Sidebar({
           </div>
         ) : mode === "auction" ? (
           <div className="flex-1 min-h-0">
-            <AuctionSearchPanel />
+            <AuctionSearchPanel onResults={onAuctionResults} />
           </div>
         ) : (
         <>

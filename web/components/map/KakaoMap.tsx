@@ -35,6 +35,22 @@ export interface OnbidVillageMarkerData {
   minDaysLeft: number | null;
 }
 
+/** 경매 마을 마커 1개 — 같은 BJD(10자리)의 매물 N건을 묶은 그룹. */
+export interface AuctionVillageMarkerData {
+  /** 그룹 키 (BJD 10자리) — 클릭 콜백 식별자 */
+  key: string;
+  lat: number;
+  lng: number;
+  /** 그룹 내 매물 수 — 마커 안 숫자 + 카드 배지 */
+  count: number;
+  /** D-3 이내 매물 1건 이상 보유 — 펄스 강조용 */
+  hasUrgent: boolean;
+  /** 평균 할인율 0~1 (감정가 대비 최저가 ↓ 비율) — 카드 본체 메인 표시 */
+  avgDiscountRatio: number;
+  /** 가장 임박한 D-day (마감 제외). 모두 마감이면 null */
+  minDaysLeft: number | null;
+}
+
 interface Props {
   rows: MapSummaryRow[];
   /** 현재 활성화된 색상 필터 */
@@ -130,6 +146,15 @@ interface Props {
   onbidVillages?: OnbidVillageMarkerData[];
   /** 마을 마커 클릭 콜백 — group key 전달, MapClient 가 OnbidVillageCard 표시 */
   onOnbidVillageClick?: (key: string) => void;
+  /**
+   * 경매 모드 ON 여부. true 일 때 매물 마커 표시.
+   * 공매와 단일 라디오 구조라 둘이 동시에 true 일 일은 없음 (registry 정책).
+   */
+  auctionActive?: boolean;
+  /** 경매 마을 마커 — BJD 10자리 단위로 그룹화한 결과. 빈 배열이면 표시 X. */
+  auctionVillages?: AuctionVillageMarkerData[];
+  /** 경매 마을 마커 클릭 콜백 — group key (BJD 10자리) 전달 */
+  onAuctionVillageClick?: (key: string) => void;
   /**
    * 솔라 발전소 마커 — 입지 탭 활성 시 같은 리(BJD)의 좌표 보유 발전소들.
    * 같은 PNU 는 1 마커 + 갯수 배지.
@@ -398,6 +423,38 @@ function makeOnbidCardHtml(
   </div>`;
 }
 
+/**
+ * 경매 카드 마커 HTML — globals.css 의 .auction-card-marker 와 동작.
+ *
+ * 영업담당자 시각 위계 (의뢰자 의도 = 저가 매입 발굴):
+ *   - 메인 (큰 글씨): 평균 할인율 (-50% 등) — amber 강조
+ *   - 보조 (작은 글씨): D-day
+ *   - 우측 배지: 매물 수 (count > 1)
+ *
+ * 라벨(동·가격) 미사용 — 의뢰자 의도("저가 매입") = 할인율 핵심.
+ */
+function makeAuctionCardHtml(
+  bjdKey: string,
+  pctLabel: string,
+  dayLabel: string,
+  count: number,
+  isUrgent: boolean,
+  isEnded: boolean,
+): string {
+  const showBadge = count > 1;
+  const badgeText = count > 9999 ? "9999+" : String(count);
+  const badge = showBadge ? `<span class="badge">${badgeText}</span>` : "";
+  const safeId = bjdKey.replace(/"/g, "&quot;");
+  return `<div class="auction-card-marker" data-auction-id="${safeId}" data-urgent="${isUrgent}" data-ended="${isEnded}">
+    <div class="card">
+      <div class="pct">${pctLabel}</div>
+      <div class="day">${dayLabel}</div>
+    </div>
+    <div class="arrow"></div>
+    ${badge}
+  </div>`;
+}
+
 export default function KakaoMap({
   rows,
   colorFilter,
@@ -423,7 +480,10 @@ export default function KakaoMap({
   onUqMarkerClick,
   onbidActive = false,
   onbidVillages = [],
+  auctionActive = false,
+  auctionVillages = [],
   onOnbidVillageClick,
+  onAuctionVillageClick,
   solarMarkers = [],
   onSolarMarkerClick,
 }: Props) {
@@ -463,6 +523,11 @@ export default function KakaoMap({
   // 공매 마을 마커 클릭 콜백 — 클로저 stale 방지
   const onOnbidClickRef = useRef(onOnbidVillageClick);
   onOnbidClickRef.current = onOnbidVillageClick;
+  // 경매 마을 마커 오버레이 + rebuild + 클릭 콜백 (공매 패턴 미러)
+  const auctionOverlaysRef = useRef<any[]>([]);
+  const auctionRebuildRef = useRef<() => void>(() => {});
+  const onAuctionClickRef = useRef(onAuctionVillageClick);
+  onAuctionClickRef.current = onAuctionVillageClick;
   // 마커 참조 맵 (geocode_address → kakao.maps.Marker) — 선택 변경 시 이미지 교체용
   const markersByAddrRef = useRef<Map<string, { marker: any; row: MapSummaryRow }>>(
     new Map()
@@ -1247,6 +1312,72 @@ export default function KakaoMap({
     onbidRebuildRef.current();
   }, [loaded, onbidActive, onbidVillages]);
 
+  // ─────────────────── 경매 마을 마커 (onbid 패턴 미러) ───────────────────
+  useEffect(() => {
+    auctionRebuildRef.current = () => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      // 기존 마커/오버레이 정리
+      auctionOverlaysRef.current.forEach((o) => o.setMap(null));
+      auctionOverlaysRef.current = [];
+
+      if (!auctionActive || !auctionVillages || auctionVillages.length === 0) return;
+
+      const level = map.getLevel();
+      const showCard = level <= LABEL_VISIBLE_LEVEL;
+
+      auctionVillages.forEach((v) => {
+        const position = new window.kakao.maps.LatLng(v.lat, v.lng);
+        const safeKey = v.key.replace(/"/g, "&quot;");
+
+        if (showCard) {
+          // 가까운 줌 — 카드. 평균 할인율 메인 + D-day 보조.
+          const dayLabel =
+            v.minDaysLeft == null ? "마감" : `D-${v.minDaysLeft}`;
+          const pctLabel =
+            v.avgDiscountRatio > 0
+              ? `-${Math.round(v.avgDiscountRatio * 100)}%`
+              : "신건";
+          const html = makeAuctionCardHtml(
+            safeKey,
+            pctLabel,
+            dayLabel,
+            v.count,
+            v.hasUrgent,
+            v.minDaysLeft == null,
+          );
+          const overlay = new window.kakao.maps.CustomOverlay({
+            position,
+            content: html,
+            yAnchor: 1,
+            xAnchor: 0.5,
+            zIndex: 100,
+          });
+          overlay.setMap(map);
+          auctionOverlaysRef.current.push(overlay);
+        } else {
+          // 먼 줌 — 노랑 원. 안에 매물 수.
+          const dotHtml = `<div class="auction-dot${v.hasUrgent ? " urgent" : ""}" data-auction-id="${safeKey}">${v.count > 1 ? v.count : ""}</div>`;
+          const dotOverlay = new window.kakao.maps.CustomOverlay({
+            position,
+            content: dotHtml,
+            yAnchor: 0.5,
+            xAnchor: 0.5,
+            zIndex: 50,
+          });
+          dotOverlay.setMap(map);
+          auctionOverlaysRef.current.push(dotOverlay);
+        }
+      });
+    };
+  }, [auctionActive, auctionVillages]);
+
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    auctionRebuildRef.current();
+  }, [loaded, auctionActive, auctionVillages]);
+
   // ─────────────────── 솔라 발전소 마커 ───────────────────
   // 입지 탭 활성 시 같은 리(BJD) 발전소들을 마커로 표시.
   // 같은 PNU 의 발전소는 1개 마커 + 갯수 배지로 그룹화.
@@ -1338,6 +1469,17 @@ export default function KakaoMap({
     };
   }, [loaded]);
 
+  // 줌 변경 시 경매 rebuild (카드 ↔ 클러스터 전환) — 공매와 동일 패턴
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const onIdle = () => auctionRebuildRef.current();
+    window.kakao.maps.event.addListener(map, "idle", onIdle);
+    return () => {
+      window.kakao.maps.event.removeListener(map, "idle", onIdle);
+    };
+  }, [loaded]);
+
   // 공매 마커 클릭 — 컨테이너 위임 (data-onbid-id)
   useEffect(() => {
     const container = mapRef.current;
@@ -1348,6 +1490,21 @@ export default function KakaoMap({
       if (!marker) return;
       const id = marker.getAttribute("data-onbid-id");
       if (id) onOnbidClickRef.current?.(id);
+    };
+    container.addEventListener("click", onClick);
+    return () => container.removeEventListener("click", onClick);
+  }, []);
+
+  // 경매 마커 클릭 — 컨테이너 위임 (data-auction-id) (공매 패턴 미러)
+  useEffect(() => {
+    const container = mapRef.current;
+    if (!container) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const marker = target?.closest("[data-auction-id]") as HTMLElement | null;
+      if (!marker) return;
+      const id = marker.getAttribute("data-auction-id");
+      if (id) onAuctionClickRef.current?.(id);
     };
     container.addEventListener("click", onClick);
     return () => container.removeEventListener("click", onClick);

@@ -32,6 +32,12 @@ import {
 } from "@/lib/onbid/group";
 import OnbidVillageCard from "./onbid/OnbidVillageCard";
 import OnbidVillageModal from "./onbid/OnbidVillageModal";
+import type { AuctionListItem } from "@/lib/hyphen/types";
+import {
+  groupAuctionItemsByVillage,
+  type AuctionVillageGroup,
+} from "@/lib/hyphen/group";
+import AuctionVillageCard from "./auction/AuctionVillageCard";
 import type { DataModeId } from "@/lib/modes/registry";
 import LocationSummaryCard from "./LocationSummaryCard";
 import LocationDetailModal from "./LocationDetailModal";
@@ -241,11 +247,25 @@ export default function MapClient({ isAdmin, email }: Props) {
     () => groupOnbidItemsByVillage(onbidItems),
     [onbidItems],
   );
-  /** 모드 전환 — 공매 카드/모달은 닫고, 검색 결과는 sessionStorage 로 보존. */
+
+  // ─────── 경매(Hyphen) — 공매 패턴 미러 ───────
+  const auctionActive = mode === "auction";
+  /** 경매 검색 결과 매물. AuctionSearchPanel 의 onResults 콜백으로 채움. */
+  const [auctionItems, setAuctionItems] = useState<AuctionListItem[]>([]);
+  /** 노랑 마을 마커 클릭으로 선택된 그룹 — AuctionVillageCard 표시 출처 */
+  const [selectedAuctionVillage, setSelectedAuctionVillage] =
+    useState<AuctionVillageGroup | null>(null);
+  /** 매물 → BJD 단위 그룹화 결과. 지도 마커 + 카드 데이터 출처. */
+  const auctionVillages = useMemo(
+    () => groupAuctionItemsByVillage(auctionItems),
+    [auctionItems],
+  );
+  /** 모드 전환 — 공매/경매 카드 정리. 검색 결과는 sessionStorage 로 보존. */
   const handleModeChange = useCallback((next: DataModeId) => {
     setMode(next);
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
+    setSelectedAuctionVillage(null);
     // uq 외 모드로 전환 시 화면에 남은 자연취락지구 폴리곤/마커 정리
     if (next !== "uq") {
       setUqVillagePolygons([]);
@@ -716,6 +736,36 @@ export default function MapClient({ isAdmin, email }: Props) {
     clearPolygons();
   }, [clearPolygons]);
 
+  // 경매 마을 마커 클릭 — 동 폴리곤 + AuctionVillageCard 표시 (공매 미러)
+  const openAuctionVillage = useCallback(
+    async (key: string) => {
+      const group = auctionVillages.find((g) => g.key === key);
+      if (!group) return;
+
+      // 다른 패널 정리
+      villageReqSeqRef.current++;
+      villageAbortRef.current?.abort();
+      setSelectedVillage(null);
+      setDetailModalOpen(false);
+      setSelectedOnbidVillage(null);
+      closeParcelPanelRef.current?.();
+
+      setSelectedAuctionVillage(group);
+      moveMapToRef.current?.(group.lat, group.lng);
+
+      // 동 폴리곤 — group.key 가 BJD 10자리 그대로
+      if (/^\d{10}$/.test(group.key)) {
+        void loadVillageAndUqPolygons(group.key);
+      }
+    },
+    [auctionVillages, loadVillageAndUqPolygons],
+  );
+
+  const closeAuctionVillage = useCallback(() => {
+    setSelectedAuctionVillage(null);
+    clearPolygons();
+  }, [clearPolygons]);
+
   /**
    * 지도 좌표 클릭 — VWorld BBOX → point-in-polygon 으로 정확 1필지 선별 → PNU 로 통합 진입.
    * 좌표 → PNU 변환만 여기서 하고, 그 다음은 다른 진입 경로와 동일 (분기 0).
@@ -794,6 +844,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         onModeChange={handleModeChange}
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
+        onAuctionResults={setAuctionItems}
         uqLatIndex={latIndex}
         onUqVillagePick={handleTopRankingPick}
         onUqPolygonFocus={handleUqPolygonFocus}
@@ -894,6 +945,17 @@ export default function MapClient({ isAdmin, email }: Props) {
               minDaysLeft: g.minDaysLeft,
             }))}
             onOnbidVillageClick={openOnbidVillage}
+            auctionActive={auctionActive}
+            auctionVillages={auctionVillages.map((g) => ({
+              key: g.key,
+              lat: g.lat,
+              lng: g.lng,
+              count: g.items.length,
+              hasUrgent: g.hasUrgent,
+              avgDiscountRatio: g.avgDiscountRatio,
+              minDaysLeft: g.minDaysLeft,
+            }))}
+            onAuctionVillageClick={openAuctionVillage}
             solarMarkers={solarMarkers}
             onSolarMarkerClick={(marker) => {
               // 기존 Sidebar 지번 클릭 흐름 그대로 재사용 — marker.pnu 직접 사용 (좌표 변환 X)
@@ -1111,6 +1173,20 @@ export default function MapClient({ isAdmin, email }: Props) {
               group={selectedOnbidVillage}
               onClose={() => setOnbidModalOpen(false)}
               onItemClick={openParcelPanelOnOnbidItemClick}
+            />
+          )}
+
+          {/* 경매 마을 요약 카드 — 노랑 마커 클릭, 지번 패널 떠있으면 숨김.
+              상세 모달은 D4 단계에서 추가 — 일단 onShowDetail 은 콘솔만. */}
+          {selectedAuctionVillage && !selectedPnu && (
+            <AuctionVillageCard
+              key={selectedAuctionVillage.key}
+              group={selectedAuctionVillage}
+              onShowDetail={() => {
+                // TODO(D4): AuctionVillageModal 표시
+                console.log("[auction] show detail", selectedAuctionVillage);
+              }}
+              onClose={closeAuctionVillage}
             />
           )}
 

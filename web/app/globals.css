@@ -314,6 +314,139 @@ body.roadview-mode * {
   50% { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0), 0 1px 3px rgba(0, 0, 0, 0.3); }
 }
 
+/* ───────────────────────────────────────────────────────────────
+ * 경매 카드 마커 (가까운 줌, level ≤ 7)
+ * 공매(.onbid-card-marker) 와 동일 골격, amber 톤 + 영업 핵심 = 평균 할인율.
+ * 라벨(동·할인율) 미사용 — 카드 본체에 할인율 큼지막하게 표시.
+ *
+ * D-3 임박만 rose 펄스 유지 (긴급 의미는 색상보다 우선 — 사용자 인지 일관성).
+ * ─────────────────────────────────────────────────────────────── */
+.auction-card-marker {
+  position: relative;
+  width: 32px;
+  font-family: Arial, sans-serif;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.auction-card-marker .card {
+  width: 32px;
+  height: 32px;
+  background: #fff;
+  border: 1px solid rgba(217, 119, 6, 0.75); /* amber-600 */
+  border-radius: 3px;
+  padding: 3px 2px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+/* 평균 할인율 (예: -50%) — 영업 핵심 지표, 가장 큰 글씨 */
+.auction-card-marker .pct {
+  font-size: 11px;
+  font-weight: 800;
+  color: #d97706; /* amber-600 */
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+/* D-day (작은 글씨, 보조 정보) */
+.auction-card-marker .day {
+  font-size: 8px;
+  font-weight: 700;
+  color: #92400e; /* amber-800 */
+  line-height: 1;
+  margin-top: 1px;
+}
+.auction-card-marker .arrow {
+  width: 0;
+  height: 0;
+  margin: -1px auto 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #fff;
+  filter: drop-shadow(0 1px 0 rgba(217, 119, 6, 0.75));
+}
+.auction-card-marker .badge {
+  position: absolute;
+  top: 8px;
+  left: 34px;
+  height: 14px;
+  padding: 0 5px;
+  background: #78350f; /* amber-900 */
+  color: #fff;
+  border: 1.5px solid #fff;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 11px;
+  white-space: nowrap;
+}
+/* D-3 이내 임박 — amber 진한 톤 펄스 (모드 심볼 색 유지) */
+.auction-card-marker[data-urgent="true"] .card {
+  border: 2px solid #b45309; /* amber-700 */
+  background: #fffbeb; /* amber-50 */
+  animation: auction-card-pulse 1s ease-in-out infinite;
+}
+.auction-card-marker[data-urgent="true"] .pct {
+  color: #b45309; /* amber-700 */
+}
+.auction-card-marker[data-urgent="true"] .day {
+  color: #92400e; /* amber-800 */
+}
+.auction-card-marker[data-urgent="true"] .arrow {
+  filter: drop-shadow(0 1px 0 #b45309);
+}
+/* 마감 — 회색 처리 */
+.auction-card-marker[data-ended="true"] .card {
+  border-color: rgba(107, 114, 128, 0.6);
+  background: #f3f4f6;
+}
+.auction-card-marker[data-ended="true"] .pct,
+.auction-card-marker[data-ended="true"] .day {
+  color: #6b7280;
+  text-decoration: line-through;
+}
+.auction-card-marker[data-ended="true"] .arrow {
+  filter: drop-shadow(0 1px 0 rgba(107, 114, 128, 0.6));
+}
+@keyframes auction-card-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(180, 83, 9, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(180, 83, 9, 0); }
+}
+
+/* ─── 경매 노랑 원 마커 (먼 줌, level ≥ 8) ─── */
+.auction-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(217, 119, 6, 0.92); /* amber-600 */
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease;
+}
+.auction-dot:hover {
+  transform: scale(1.15);
+  background: rgba(180, 83, 9, 0.95); /* amber-700 */
+}
+.auction-dot.urgent {
+  background: rgba(180, 83, 9, 0.95); /* amber-700 (긴급) */
+  animation: auction-dot-pulse 1s ease-in-out infinite;
+}
+@keyframes auction-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(180, 83, 9, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(180, 83, 9, 0), 0 1px 3px rgba(0, 0, 0, 0.3); }
+}
+
 /* ──────────────── 솔라 발전소 마커 (입지 탭 활성 시) ──────────────── */
 /* 태양 아이콘 ☀ + 지번(본번-부번) 라벨. 클릭 = 그 PNU 의 ParcelInfoPanel 이동. */
 .solar-card-marker {
