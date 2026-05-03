@@ -669,7 +669,10 @@ export default function KakaoMap({
   // 이전 구조: rows 2,678개 전부 SVG→PNG 변환→Marker 생성 → 초기 16초 병목.
   // ─────────────────────────────────────────────
   const rebuildRef = useRef<() => void>(() => {});
-  const overlayRef = useRef<any[]>([]);
+  // 카드 오버레이 풀 — addr → CustomOverlay. rebuild 시 폐기/재생성 대신
+  // 같은 addr 인 오버레이는 innerHTML + position + zIndex 만 갱신해 DOM 재사용.
+  // 줌 ≤ 7 (카드 표시) 영역 내 패닝/리렌더 시 가장 무거운 비용을 직접 절감.
+  const overlayPoolRef = useRef<Map<string, any>>(new Map());
   const lastBoundsKeyRef = useRef<string>("");
   const renderingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -680,10 +683,8 @@ export default function KakaoMap({
       const clusterer = clustererRef.current;
       if (!map || !clusterer) return;
 
-      // 정리는 항상 실행 (모드 전환 시 잔재 제거)
+      // 클러스터러는 풀링 안 함 — Marker 객체는 가벼움 + SDK 자체 인덱싱 비용이 더 큼.
       clusterer.clear();
-      overlayRef.current.forEach((o) => o.setMap(null));
-      overlayRef.current = [];
       markersByAddrRef.current.clear();
 
       // 전기 마커는 공매 토글과 무관하게 항상 표시 (2026-05-02 의뢰자 결정)
@@ -700,16 +701,19 @@ export default function KakaoMap({
         return bounds.contain(new window.kakao.maps.LatLng(r.lat, r.lng));
       });
 
+      // 카드 표시 줌이 아니거나 결과 0 이면 풀의 모든 카드 숨김(객체는 보존).
+      if (!showCard || filtered.length === 0) {
+        overlayPoolRef.current.forEach((o) => o.setMap(null));
+      }
+
       if (filtered.length === 0) return;
 
       if (showCard) {
         // 카드 표시 줌(≤7): 클러스터/마커 없이 HTML 오버레이만.
         // markersByAddrRef 에 row 만 저장 (위임 클릭 핸들러가 row 조회용)
-        overlayRef.current = filtered.map((row) => {
+        filtered.forEach((row) => {
           markersByAddrRef.current.set(row.geocode_address, { marker: null, row });
-          return row;
-        }) as any[];
-        // overlayRef 는 아래 카드 생성 블록에서 다시 채워짐 — 임시 placeholder
+        });
       } else {
         // 클러스터 표시 줌(≥8): 위치만 가진 마커로 클러스터링.
         // 단독으로 표시되는 마커 클릭 → 카드 보이는 줌(7)으로 자동 줌인.
@@ -731,31 +735,52 @@ export default function KakaoMap({
         clusterer.addMarkers(hiddenMarkers);
       }
 
-      // 줌 가까울 때만 카드 HTML 오버레이 추가 (라벨도 카드 안에 포함)
+      // 카드 오버레이 풀링 — 같은 addr 면 setContent/setPosition/setZIndex 만,
+      // 새로 보이는 addr 만 신규 생성, 사라진 addr 는 setMap(null) 로 숨김(객체 보존).
       if (showCard) {
-        overlayRef.current = filtered.map((row) => {
-          const isSelected = row.geocode_address === selectedAddr;
+        const pool = overlayPoolRef.current;
+        const usedAddrs = new Set<string>();
+        for (const row of filtered) {
+          const addr = row.geocode_address;
+          usedAddrs.add(addr);
+          const isSelected = addr === selectedAddr;
           const li = row.addr_li && !row.addr_li.includes("기타지역") ? row.addr_li : "";
           const placeName = li || row.addr_dong || "";
           const html = makeMarkerHtml(
-            row.geocode_address,
+            addr,
             ratiosForMarker(row),
             row.total,
             isSelected,
             placeName,
             row.max_remaining_kw ?? 0
           );
-          const overlay = new window.kakao.maps.CustomOverlay({
-            position: new window.kakao.maps.LatLng(row.lat, row.lng),
-            content: html,
-            yAnchor: 1,
-            xAnchor: 0.5,
-            zIndex: isSelected ? 10 : 3,
-          });
-          // 클릭은 지도 컨테이너 위임 핸들러에서 data-addr 로 식별 (별도 effect)
-          overlay.setMap(map);
-          return overlay;
-        });
+          const position = new window.kakao.maps.LatLng(row.lat, row.lng);
+          const zIndex = isSelected ? 10 : 3;
+
+          let overlay = pool.get(addr);
+          if (overlay) {
+            // 재사용 — DOM 노드는 그대로, 내용/위치/zIndex 만 갱신.
+            overlay.setContent(html);
+            overlay.setPosition(position);
+            overlay.setZIndex(zIndex);
+            overlay.setMap(map); // 직전 rebuild 에서 숨겼다가 다시 보이는 케이스 대응
+          } else {
+            // 신규 — 처음 화면에 들어온 addr.
+            overlay = new window.kakao.maps.CustomOverlay({
+              position,
+              content: html,
+              yAnchor: 1,
+              xAnchor: 0.5,
+              zIndex,
+            });
+            overlay.setMap(map);
+            pool.set(addr, overlay);
+          }
+        }
+        // 화면 밖으로 사라진 addr 는 숨김(객체는 보존 → 다시 들어올 때 재사용).
+        for (const [addr, overlay] of pool) {
+          if (!usedAddrs.has(addr)) overlay.setMap(null);
+        }
       }
     };
   }, [rows, colorFilter, visibleAddrs, selectedAddr, onMarkerClick]);
