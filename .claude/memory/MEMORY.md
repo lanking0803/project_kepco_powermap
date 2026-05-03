@@ -47,6 +47,7 @@
 - 📊 [차트는 라이브러리 사용](feedback_charts_use_library.md) — Recharts 우선. SVG 직접 그리기 시 점 찌그러짐/툴팁/보간 재구현으로 유지보수 어려움
 - 🎴 [ParcelInfoPanel 카드 패턴](project_panel_card_pattern.md) — 공매탭 Section 미러 + accent 색상 분기 (rose/amber/blue/gray)
 - 🏘 [자연취락지구 폴리곤 표시](project_uq_villages.md) ⭐ — 마을 클릭 시 자동 표시. 별도 토글 X. atomic /api/uq-villages/by-bjd + 프론트 Turf 후처리 (2026-05-02)
+- 📍 [자연취락지구 마커 + 클러스터](project_uq_marker.md) ⭐ — 검색 결과 줌별 마커/클러스터(KEPCO 패턴). 평수 압축 라벨. CustomOverlay 418개 프리징 사고 복기(2026-05-03)
 - 🪤 [VWorld lt_c_uq128 함정 5종](reference_vworld_uq128.md) ⚠️ — OGC FILTER 전용/일반시 등록 단위 불일치/uname 자연·집단 혼재/sigg_name 부정확/bbox 함정. 회피=sgg-strategy + uname 필터
 - 🪤 [캠코 lctnSggnm 표기 규칙](reference_onbid_sigungu_format.md) — 일반시 일반구는 "성남시 분당구" 통합. 광역시 자치구/일반 군은 단독. 분당구 단독 검색 0건 사고(2026-05-02)
 - ⚠️ [정부 공공 API 행정구역 단위 가정 금지](feedback_govdata_unit_mismatch.md) — bjd_master 표준 ≠ 외부 등록 단위. 일반시 일반구 시·구 따로 등록 흔함. 실 호출 검증 필수, 추측 금지(2026-05-02)

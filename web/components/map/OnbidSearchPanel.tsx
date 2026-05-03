@@ -120,9 +120,11 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
       .map((r) => ({ label: r.label, value: r.label }));
   }, [allSigungus, params.sido]);
 
-  /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구 자동 초기화. */
+  /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구 자동 초기화.
+   * sigunguOptions 가 비어있는 동안은 검증 보류 (atomic 미응답 시 복원값 보존). */
   useEffect(() => {
     if (!params.sigungu) return;
+    if (sigunguOptions.length === 0) return;
     const stillValid = sigunguOptions.some((o) => o.value === params.sigungu);
     if (!stillValid) {
       setParams((p) => ({ ...p, sigungu: "" }));

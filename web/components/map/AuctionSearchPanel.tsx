@@ -31,6 +31,7 @@ import {
   type AuctionSearchUiParams,
 } from "@/lib/modes/modes/auction";
 import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
+import { jibunFromPnu } from "@/lib/geo/pnu";
 import type { AuctionListItem } from "@/lib/hyphen/types";
 
 const MODE_ID = "auction";
@@ -101,9 +102,11 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
       .map((r) => ({ label: r.label, code: r.code }));
   }, [allSigungus, params.sido]);
 
-  /** 시도 변경 시 무효 시군구 자동 초기화 */
+  /** 시도 변경 시 무효 시군구 자동 초기화.
+   * sigungus 가 비어있는 동안은 검증 보류 (atomic 미응답 시 복원값 보존). */
   useEffect(() => {
     if (!params.sigungu) return;
+    if (sigungus.length === 0) return;
     const stillValid = sigungus.some((s) => s.label === params.sigungu);
     if (!stillValid) {
       setParams((p) => ({ ...p, sigungu: "", sigunguCode: "" }));
@@ -127,17 +130,72 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
   // ─── 고급 필터 펼침 상태 — 모바일 시각 부담 줄임. 디폴트 접힘. ──
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // ─── 검색 (미니멀 골격 — 다음 단계에서 /api/auction/search 연결) ──
+  // ─── 검색 ─────────────────────────────────────────────
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /**
+   * Hyphen apiStatus — 인증 실패/잔액부족/레이트리밋/일시장애 안내용.
+   * 검증된 상태:
+   *   - "auth_failed"           : 결제 만료 / 키 오류 (HDM006/HDM009)
+   *   - "no_permission"         : 운영 모드 권한 미신청 (HDM012)
+   *   - "rate_limited"          : 테스트 모드 20초 (HDM016)
+   *   - "insufficient_balance"  : 비즈머니 부족 (운영 모드)
+   *   - "unavailable"           : 5xx / 네트워크
+   */
+  const [apiStatus, setApiStatus] = useState<string | null>(null);
+  const [totalCountAll, setTotalCountAll] = useState<number | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const canSearch = params.sigunguCode !== "" && !searching;
 
   const runSearch = async () => {
     if (!canSearch) return;
     setSearching(true);
+    setError(null);
+    setApiStatus(null);
     try {
-      // TODO(다음 단계): /api/auction/search 호출 → enrich → setResults
-      await new Promise((r) => setTimeout(r, 300));
+      const qs = new URLSearchParams();
+      qs.set("sigunguCode", params.sigunguCode);
+      if (params.emdong) qs.set("emdong", params.emdong);
+      if (params.yongdoCodes.length > 0)
+        qs.set("yongdoCodes", params.yongdoCodes.join(","));
+      if (params.progressStatus.length > 0)
+        qs.set("progressStatus", params.progressStatus.join(","));
+      if (params.landMin != null) qs.set("landMin", String(params.landMin));
+      if (params.landMax != null) qs.set("landMax", String(params.landMax));
+      if (params.bareaMin != null) qs.set("bareaMin", String(params.bareaMin));
+      if (params.bareaMax != null) qs.set("bareaMax", String(params.bareaMax));
+      if (params.gamMin != null) qs.set("gamMin", String(params.gamMin));
+      if (params.gamMax != null) qs.set("gamMax", String(params.gamMax));
+      if (params.lowMin != null) qs.set("lowMin", String(params.lowMin));
+      if (params.lowMax != null) qs.set("lowMax", String(params.lowMax));
+      if (params.bidStart) qs.set("bidStart", params.bidStart);
+      if (params.bidEnd) qs.set("bidEnd", params.bidEnd);
+      if (params.usbdMin != null) qs.set("usbdMin", String(params.usbdMin));
+      if (params.usbdMax != null) qs.set("usbdMax", String(params.usbdMax));
+      if (params.discountMin != null)
+        qs.set("discountMin", String(params.discountMin));
+      if (params.discountMax != null)
+        qs.set("discountMax", String(params.discountMax));
+
+      const res = await fetch(`/api/auction/search?${qs.toString()}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+
+      const items: AuctionListItem[] = json.items ?? [];
+      setApiStatus(json.apiStatus ?? "ok");
+      setResults(items);
+      setTotalCountAll(json.totalCountAll ?? null);
+      setTruncated(Boolean(json.truncated));
+      _onResults?.(items);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
       setResults([]);
+      _onResults?.([]);
     } finally {
       setSearching(false);
     }
@@ -146,6 +204,10 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
   const reset = () => {
     setParams(AUCTION_EMPTY_PARAMS);
     setResults([]);
+    setError(null);
+    setApiStatus(null);
+    setTotalCountAll(null);
+    setTruncated(false);
     clearModeState(MODE_ID);
   };
 
@@ -521,33 +583,61 @@ export default function AuctionSearchPanel({ onResults: _onResults, onItemClick:
         </div>
       </div>
 
-      {/* 결과 영역 — 다음 단계에서 카드 리스트로 채움 */}
+      {/* 결과 영역 — 매물 카드 리스트 */}
       <div className="flex-1 flex flex-col min-h-0">
         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between border-b border-gray-200 bg-gray-50">
           <span>결과</span>
-          <span className="tabular-nums">매물 {results.length.toLocaleString()}건</span>
+          <span className="tabular-nums">
+            매물 {results.length.toLocaleString()}건
+            {totalCountAll != null && totalCountAll !== results.length && (
+              <span className="text-gray-400 ml-1 font-normal">
+                / 전체 {totalCountAll.toLocaleString()}
+              </span>
+            )}
+          </span>
         </div>
+
+        {/* apiStatus 비정상 배너 */}
+        {apiStatus && apiStatus !== "ok" && apiStatus !== "empty" && (
+          <ApiStatusBanner status={apiStatus} />
+        )}
+
+        {/* truncated 안내 (20페이지 cap 초과) */}
+        {truncated && (
+          <div className="px-3 py-2 text-[11px] text-amber-800 bg-amber-50 border-b border-amber-200 leading-snug">
+            ⚠️ 매물이 많아 일부만 표시됨 (20페이지 cap). 시군구·카테고리·면적으로 좁혀주세요.
+          </div>
+        )}
+
         <div className="overflow-y-auto flex-1">
-          {results.length === 0 ? (
+          {searching ? (
+            <div className="p-4 text-center text-xs text-gray-500 flex flex-col items-center gap-2">
+              <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              매물 조회 중...
+              <span className="text-[10px] text-gray-400">
+                (테스트 모드 20초 대기 가능 — 카테고리 다중 시 더 길어짐)
+              </span>
+            </div>
+          ) : error ? (
+            <div className="p-4 text-center text-xs text-red-600">
+              조회 실패: {error}
+            </div>
+          ) : results.length === 0 ? (
             <div className="p-4 text-center text-xs text-gray-400 leading-relaxed">
               {params.sigunguCode === "" ? (
                 <>지역(시군구)을 선택하고 [검색] 버튼을 눌러주세요</>
-              ) : searching ? (
-                <>매물 조회 중...</>
               ) : (
-                <>
-                  검색 결과 0건
-                  <br />
-                  <span className="text-[10px] text-gray-300">
-                    (백엔드 미연결 — 다음 단계에서 활성화)
-                  </span>
-                </>
+                <>검색 결과 0건</>
               )}
             </div>
           ) : (
-            <div className="p-4 text-center text-xs text-gray-400">
-              결과 카드는 다음 단계에서 렌더됩니다
-            </div>
+            results.map((it) => (
+              <ResultCard
+                key={it.경매번호}
+                item={it}
+                onClick={() => _onItemClick?.(it)}
+              />
+            ))
           )}
         </div>
       </div>
@@ -672,4 +762,219 @@ function rangeFromToday(months: number): { bidStart: string; bidEnd: string } {
   future.setUTCMonth(future.getUTCMonth() + months);
   const end = future.toISOString().slice(0, 10);
   return { bidStart: start, bidEnd: end };
+}
+
+// ───────────────────────────────────────────────
+// 결과 카드 — 영업담당자 한눈 평가 가능 형식
+// ───────────────────────────────────────────────
+
+/**
+ * 매물 1건 카드.
+ *
+ * 시각 위계 (영업 시점 우선순위):
+ *   1) 사건명칭 (가장 큰 글자) — 영업 키
+ *   2) 감정가 (큰 글자, 절대값)
+ *   3) 할인율% (강조 — 차별화 포인트)
+ *   4) D-day (D-3 이내 빨강 깜빡)
+ *   5) 면적 / 유찰 / 위치 — 작은 글자
+ *
+ * 우측 = 지번 핀 (📍 197-1) — 클릭 시 해당 지번 진입 (D3/D4 단계).
+ */
+function ResultCard({
+  item,
+  onClick,
+}: {
+  item: AuctionListItem;
+  onClick: () => void;
+}) {
+  const gamMan = Math.round(item.감정가 / 10000);
+  const lowMan = Math.round(item.최저가 / 10000);
+  const discountPct = Math.round(item.discountRatio * 100);
+  const jibun = item.pnuStandard ? jibunFromPnu(item.pnuStandard) ?? null : null;
+
+  // 면적: 토지/건물 중 큰 쪽 우선. 둘 다 없으면 생략.
+  const areaText = (() => {
+    const land = item.토지면적;
+    const bld = item.건물면적;
+    if (bld != null && bld > 0 && (land == null || bld >= land)) {
+      return `건물 ${Math.round(bld).toLocaleString()}㎡`;
+    }
+    if (land != null && land > 0) {
+      return `토지 ${Math.round(land).toLocaleString()}㎡`;
+    }
+    return null;
+  })();
+
+  // D-day 색상 — D-3 빨강 깜빡, D-7 주황, 그 외 회색.
+  const dayBadge = (() => {
+    if (item.daysLeft < 0) return { cls: "text-gray-400", label: "마감" };
+    if (item.daysLeft <= 3)
+      return {
+        cls: "text-red-600 font-bold animate-pulse",
+        label: `D-${item.daysLeft}`,
+      };
+    if (item.daysLeft <= 7)
+      return { cls: "text-amber-600 font-semibold", label: `D-${item.daysLeft}` };
+    return { cls: "text-gray-500", label: `D-${item.daysLeft}` };
+  })();
+
+  // 진행상태 배지 색상 — 영업 매력도순.
+  const statusBadgeCls = (() => {
+    switch (item.진행상태) {
+      case "신건":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "진행":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "유찰":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "매각":
+      case "취하":
+        return "bg-gray-100 text-gray-500 border-gray-200";
+      default:
+        return "bg-gray-50 text-gray-600 border-gray-200";
+    }
+  })();
+
+  return (
+    <div className="w-full px-3 py-2.5 border-b border-gray-200 bg-white hover:bg-amber-50 transition-colors">
+      <div className="flex items-stretch gap-2">
+        {/* 좌측 본문 */}
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex-1 min-w-0 text-left active:opacity-70"
+        >
+          {/* 1줄: 진행상태 + 용도 + 법원 + 위치 */}
+          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+            <span
+              className={`text-[10px] font-semibold px-1.5 py-px rounded border ${statusBadgeCls}`}
+            >
+              {item.진행상태}
+            </span>
+            {item.용도 && (
+              <span className="text-[10px] text-gray-600 font-medium">
+                {item.용도}
+              </span>
+            )}
+            <span className="text-[10px] text-gray-300">·</span>
+            <span className="text-[10px] text-gray-500">
+              {item.법원간략명}지원
+            </span>
+            <span className="text-[10px] text-gray-400 ml-auto truncate">
+              유찰 {item.유찰수}회
+            </span>
+          </div>
+
+          {/* 2줄: 사건명칭 (영업 키, 큰 글씨) */}
+          <div className="text-[12px] text-gray-900 font-bold leading-tight mb-1">
+            {item.사건명칭}
+          </div>
+
+          {/* 3줄: 감정가 (큰 글씨) + 할인율 % */}
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-[10px] text-gray-500">감정가</span>
+            <span className="text-[14px] font-bold text-gray-900 tabular-nums leading-none">
+              {gamMan.toLocaleString()}만원
+            </span>
+            {discountPct > 0 && (
+              <span className="text-[12px] font-bold text-rose-600 tabular-nums leading-none">
+                -{discountPct}%
+              </span>
+            )}
+          </div>
+
+          {/* 4줄: 최저가 + 면적 */}
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-600 mb-0.5">
+            {discountPct > 0 && (
+              <>
+                <span className="text-gray-400">최저</span>
+                <span className="tabular-nums">
+                  {lowMan.toLocaleString()}만원
+                </span>
+              </>
+            )}
+            {discountPct > 0 && areaText && (
+              <span className="text-gray-300">·</span>
+            )}
+            {areaText && <span>{areaText}</span>}
+          </div>
+
+          {/* 5줄: 매각기일 + D-day */}
+          <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+            <span>매각</span>
+            <span className="tabular-nums">
+              {item.매각기일일자 ?? item.매각기일.slice(0, 10)}
+            </span>
+            <span className={`tabular-nums ${dayBadge.cls}`}>
+              {dayBadge.label}
+            </span>
+            <span className="text-gray-300">·</span>
+            <span className="text-gray-400 truncate flex-1">
+              {item.대표소재지}
+            </span>
+          </div>
+        </button>
+
+        {/* 우측 — 📍 지번 핀 */}
+        {jibun && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            className="flex-shrink-0 inline-flex items-center gap-0.5 self-center px-2 py-1 rounded text-amber-600 font-semibold hover:bg-amber-100 active:bg-amber-200 transition-colors text-xs"
+            title="지도에서 이 지번 위치 보기"
+          >
+            <span className="text-[10px]">📍</span>
+            <span className="tabular-nums">{jibun}</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────
+// API 상태 배너 — 인증실패/잔액부족/레이트리밋/일시장애 안내
+// ───────────────────────────────────────────────
+
+function ApiStatusBanner({ status }: { status: string }) {
+  const cfg: Record<string, { cls: string; icon: string; msg: string }> = {
+    auth_failed: {
+      cls: "bg-red-50 border-red-200 text-red-700",
+      icon: "🔒",
+      msg: "Hyphen 인증 실패 — 결제 만료 또는 키 오류. 비즈머니 충전이 필요합니다.",
+    },
+    no_permission: {
+      cls: "bg-amber-50 border-amber-200 text-amber-800",
+      icon: "⚠️",
+      msg: "Hyphen 운영 모드 권한 미신청. 테스트 모드로 자동 전환됩니다.",
+    },
+    rate_limited: {
+      cls: "bg-amber-50 border-amber-200 text-amber-800",
+      icon: "⏱",
+      msg: "테스트 모드 20초 제한. 잠시 후 재시도해주세요.",
+    },
+    insufficient_balance: {
+      cls: "bg-red-50 border-red-200 text-red-700",
+      icon: "💳",
+      msg: "Hyphen 비즈머니 부족 — 충전 후 재시도.",
+    },
+    unavailable: {
+      cls: "bg-gray-50 border-gray-200 text-gray-700",
+      icon: "📡",
+      msg: "Hyphen 서비스 일시 장애. 잠시 후 재시도.",
+    },
+  };
+  const c = cfg[status] ?? cfg.unavailable;
+
+  return (
+    <div
+      className={`px-3 py-2 text-[11px] border-b leading-snug flex gap-2 ${c.cls}`}
+    >
+      <span className="flex-shrink-0">{c.icon}</span>
+      <span>{c.msg}</span>
+    </div>
+  );
 }

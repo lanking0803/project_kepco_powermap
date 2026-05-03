@@ -12,7 +12,7 @@
  *   4. 결과 카드 표시. 카드 클릭 → onItemClick(row) → MapClient 가 마을 진입
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadModeState,
   saveModeState,
@@ -49,12 +49,18 @@ interface Props {
     polygon: number[][][];
     center: { lat: number; lng: number };
   }) => void;
+  /**
+   * 검색 결과 변경 — 부모(MapClient) 가 줌아웃 마커 표시용으로 전체 보유.
+   * 빈 배열 = 결과 없음 / 초기화.
+   */
+  onResults?: (results: UqVillageWithMatches[]) => void;
 }
 
 export default function UqVillageSearchPanel({
   latIndex,
   onItemClick,
   onPolygonFocus,
+  onResults,
 }: Props) {
   const persisted =
     typeof window !== "undefined"
@@ -78,6 +84,13 @@ export default function UqVillageSearchPanel({
   );
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  /** 결과 변경 시 부모(MapClient)로 forward — 줌아웃 마커 표시용. */
+  const onResultsRef = useRef(onResults);
+  onResultsRef.current = onResults;
+  useEffect(() => {
+    onResultsRef.current?.(results);
+  }, [results]);
 
   /** 시군구 마스터 — 마운트 시 1회 lazy fetch. 이후 모듈 캐시 hit. */
   const [allSigungus, setAllSigungus] = useState<SigunguEntry[]>([]);
@@ -115,9 +128,12 @@ export default function UqVillageSearchPanel({
       .map((r) => ({ label: r.label, code: r.code }));
   }, [allSigungus, params.sido]);
 
-  /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구는 자동 초기화. */
+  /** 시도 변경 또는 데이터 갱신 시 — 무효 시군구는 자동 초기화.
+   * 단 sigungus 가 비어있는 동안(시군구 마스터 lazy fetch 진행 중)은 검증 보류 —
+   * 그렇지 않으면 sessionStorage 복원값이 빈 배열에 의해 부당하게 비워짐. */
   useEffect(() => {
     if (!params.sigungu) return;
+    if (sigungus.length === 0) return;
     const stillValid = sigungus.some((s) => s.label === params.sigungu);
     if (!stillValid) {
       setParams((p) => ({ ...p, sigungu: "", sigunguCode: "" }));

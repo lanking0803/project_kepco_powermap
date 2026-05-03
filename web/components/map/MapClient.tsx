@@ -52,6 +52,7 @@ import {
   fetchVworldUqVillagesByBjdCode,
 } from "@/lib/api/vworld";
 import type { UqVillage } from "@/lib/vworld/uq-villages";
+import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import { buildLatIndex, type LatIndex } from "@/lib/uq/sorted-by-lat";
 import {
@@ -245,8 +246,11 @@ export default function MapClient({ isAdmin, email }: Props) {
     setMode(next);
     setSelectedOnbidVillage(null);
     setOnbidModalOpen(false);
-    // uq 외 모드로 전환 시 화면에 남은 자연취락지구 폴리곤 정리
-    if (next !== "uq") setUqVillagePolygons([]);
+    // uq 외 모드로 전환 시 화면에 남은 자연취락지구 폴리곤/마커 정리
+    if (next !== "uq") {
+      setUqVillagePolygons([]);
+      setUqSearchResults([]);
+    }
   }, []);
 
   const [roadviewActive, setRoadviewActive] = useState(false);
@@ -298,6 +302,14 @@ export default function MapClient({ isAdmin, email }: Props) {
   // 자연취락지구 — 마을 폴리곤 안에 있는 0~N개 (Turf 교차 후 결과만 보유).
   // 마을 폴리곤이 바뀌면 자동 cleanup. cleanup 누락 방지를 위해 villagePolygon 과 한 묶음으로 관리.
   const [uqVillagePolygons, setUqVillagePolygons] = useState<number[][][][]>([]);
+  /**
+   * 자연취락지구 검색 결과 — 줌아웃 시 마커 표시용 centroid 출처.
+   * 폴리곤(uqVillagePolygons) 과 분리: 폴리곤은 카드 클릭/마을 클릭 시 1개만 부각,
+   * 검색 결과 전체는 줌 ≥ 8 에서 마커로 노출.
+   */
+  const [uqSearchResults, setUqSearchResults] = useState<UqVillageWithMatches[]>(
+    [],
+  );
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const villageReqSeqRef = useRef(0);
   const villageAbortRef = useRef<AbortController | null>(null);
@@ -785,6 +797,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         uqLatIndex={latIndex}
         onUqVillagePick={handleTopRankingPick}
         onUqPolygonFocus={handleUqPolygonFocus}
+        onUqResults={setUqSearchResults}
       />
 
       <main className="flex-1 flex min-w-0">
@@ -860,6 +873,16 @@ export default function MapClient({ isAdmin, email }: Props) {
             highlightedParcel={selectedGeometry?.polygon ?? null}
             villagePolygon={villagePolygon}
             uqVillagePolygons={uqVillagePolygons}
+            uqMode={mode === "uq"}
+            uqMarkers={uqSearchResults.map((v) => ({
+              mnum: v.mnum,
+              lat: v.center.lat,
+              lng: v.center.lng,
+              area_m2: v.area_m2,
+              polygon: v.polygon,
+              center: v.center,
+            }))}
+            onUqMarkerClick={handleUqPolygonFocus}
             onbidActive={onbidActive}
             onbidVillages={onbidVillages.map((g) => ({
               key: g.key,

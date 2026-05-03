@@ -15,6 +15,7 @@ import OnbidSearchPanel from "./OnbidSearchPanel";
 import UqVillageSearchPanel from "./UqVillageSearchPanel";
 import AuctionSearchPanel from "./AuctionSearchPanel";
 import type { LatIndex } from "@/lib/uq/sorted-by-lat";
+import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import ModeSelector from "./ModeSelector";
 import { getDataMode, type DataModeId } from "@/lib/modes/registry";
@@ -63,6 +64,8 @@ interface Props {
     polygon: number[][][];
     center: { lat: number; lng: number };
   }) => void;
+  /** 자연취락지구 — 검색 결과 변경. 줌아웃 마커 표시용. */
+  onUqResults?: (results: UqVillageWithMatches[]) => void;
 }
 
 // ── 검색 히스토리 ──
@@ -149,6 +152,7 @@ export default function Sidebar({
   uqLatIndex = null,
   onUqVillagePick,
   onUqPolygonFocus,
+  onUqResults,
 }: Props) {
   /** 현재 모드 설정 — 색/라벨/패널 분기 기준 (단일 진실 공급원 = registry) */
   const modeCfg = getDataMode(mode);
@@ -359,6 +363,7 @@ export default function Sidebar({
               latIndex={uqLatIndex}
               onItemClick={onUqVillagePick}
               onPolygonFocus={onUqPolygonFocus}
+              onResults={onUqResults}
             />
           </div>
         ) : mode === "auction" ? (

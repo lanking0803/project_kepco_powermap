@@ -99,6 +99,26 @@ interface Props {
    * 외각: number[][][] (한 폴리곤의 외곽링들), 외각: 폴리곤 N개.
    */
   uqVillagePolygons?: number[][][][];
+  /** 자연취락지구 모드 활성 여부 — 마커는 이때만 표시. */
+  uqMode?: boolean;
+  /**
+   * 자연취락지구 검색 결과 마커 — 줌 ≥ 8 에서 표시 (공매 dot 패턴 미러).
+   * 클릭 시 onUqMarkerClick → 폴리곤 focus 흐름 (panTo + 줌인 + 폴리곤 강조).
+   */
+  uqMarkers?: Array<{
+    mnum: string;
+    lat: number;
+    lng: number;
+    /** ㎡ — 마커 라벨에 평수 압축 표기 */
+    area_m2: number;
+    polygon: number[][][];
+    center: { lat: number; lng: number };
+  }>;
+  /** uq 마커 클릭 — MapClient 의 handleUqPolygonFocus 와 동일 시그니처. */
+  onUqMarkerClick?: (village: {
+    polygon: number[][][];
+    center: { lat: number; lng: number };
+  }) => void;
   /**
    * 공매 모드 ON 여부. true 일 때 매물 마커 표시 + KEPCO 마커 시각적 비중 ↓.
    */
@@ -261,6 +281,19 @@ function makeMarkerSvg(
   return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
 }
 
+/** 평수(㎡→평) 압축 라벨 — 자연취락지구 마커 텍스트용.
+ *  영업이 한 눈에 우선순위 판단할 수 있게 1~3자 안에 떨어지도록 단위 자동.
+ *  예: 5,000㎡ → "1.5K", 100,000㎡ → "30K", 5,000,000㎡ → "1.5M" */
+function formatPyeongCompact(m2: number): string {
+  if (!Number.isFinite(m2) || m2 <= 0) return "—";
+  const pyeong = m2 / 3.305785;
+  if (pyeong >= 1_000_000) return `${(pyeong / 1_000_000).toFixed(1)}M`;
+  if (pyeong >= 100_000) return `${Math.round(pyeong / 1000)}K`;
+  if (pyeong >= 10_000) return `${(pyeong / 1000).toFixed(0)}K`;
+  if (pyeong >= 1000) return `${(pyeong / 1000).toFixed(1)}K`;
+  return `${Math.round(pyeong)}`;
+}
+
 /**
  * 마을 카드 마커 HTML — globals.css 의 .kepco-card-marker 스타일과 함께 동작.
  * SVG → PNG 변환을 거치지 않고 DOM 으로 직접 렌더해 2,678개 생성 시 16초 → 1초.
@@ -385,6 +418,9 @@ export default function KakaoMap({
   highlightedParcel = null,
   villagePolygon = null,
   uqVillagePolygons = [],
+  uqMode = false,
+  uqMarkers = [],
+  onUqMarkerClick,
   onbidActive = false,
   onbidVillages = [],
   onOnbidVillageClick,
@@ -995,21 +1031,99 @@ export default function KakaoMap({
   }, [loaded, villagePolygon]);
 
   // ─────────────────────────────────────────────
-  // 자연취락지구 폴리곤 (emerald) — 자연취락지구 모드 전용 시각.
-  // 색상은 lib/modes/registry.ts 의 uq.colors.primary (#10b981) 와 일치 —
-  // 영업이 "초록 = 취락지구" 메탈 모델 형성.
-  // 마을 외곽선(zIndex 3) 아래, 마을 채우기(zIndex 1) 위 — zIndex 2.
+  // 자연취락지구 — 마커(클러스터러) + 폴리곤 (카드/마커 클릭 시 1개 강조).
+  //
+  // 마커: kakao.maps.Marker + MarkerClusterer (KEPCO 패턴 미러).
+  //   - 줌 ≥ 8: 클러스터러가 자동으로 묶어서 emerald 클러스터
+  //   - 줌 ≤ 7: 클러스터러가 자동으로 풀어서 단독 emerald 마커 (centroid)
+  //   - minLevel = LABEL_VISIBLE_LEVEL 이 자동 전환 임계값
+  //
+  // 폴리곤: 카드 본체 / 마커 클릭 시 그 1개만 강조 (의뢰자 의도 — 시각 노이즈 최소화).
+  //   - uqVillagePolygons state 는 항상 0~1개 (또는 마을 클릭 시 시군구 응답).
+  //   - 줌 분기 없음 — 폴리곤이 있으면 항상 그림.
+  //
+  // 마커 클릭 = onUqMarkerClick → MapClient handleUqPolygonFocus 흐름 재사용
+  //            (panTo + setUqVillagePolygons([그 1개])).
   // ─────────────────────────────────────────────
   const uqPolygonsRef = useRef<any[]>([]);
+  const uqClustererRef = useRef<any>(null);
+  const uqMarkersRef = useRef<any[]>([]);
+  // 클로저 stale 방지
+  const onUqMarkerClickRef = useRef(onUqMarkerClick);
+  onUqMarkerClickRef.current = onUqMarkerClick;
+  // 마커 클릭 시 mnum → 입력 데이터 lookup (effect dep 폭증 방지)
+  const uqMarkerDataRef = useRef(uqMarkers);
+  uqMarkerDataRef.current = uqMarkers;
+
+  /** emerald 마커 이미지 가공 — 평수(평) 압축 라벨 표시.
+   *  공매 dot 안에 숫자 표기 패턴 미러. 형상은 KEPCO 카드+화살표 미러.
+   *  같은 라벨끼리는 _uqImageCache 로 SVG/MarkerImage 재사용 — 100개 검색 결과 중
+   *  중복 라벨 다수면 가공 횟수가 라벨 unique 수로 떨어진다. */
+  const uqMarkerImageCacheRef = useRef<Map<string, any>>(new Map());
+
+  const buildUqMarkerImage = (areaM2: number): any => {
+    const label = formatPyeongCompact(areaM2);
+    const cache = uqMarkerImageCacheRef.current;
+    const hit = cache.get(label);
+    if (hit) return hit;
+    const cardW = 28;
+    const cardH = 30;
+    const arrowH = 8;
+    const totalH = cardH + arrowH;
+    const arrowPath = `M${cardW / 2 - 5} ${cardH} L${cardW / 2} ${totalH - 1} L${cardW / 2 + 5} ${cardH} Z`;
+    const fontSize = label.length >= 4 ? 8 : 9;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cardW}" height="${totalH}" viewBox="0 0 ${cardW} ${totalH}">
+      <path d="${arrowPath}" fill="#10b981" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+      <rect x="0.75" y="0.75" width="${cardW - 1.5}" height="${cardH - 1.5}" rx="3" ry="3"
+        fill="#10b981" stroke="white" stroke-width="1.5"/>
+      <text x="${cardW / 2}" y="${cardH / 2 + fontSize / 3}" text-anchor="middle"
+        font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="white">${label}</text>
+      <line x1="${cardW / 2 - 4}" y1="${cardH - 0.5}" x2="${cardW / 2 + 4}" y2="${cardH - 0.5}"
+        stroke="#10b981" stroke-width="1.5"/>
+    </svg>`;
+    const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    const image = new window.kakao.maps.MarkerImage(
+      dataUri,
+      new window.kakao.maps.Size(cardW, totalH),
+      { offset: new window.kakao.maps.Point(cardW / 2, totalH) }, // 화살표 끝 = 좌표 지점
+    );
+    cache.set(label, image);
+    return image;
+  };
+
+  /** 클러스터러 1회 생성 (emerald 톤, KEPCO 클러스터러 styles 패턴 미러).
+   *  minLevel = LABEL_VISIBLE_LEVEL+1 = 8 — 줌 ≤ 7 에서 자동 분해되어 단독 마커 노출. */
+  useEffect(() => {
+    if (!loaded || !mapInstanceRef.current || uqClustererRef.current) return;
+    const map = mapInstanceRef.current;
+    const baseStyle = "color:white;text-align:center;border-radius:50%;font-weight:bold;border:2px solid white;background:rgba(16,185,129,0.95);";
+    uqClustererRef.current = new window.kakao.maps.MarkerClusterer({
+      map,
+      averageCenter: true,
+      minLevel: LABEL_VISIBLE_LEVEL + 1, // 줌 ≥ 8 에서만 클러스터, ≤ 7 은 자동 분해
+      gridSize: 60,
+      disableClickZoom: true,  // 클릭 핸들러로 직접 줌인 제어
+      styles: [
+        { width: "40px", height: "40px", lineHeight: "40px", fontSize: "12px", cssText: `${baseStyle}width:40px;height:40px;line-height:40px;font-size:12px;` },
+        { width: "50px", height: "50px", lineHeight: "50px", fontSize: "13px", cssText: `${baseStyle}width:50px;height:50px;line-height:50px;font-size:13px;` },
+        { width: "60px", height: "60px", lineHeight: "60px", fontSize: "14px", cssText: `${baseStyle}width:60px;height:60px;line-height:60px;font-size:14px;` },
+      ],
+    });
+    // 클러스터 클릭 = 그 위치로 panTo + 1단계 줌인 (KEPCO 패턴 동일).
+    window.kakao.maps.event.addListener(uqClustererRef.current, "clusterclick", (cluster: any) => {
+      const center = cluster.getCenter();
+      map.panTo(center);
+      setTimeout(() => map.setLevel(map.getLevel() - 1, { animate: true }), 350);
+    });
+  }, [loaded]);
+
+  /** 폴리곤 cleanup + 그리기 — 카드/마커 클릭 시 1개만(또는 마을 응답). 줌 분기 없음. */
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!loaded || !map) return;
-
     uqPolygonsRef.current.forEach((p) => p.setMap(null));
     uqPolygonsRef.current = [];
-
     if (!uqVillagePolygons || uqVillagePolygons.length === 0) return;
-
     uqVillagePolygons.forEach((polyRings) => {
       polyRings.forEach((ring) => {
         const path = ring.map(
@@ -1018,7 +1132,7 @@ export default function KakaoMap({
         const polygon = new window.kakao.maps.Polygon({
           path,
           strokeWeight: 2,
-          strokeColor: "#10b981", // emerald-500 (registry uq.colors.primary 와 일치)
+          strokeColor: "#10b981",
           strokeOpacity: 1,
           strokeStyle: "solid",
           fillColor: "#10b981",
@@ -1030,6 +1144,38 @@ export default function KakaoMap({
       });
     });
   }, [loaded, uqVillagePolygons]);
+
+  /** 마커 cleanup + 그리기 — uq 모드일 때 검색 결과 전체 centroid 마커 등록.
+   *  클러스터러가 줌에 따라 자동으로 클러스터/단독 전환.
+   *  마커 이미지는 평수 라벨 별로 캐시 (buildUqMarkerImage). */
+  useEffect(() => {
+    const clusterer = uqClustererRef.current;
+    if (!loaded || !mapInstanceRef.current || !clusterer) return;
+    if (uqMarkersRef.current.length > 0) {
+      clusterer.removeMarkers(uqMarkersRef.current);
+      uqMarkersRef.current = [];
+    }
+    if (!uqMode || !uqMarkers || uqMarkers.length === 0) return;
+    const newMarkers = uqMarkers.map((m) => {
+      const marker = new window.kakao.maps.Marker({
+        position: new window.kakao.maps.LatLng(m.lat, m.lng),
+        image: buildUqMarkerImage(m.area_m2),
+      });
+      // 단독 마커 클릭 = 카드 본체 클릭과 동일 (폴리곤 focus 흐름)
+      window.kakao.maps.event.addListener(marker, "click", () => {
+        const found = uqMarkerDataRef.current.find((x) => x.mnum === m.mnum);
+        if (found) {
+          onUqMarkerClickRef.current?.({
+            polygon: found.polygon,
+            center: found.center,
+          });
+        }
+      });
+      return marker;
+    });
+    clusterer.addMarkers(newMarkers);
+    uqMarkersRef.current = newMarkers;
+  }, [loaded, uqMode, uqMarkers]);
 
   // ─────────────────────────────────────────────
   // 공매 매물 마커 — 전기와 동일 패턴 (줌별 카드/클러스터 분기).
