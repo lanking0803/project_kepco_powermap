@@ -621,7 +621,6 @@ export default function KakaoMap({
   roadviewActiveRef.current = roadviewActive;
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const clustererRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
   const lastFitKeyRef = useRef(-1);
   // 마커 위 마을명 라벨(CustomOverlay) — 줌 인 했을 때만 표시
@@ -724,14 +723,15 @@ export default function KakaoMap({
 
 
   // ─────────────────────────────────────────────
-  // 마커 렌더링 — 뷰포트(bounds) 기반 동적 생성 + HTML CustomOverlay
+  // 마커 렌더링 — 뷰포트(bounds) 기반 + 줌별 sep 그룹핑 (Tier 3)
   //
   // 설계:
-  //  1. 클러스터러는 1회 생성 후 재사용, 위치만 가진 "숨김 마커"가 클러스터 묶음을 만듦.
-  //  2. 줌 7 이하(상세 줌)에선 화면 안 마을 카드 HTML 오버레이 추가 표시.
+  //  1. 줌 ≤ 7 (상세): 화면 안 마을 카드 HTML 오버레이 풀링 (Tier 2).
+  //  2. 줌 8~12 (광역): sep 단위 직접 그룹핑 → 적은 수의 큰 마커 (Tier 3).
+  //     (SDK 클러스터러의 4,325개 픽셀 격자 인덱싱 비용 회피)
   //  3. rebuild 함수는 ref 에 저장 → 의존성 변경 시 effect 재실행 없이 함수만 갱신.
   //  4. idle 이벤트(팬/줌 종료)에 200ms debounce 후 rebuild 호출.
-  //  5. bounds 동일하면 rebuild skip → addMarkers 가 idle 재발화해도 자기 루프 차단.
+  //  5. bounds 동일하면 rebuild skip → idle 재발화해도 자기 루프 차단.
   //  6. rebuild 가 200ms 넘으면 onRenderingChange(true) 로 상위에 로딩 신호.
   //
   // 이전 구조: rows 2,678개 전부 SVG→PNG 변환→Marker 생성 → 초기 16초 병목.
@@ -899,38 +899,12 @@ export default function KakaoMap({
     };
   }, [rows, colorFilter, visibleAddrs, selectedAddr, onMarkerClick]);
 
-  // 클러스터러 1회 생성 + idle 리스너 (debounce 200ms)
+  // idle 리스너 (debounce 200ms) + 클릭 위임.
+  // Tier 3 적용 후 KEPCO 클러스터러는 사용하지 않음 — 줌 8~12 는 직접 sep 그룹핑,
+  // 줌 ≤ 7 은 카드 오버레이 풀링. SDK 클러스터러의 4,325개 마커 인덱싱 비용 제거가 핵심.
   useEffect(() => {
     if (!loaded || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
-
-    if (!clustererRef.current) {
-      clustererRef.current = new window.kakao.maps.MarkerClusterer({
-        map,
-        averageCenter: true,
-        minLevel: 5,
-        gridSize: 60,
-        disableClickZoom: true,
-        styles: [
-          { width: "40px", height: "40px", background: "rgba(59,130,246,0.9)", color: "white", textAlign: "center", lineHeight: "40px", borderRadius: "50%", fontSize: "12px", fontWeight: "bold", border: "2px solid white" },
-          { width: "50px", height: "50px", background: "rgba(59,130,246,0.9)", color: "white", textAlign: "center", lineHeight: "50px", borderRadius: "50%", fontSize: "13px", fontWeight: "bold", border: "2px solid white" },
-          { width: "60px", height: "60px", background: "rgba(59,130,246,0.9)", color: "white", textAlign: "center", lineHeight: "60px", borderRadius: "50%", fontSize: "14px", fontWeight: "bold", border: "2px solid white" },
-        ],
-      });
-      window.kakao.maps.event.addListener(clustererRef.current, "clusterclick", (cluster: any) => {
-        const center = cluster.getCenter();
-        if (measureModeRef.current) {
-          measureAddPointRef?.current?.(center);
-          return;
-        }
-        // 부드럽게 중앙 이동 후 1단계 줌인 (panTo 애니메이션 ~350ms 대기)
-        map.panTo(center);
-        setTimeout(() => map.setLevel(map.getLevel() - 1, { animate: true }), 350);
-      });
-    }
-
-    // 공매는 클러스터러 사용 안 함 — 검색 결과가 많지 않고 모든 매물을
-    // 빨간 원 오버레이로 직접 그리는 게 SDK 기본 파란 핀 회피에 단순.
 
     // idle: 팬/줌 종료. 200ms debounce + bounds 동일 시 skip 으로 자기 루프 차단.
     // 통합 핸들러 — 전기/공매/경매/필지 4개 rebuild 를 단일 idle 에서 순차 호출.
@@ -1052,7 +1026,6 @@ export default function KakaoMap({
   }, [loaded, fitBoundsKey]);
 
   // props 변경 시 rebuild 직접 호출 (idle 안 기다림)
-  // Tier 3 이후 rebuild 는 클러스터러를 안 쓰므로 clustererRef 가드 제거.
   useEffect(() => {
     if (!loaded || !mapInstanceRef.current) return;
     rebuildRef.current();

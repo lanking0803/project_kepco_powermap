@@ -26,7 +26,7 @@
 - ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
 - ⚠️ [태양광 허가 API 검증 결과](reference_solar_permit_api.md) — 검색 필터 미지원 (LCTN_LOTNO_ADDR/LATITUDE 등 전부 NODATA). 페이지네이션만 가능. Phase 3 시 12만건 DB 적재 후 by-pnu 신설 필요
 - [건축물대장 API 검증](reference_bldg_register_api.md) — endpoint/파라미터/응답필드 실측. 비닐하우스는 대부분 미등록 한계. 키는 SECRETS.local.md
-- [줌 레벨별 마커 최적화](project_zoom_level_optimization.md) — 130만 행 대비, 줌에 따라 시/군→읍/면→리 마커 전환 (미구현 숙제)
+- ✅ [줌 레벨별 마커 최적화 — 완료](project_zoom_level_optimization.md) — 줌 8~12 sep 단위 클라이언트 그룹핑 + maxLevel 12 (2026-05-04). 클러스터러 인덱싱 비용 제거
 - [DB row_hash 리팩토링 — 추후](project_db_row_hash_refactor.md) — kepco_capa_ukey 61MB → MD5 해시로 40MB 절감. 1차 2단계 완료 후 권장
 - [캐시 전략 체계화 — 차기](project_cache_strategy.md) — HTTP Cache/KV/Next Data Cache 레이어 정리. "마커 0" 사고 복기가 선결
 - [지적편집도 + 지도 클릭 팝업](project_cadastral_and_click_popup.md) — 카카오 지적편집도 레이어 + 빈 곳 클릭 시 지번 용량 팝업 (차기 개발)
@@ -55,3 +55,4 @@
 - ⚠️ [정부 공공 API 행정구역 단위 가정 금지](feedback_govdata_unit_mismatch.md) — bjd_master 표준 ≠ 외부 등록 단위. 일반시 일반구 시·구 따로 등록 흔함. 실 호출 검증 필수, 추측 금지(2026-05-02)
 - 🗺 [시군구 atomic — 모드 공통](project_regions_atomic.md) — `/api/regions/sigungu` (bjd_master 250개) 모든 모드 공유. 취락지구·공매 적용
 - 🏭 [필지 마을 마커 — 공매·경매 미러](project_facility_markers.md) ⭐ — `/api/facility/search` atomic + bjd_master JOIN. violet zIndex 100/50. 동적 갱신은 BJD 키 lookup 패턴 (2026-05-03)
+- ⚡ [줌 빈번 시 level-skip 가드는 무의미](feedback_perf_skip_guard_zoom.md) — 사용 패턴이 줌 위주면 level 기반 skip 발동률 0. idle 리스너 4→1 통합(Step 1A)이 진짜 효과(-63% 스크립트, INP 2,498→313ms). 1B+1C 시도 후 원복(2026-05-03)
