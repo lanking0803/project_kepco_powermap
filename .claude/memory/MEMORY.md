@@ -17,6 +17,8 @@
 - 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
 - 🚀 [2차 착수 인덱스](project_phase2_kickoff.md) ⭐ — 700만 5개 항목 작업 분할 + 1순위=공매 통합(350만)
 - 🏛 [공매·경매 통합 의도](project_auction_intent.md) ⭐ — "저가 매입 기회 발굴". 경매 Phase 1+2 개발 완료(2026-05-02). 테스트모드 시연 단계
+- 🔨 [경매 D4 완료 — 진입 흐름 통합](project_auction_d4_done.md) ⭐ — 검색 카드/마커/카드/모달 4경로 모두 ParcelPanel [경매] 탭으로 수렴 (2026-05-03)
+- 🪤 [sessionStorage 복원 패턴](feedback_session_restore_pattern.md) ⚠️ — 모드 패널 마운트 시 복원된 results 를 부모로 흘려야 마커 회귀 안 함
 - 💰 [Hyphen 비용 구조 + 운영전환](project_hyphen_billing.md) ⭐ — 멤버십 11만/월 + 호출당 종량(단가 미공시). 의뢰자: 테스트 후 결제. HYPHEN_OPERATION_MODE=Y 토글
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
 - 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)

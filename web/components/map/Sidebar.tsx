@@ -14,10 +14,12 @@ import UserGuide from "./UserGuide";
 import OnbidSearchPanel from "./OnbidSearchPanel";
 import UqVillageSearchPanel from "./UqVillageSearchPanel";
 import AuctionSearchPanel from "./AuctionSearchPanel";
+import FacilitySearchPanel from "./FacilitySearchPanel";
 import type { LatIndex } from "@/lib/uq/sorted-by-lat";
 import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 import type { OnbidListItem } from "@/lib/onbid/types";
 import type { AuctionListItem } from "@/lib/hyphen/types";
+import type { FacilitySearchResult } from "@/lib/modes/modes/facility";
 import ModeSelector from "./ModeSelector";
 import { getDataMode, type DataModeId } from "@/lib/modes/registry";
 
@@ -58,6 +60,8 @@ interface Props {
   onOnbidItemClick?: (item: OnbidListItem) => void;
   /** 경매 검색 결과 변경 콜백 (지도 마커용) */
   onAuctionResults?: (items: AuctionListItem[]) => void;
+  /** 경매 매물 카드 클릭 콜백 — 지도 이동 + ParcelPanel 진입 */
+  onAuctionItemClick?: (item: AuctionListItem) => void;
   /** 자연취락지구 — 마을 매칭용 위도순 인덱스 (앱 마운트 시 1회 빌드). */
   uqLatIndex?: LatIndex | null;
   /** 자연취락지구 — 칩(매칭 마을명) 클릭. 마을 진입 흐름. */
@@ -69,6 +73,10 @@ interface Props {
   }) => void;
   /** 자연취락지구 — 검색 결과 변경. 줌아웃 마커 표시용. */
   onUqResults?: (results: UqVillageWithMatches[]) => void;
+  /** 시설 — 검색 결과 변경. 마커 표시용. */
+  onFacilityResults?: (results: FacilitySearchResult[]) => void;
+  /** 시설 — 결과 카드 클릭. 카메라 이동 + 강조용. */
+  onFacilityItemClick?: (result: FacilitySearchResult) => void;
 }
 
 // ── 검색 히스토리 ──
@@ -153,10 +161,13 @@ export default function Sidebar({
   onOnbidResults,
   onOnbidItemClick,
   onAuctionResults,
+  onAuctionItemClick,
   uqLatIndex = null,
   onUqVillagePick,
   onUqPolygonFocus,
   onUqResults,
+  onFacilityResults,
+  onFacilityItemClick,
 }: Props) {
   /** 현재 모드 설정 — 색/라벨/패널 분기 기준 (단일 진실 공급원 = registry) */
   const modeCfg = getDataMode(mode);
@@ -372,7 +383,17 @@ export default function Sidebar({
           </div>
         ) : mode === "auction" ? (
           <div className="flex-1 min-h-0">
-            <AuctionSearchPanel onResults={onAuctionResults} />
+            <AuctionSearchPanel
+              onResults={onAuctionResults}
+              onItemClick={onAuctionItemClick}
+            />
+          </div>
+        ) : mode === "facility" ? (
+          <div className="flex-1 min-h-0">
+            <FacilitySearchPanel
+              onResults={onFacilityResults}
+              onItemClick={onFacilityItemClick}
+            />
           </div>
         ) : (
         <>

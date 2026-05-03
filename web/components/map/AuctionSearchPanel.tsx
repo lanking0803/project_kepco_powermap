@@ -6,12 +6,14 @@
  * 외곽 컨테이너/헤더 색은 부모 Sidebar 가 registry.colors 로 분기 (amber 톤).
  * 본 컴포넌트는 검색 입력 + 결과 카드 영역만 담당.
  *
- * 데이터 흐름 (현재는 미니멀 골격):
+ * 데이터 흐름:
  *   1. /api/regions/sigungu → 시도/시군구 드롭다운 (atomic, 30일 CDN)
- *   2. 검색 → /api/auction/search (다음 단계, 현재는 mock 빈 결과)
- *   3. 결과 카드 → 지도 마커 + 클릭 시 지번 진입 (다음 단계)
+ *   2. 검색 → /api/auction/search → results 부모(MapClient) 로 흘림 → 지도 마커
+ *   3. 결과 카드 클릭 → onItemClick → 지도 이동 + ParcelPanel 진입
  *
- * 카테고리/진행상태/고급필터는 시각 확인 후 단계적 추가.
+ * 상태 영속화:
+ *   - sessionStorage (registry.sessionKey = "auction_search_state_v1")
+ *   - 마운트 시 복원된 results 도 부모로 흘려줌 (모드 전환/새로고침 후 마커 자동 복원)
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -53,7 +55,7 @@ interface Props {
 }
 
 
-export default function AuctionSearchPanel({ onResults, onItemClick: _onItemClick }: Props) {
+export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
   // ─── 상태 복원 ─────────────────────────────────────────────
   const persisted =
     typeof window !== "undefined"
@@ -677,7 +679,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick: _onItemClic
               <ResultCard
                 key={it.경매번호}
                 item={it}
-                onClick={() => _onItemClick?.(it)}
+                onClick={() => onItemClick?.(it)}
               />
             ))
           )}

@@ -735,11 +735,16 @@ export default function MapClient({ isAdmin, email }: Props) {
         return;
       }
       setAuctionModalOpen(false);
+      // 매물 좌표로 카메라 이동 (검색 결과 카드 클릭 시 시각 피드백).
+      // 모달 클릭에도 동일하게 작동 — 모달 위치와 매물 위치가 어긋났을 때 도움.
+      if (auction.lat != null && auction.lng != null) {
+        moveMapTo(auction.lat, auction.lng);
+      }
       await openParcelPanelByPnu(pnu, {
         onNotFound: () => setSimpleToast("⚠️ 매물 필지 정보를 찾을 수 없어요"),
       });
     },
-    [openParcelPanelByPnu],
+    [openParcelPanelByPnu, moveMapTo],
   );
 
   // 공매 마을 마커 클릭 — 동 폴리곤 음영 + OnbidVillageCard 표시.
@@ -886,6 +891,7 @@ export default function MapClient({ isAdmin, email }: Props) {
         onOnbidResults={setOnbidItems}
         onOnbidItemClick={openParcelPanelOnOnbidItemClick}
         onAuctionResults={setAuctionItems}
+        onAuctionItemClick={openParcelPanelOnAuctionItemClick}
         uqLatIndex={latIndex}
         onUqVillagePick={handleTopRankingPick}
         onUqPolygonFocus={handleUqPolygonFocus}
