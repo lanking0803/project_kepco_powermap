@@ -102,6 +102,51 @@ useAprDay      사용승인일 (YYYYMMDD)
 
 ---
 
+## 🧬 PNU 합성 — 응답 5필드 → 행안부 표준 PNU 19자리
+
+### 검증 결과 (2026-05-03, 70건 표본)
+
+- **합성 알고리즘 100% 정확** — 형식·prefix(시군구+bjdong)·산구분·zero-pad 모두 표준대로
+- **VWorld 지적도 매칭률 83%** (lt_c_landinfobasemap WFS Filter 직접 매칭 기준)
+- **실패 17%는 우리 알고리즘 문제 아님** — 다음 두 가지가 원인:
+  1. **VWorld 지적도 갱신 지연** — VWorld 토지특성 API(`getLandCharacteristics`) 에서는 ✅ 존재, 같은 VWorld 의 지적도 폴리곤 DB 만 옛 PNU 미반영
+  2. **외부 건축HUB 데이터 오표기** — `platPlc: "가람동 3번지"` 인데 실제는 "가람동 산 3" (산지 ↔ 일반 잘못 표기, platGbCd=0 으로 응답)
+
+### 합성 규칙
+
+응답 item 의 5필드만으로 합성 가능 (외부 호출 0회):
+
+```
+PNU(19) = sigunguCd(5) + bjdongCd(5) + 산구분(1) + bun(4) + ji(4)
+```
+
+**산구분 매핑** (외부 platGbCd → PNU 11번째):
+- 외부 `platGbCd`: 0=대지, 1=산, 2=블록
+- PNU 11번째: 1=일반, 2=산
+- → `platGbCd === '1' → '2'`, 그 외 → `'1'`
+- ⚠️ 직관과 반대 (0/1/2 가 아닌 1/2). 검증된 규칙.
+
+**합성 skip 조건** (PNU 만들지 않음):
+- `sigunguCd`/`bjdongCd` 가 5자리 숫자가 아닌 경우
+- `bun` 이 빈값/0 (메타 row — 빈 platPlc 응답 케이스)
+
+### TS 구현
+
+[web/lib/facility/pnu.ts](../web/lib/facility/pnu.ts) — `buildPnuFromRawItem(item)`. 시설 모드 카드 클릭 시 호출되어 통합 진입점 `openParcelPanelByPnu(pnu)` 로 전달.
+
+### VWorld 검증 함정
+
+**같은 VWorld 안에서도 두 DB 가 다른 결과를 줍니다:**
+
+| API | endpoint | 12-5 같은 옛 지번 | 좌표 제공 |
+|---|---|---|---|
+| 지적도 WFS | `lt_c_landinfobasemap` | ❌ 없음 | ✅ |
+| 토지특성 NED | `getLandCharacteristics` | ✅ 있음 (4 records, 2023년 갱신) | ❌ |
+
+→ 시설 카드 클릭 후 매칭 실패 토스트가 떠도 합성 정확. 외부 데이터 한계.
+
+---
+
 ## 🧪 테스트 스크립트
 
 [scripts/test_bldg_api/test_brtitle.mjs](../scripts/test_bldg_api/test_brtitle.mjs)
