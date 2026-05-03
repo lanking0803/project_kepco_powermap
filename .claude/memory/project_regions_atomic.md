@@ -1,23 +1,34 @@
 ---
-name: 시군구 atomic endpoint — 모드 공통 자산
-description: /api/regions/sigungu 는 모든 모드의 시도/시군구 드롭다운 공통 데이터 소스. bjd_master 단일 진실 공급원, 30일 CDN + 모듈 캐시.
+name: 행정구역 atomic endpoint — 모드 공통 자산
+description: /api/regions/sigungu + /api/regions/eupmyeondong 2단 endpoint. bjd_master 단일 진실 공급원, 30일 CDN + 모듈 캐시.
 type: project
 ---
 
-# 시군구 atomic (2026-05-02 도입, 2026-05-03 누락 0 픽스)
+# 행정구역 atomic (2026-05-02 시군구 도입, 2026-05-03 누락 0 픽스, 2026-05-03 읍·면·동 추가)
 
-## 구조
+## 구조 (2단 atomic)
 
 ```
-[DB] bjd_master (행안부 표준, 월 1회 CSV)
-   ↓ 시도 17 + 시군구 267 = 284행
-[atomic] /api/regions/sigungu  (CDN 30일)
+[DB] bjd_master (행안부 표준, 20,560행, 월 1회 CSV)
    ↓
-[wrapper] lib/api/regions.ts  (모듈 캐시 + inflight 합치기)
-   ↓
-[적용 완료] 취락지구 ✅ / 공매 ✅ / 경매 ✅
-[예정]      시설
+   ├── [1단] /api/regions/sigungu             (시도17+시군구267=284행)
+   │     ↓ wrapper.fetchSigungus()  단일 모듈 캐시
+   │
+   └── [2단] /api/regions/eupmyeondong         (시군구당 8~80행, lazy)
+         ↓ wrapper.fetchEupmyeondongs(code)  시군구별 Map 캐시
+
+[적용 완료]
+- 시군구 단일 (1단만): 취락지구 ✅
+- 시군구 + 읍·면·동 선택 (2단 소비): 공매·경매 (선택), 시설 (필수)
 ```
+
+## 2단 endpoint — eupmyeondong (2026-05-03)
+
+- 입력: `sigungu_code` (5자리 숫자, /api/regions/sigungu 의 `code`)
+- 응답: `{ ok, sigungu_code, count, items: [{ code, label, sido, si, gu }] }`
+- 조건: bjd_code 끝 2자리="00" (리 제외) + 6~8번째 ≠ "000" (시군구 자체 제외) + sep_4 NOT NULL
+- 검증값: 강남구=14, 구례군=8, 일산서구=8, 광주 동구=34, 일반시 자체 코드(`41280`)=0
+- 시설 모드 필수 이유: 외부 건축HUB API 가 sigunguCd+bjdongCd 둘 다 필수, bjdongCd 빈값/생략 시 totalCount=0 (실측 2026-05-03)
 
 응답 (`SigunguEntry`): `{ sido, si, gu, label, code }`
 - `sido` = sep_1 (시도 한글)

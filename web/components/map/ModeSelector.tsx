@@ -11,7 +11,6 @@
 import {
   DATA_MODES,
   DATA_MODE_ORDER,
-  getDataMode,
   isModeSelectable,
   type DataModeId,
 } from "@/lib/modes/registry";
@@ -23,17 +22,19 @@ interface Props {
   className?: string;
 }
 
+/**
+ * 트리거(닫힌 select)는 선택된 모드와 무관하게 중립색 고정.
+ * 옵션은 <option> OS 네이티브 렌더 — Tailwind 클래스가 안 먹어서
+ * 각 모드 primary 색을 inline style 로 지정.
+ */
 export default function ModeSelector({ mode, onChange, className = "" }: Props) {
-  const current = getDataMode(mode);
-
   return (
     <select
       aria-label="데이터 모드"
       value={mode}
       onChange={(e) => onChange(e.target.value as DataModeId)}
       className={
-        "w-full px-1.5 py-0.5 rounded text-[11px] font-semibold leading-tight border outline-none focus:ring-1 transition-colors " +
-        `${current.colors.borderClass} ${current.colors.bgClass} ${current.colors.textClass} ` +
+        "w-full px-1.5 py-0.5 rounded text-[11px] font-semibold leading-tight border outline-none focus:ring-1 bg-white text-slate-700 border-slate-300 focus:ring-slate-400 " +
         className
       }
     >
@@ -42,7 +43,16 @@ export default function ModeSelector({ mode, onChange, className = "" }: Props) 
         const disabled = !isModeSelectable(id);
         const suffix = disabled && m.comingSoonLabel ? ` (${m.comingSoonLabel})` : "";
         return (
-          <option key={id} value={id} disabled={disabled}>
+          <option
+            key={id}
+            value={id}
+            disabled={disabled}
+            style={
+              disabled
+                ? undefined
+                : { color: m.colors.primary, fontWeight: 600 }
+            }
+          >
             {m.icon} {m.label}
             {suffix}
           </option>

@@ -549,7 +549,9 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
     info.fmlyCnt > 0 ||
     info.hoCnt > 0;
   const hasSiteInfo = info.bcRat != null || info.vlRat != null;
-  const hasDetails = hasExtras || hasSiteInfo;
+  // 새 상세 영역은 항상 노출 가능한 정보가 있어 hasDetails 대신 buildings.length>0 만 보면 됨
+  const hasDetails = true;
+  void hasExtras; void hasSiteInfo;
 
   // 등급별 영업결론 박스 톤 — skip 은 회색·차분, go/review 는 초록·강조
   const boxBg = isSkip ? "bg-gray-50" : "bg-emerald-50/50";
@@ -560,30 +562,30 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
       {/* 헤더 — 용도 + 종류 + 부속 + 건물명 + 연식 */}
-      <div className="px-3 py-2 flex items-center gap-1.5 flex-wrap border-b border-gray-100">
+      <div className="px-3 py-2 flex items-center gap-2 flex-wrap border-b border-gray-100">
         <PurposeBadge grade={purposeGrade}>
           {info.mainPurpsCdNm || "용도불명"}
         </PurposeBadge>
         {info.regstrKindCdNm && (
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[12px] text-gray-500">
             {info.regstrKindCdNm}
           </span>
         )}
         {isAttached && (
           <span
-            className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded"
+            className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded"
             title="부속건축물 — 영업가치 낮음"
           >
             부속
           </span>
         )}
         {info.bldNm && (
-          <span className="text-xs text-gray-700 truncate min-w-0">
+          <span className="text-[13px] text-gray-700 truncate min-w-0">
             {info.bldNm}
           </span>
         )}
         {info.useAprDay && (
-          <span className="ml-auto flex items-baseline gap-1 text-[11px] tabular-nums whitespace-nowrap shrink-0">
+          <span className="ml-auto flex items-baseline gap-1 text-[12px] tabular-nums whitespace-nowrap shrink-0">
             <span className="text-gray-500">
               {formatBldgYearMonth(info.useAprDay)}
             </span>
@@ -624,7 +626,7 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
           dim={isSkip}
         />
 
-        <div className="text-[11px] text-gray-700 flex items-baseline flex-wrap gap-x-1.5 gap-y-0.5 mt-1.5">
+        <div className="text-[13px] text-gray-700 flex items-baseline flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
           <span>
             지붕 <span className="text-gray-900 font-medium">{roofLabel}</span>
           </span>
@@ -643,7 +645,7 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
           )}
         </div>
         {!isSkip && roofWarning && (
-          <div className="mt-1.5 text-[10px] text-amber-700 font-medium">
+          <div className="mt-1.5 text-[12px] text-amber-700 font-medium">
             ⚠ 지붕/구조 보강 검토 필요
           </div>
         )}
@@ -651,7 +653,7 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
 
       {/* 마당 여유 — go/review 만 노출 */}
       {!isSkip && yardSpacious && yeoyuPct != null && (
-        <div className="px-3 py-2 border-t border-emerald-100/60 bg-emerald-50/30 text-[11px] text-emerald-800 font-medium flex items-baseline gap-1.5">
+        <div className="px-3 py-2 border-t border-emerald-100/60 bg-emerald-50/30 text-[13px] text-emerald-800 font-medium flex items-baseline gap-1.5">
           <span aria-hidden>🌱</span>
           <span>
             마당 여유{" "}
@@ -664,62 +666,177 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
         </div>
       )}
 
-      {/* 상세 — 접힘 */}
-      {hasDetails && (
-        <details className="group border-t border-gray-100">
-          <summary className="px-3 py-1.5 text-[11px] text-gray-500 cursor-pointer hover:bg-gray-50 select-none flex items-center gap-1 list-none">
-            <span className="inline-block transition-transform group-open:rotate-90">
-              ▸
-            </span>
-            상세
-          </summary>
-          <dl className="px-3 pb-2 pt-1 space-y-1 text-[11px] bg-gray-50/40">
-            {info.bcRat != null && (
-              <DetailRow label="건폐율">
-                <span className="text-gray-900 tabular-nums">
-                  {info.bcRat}%
-                </span>
-                {info.vlRat != null && info.vlRat !== info.bcRat && (
-                  <span className="text-gray-500 tabular-nums">
-                    · 용적률 {info.vlRat}%
-                  </span>
-                )}
-              </DetailRow>
-            )}
-            {info.atchBldCnt > 0 && (
-              <DetailRow label="부속건물">
-                <span className="text-gray-900 tabular-nums">
-                  {info.atchBldCnt}동 (
-                  {Math.round(info.atchBldArea).toLocaleString()}㎡)
-                </span>
-              </DetailRow>
-            )}
-            {info.oudrAutoUtcnt > 0 && (
-              <DetailRow label="옥외주차">
-                <span className="text-gray-900 tabular-nums">
-                  {info.oudrAutoUtcnt}대
-                </span>
-              </DetailRow>
-            )}
-            {(info.hhldCnt > 0 || info.fmlyCnt > 0) && (
-              <DetailRow label="세대·가구">
-                <span className="text-gray-900 tabular-nums">
-                  {info.hhldCnt > 0 && `${info.hhldCnt}세대`}
-                  {info.hhldCnt > 0 && info.fmlyCnt > 0 && " · "}
-                  {info.fmlyCnt > 0 && `${info.fmlyCnt}가구`}
-                </span>
-              </DetailRow>
-            )}
-            {info.hoCnt > 0 && (
-              <DetailRow label="호수">
-                <span className="text-gray-900 tabular-nums">
-                  {info.hoCnt}
-                </span>
-              </DetailRow>
-            )}
-          </dl>
-        </details>
+      {/* 상세 — 접힘 (공매 탭 Section 패턴 미러) */}
+      <details className="group border-t border-gray-100">
+        <summary className="px-3 py-2 text-[13px] font-medium text-gray-600 cursor-pointer hover:bg-gray-50 select-none flex items-center gap-1.5 list-none">
+          <span className="inline-block transition-transform group-open:rotate-90">
+            ▸
+          </span>
+          상세 정보 펼치기
+        </summary>
+        <div className="px-3 pb-3 pt-1 space-y-2 bg-gray-50/40">
+          <BuildingDetailSections info={info} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/**
+ * 건축물대장 상세 — 공매 탭 Section 박스 패턴 미러.
+ * 카테고리 5종으로 그룹: 분류 / 면적·규모 / 구조·자재 / 시공이력 / 부속·세대 / 식별
+ * 각 섹션은 데이터 있을 때만 렌더 (Row 가 모두 빈값이면 섹션 자체 미노출).
+ */
+function BuildingDetailSections({ info }: { info: BuildingTitleInfo }) {
+  const fmtArea = (m2: number | null) => {
+    if (m2 == null || !Number.isFinite(m2) || m2 <= 0) return null;
+    const py = Math.round((m2 / 3.305785) * 10) / 10;
+    return `${m2.toLocaleString()}㎡ (${py.toLocaleString()}평)`;
+  };
+  const fmtYmd = (s: string | null) => {
+    if (!s || s.length < 8) return null;
+    return `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}`;
+  };
+
+  const archAreaText = fmtArea(info.archArea);
+  const totAreaText = info.totArea > 0 ? fmtArea(info.totArea) : null;
+  const platAreaText = fmtArea(info.platArea);
+  const atchAreaText = info.atchBldArea > 0 ? fmtArea(info.atchBldArea) : null;
+
+  const hasClassification =
+    info.mainPurpsCdNm || info.etcPurps || info.regstrKindCdNm || info.mainAtchGbCdNm;
+  const hasArea = archAreaText || totAreaText || platAreaText || info.bcRat != null || info.vlRat != null;
+  const hasStruct = info.strctCdNm || info.roofCdNm || info.etcRoof || info.heit != null || info.grndFlrCnt > 0;
+  const hasHistory = info.useAprDay || info.pmsDay || info.stcnsDay;
+  const hasExtras = info.atchBldCnt > 0 || info.oudrAutoUtcnt > 0 || info.hhldCnt > 0 || info.fmlyCnt > 0 || info.hoCnt > 0;
+
+  return (
+    <>
+      {hasClassification && (
+        <BSection title="🏷 분류">
+          {info.mainPurpsCdNm && <BRow label="주용도" value={info.mainPurpsCdNm} highlight />}
+          {info.etcPurps && <BRow label="기타용도" value={info.etcPurps} />}
+          {info.regstrKindCdNm && <BRow label="대장종류" value={info.regstrKindCdNm} />}
+          {info.mainAtchGbCdNm && (
+            <BRow
+              label="주부속"
+              value={info.mainAtchGbCdNm}
+              highlight={info.mainAtchGbCdNm === "부속건축물"}
+            />
+          )}
+        </BSection>
       )}
+
+      {hasArea && (
+        <BSection title="📐 면적 · 규모">
+          {archAreaText && <BRow label="건축면적" value={archAreaText} highlight />}
+          {totAreaText && <BRow label="연면적" value={totAreaText} />}
+          {platAreaText && <BRow label="대지면적" value={platAreaText} />}
+          {info.bcRat != null && <BRow label="건폐율" value={`${info.bcRat}%`} />}
+          {info.vlRat != null && <BRow label="용적률" value={`${info.vlRat}%`} />}
+        </BSection>
+      )}
+
+      {hasStruct && (
+        <BSection title="🏛 구조 · 자재">
+          {info.strctCdNm && <BRow label="구조" value={info.strctCdNm} />}
+          {info.roofCdNm && (
+            <BRow
+              label="지붕"
+              value={info.etcRoof ? `${info.roofCdNm} (${info.etcRoof})` : info.roofCdNm}
+            />
+          )}
+          {info.heit != null && <BRow label="높이" value={`${info.heit}m`} />}
+          {(info.grndFlrCnt > 0 || info.ugrndFlrCnt > 0) && (
+            <BRow
+              label="층수"
+              value={
+                `지상 ${info.grndFlrCnt}F` +
+                (info.ugrndFlrCnt > 0 ? ` · 지하 ${info.ugrndFlrCnt}F` : "")
+              }
+            />
+          )}
+        </BSection>
+      )}
+
+      {hasHistory && (
+        <BSection title="🗓 시공 이력">
+          {info.pmsDay && <BRow label="허가일" value={fmtYmd(info.pmsDay) ?? info.pmsDay} muted />}
+          {info.stcnsDay && <BRow label="착공일" value={fmtYmd(info.stcnsDay) ?? info.stcnsDay} muted />}
+          {info.useAprDay && <BRow label="사용승인" value={fmtYmd(info.useAprDay) ?? info.useAprDay} />}
+        </BSection>
+      )}
+
+      {hasExtras && (
+        <BSection title="🏘 부속 · 세대">
+          {info.atchBldCnt > 0 && (
+            <BRow
+              label="부속건물"
+              value={atchAreaText ? `${info.atchBldCnt}동 · ${atchAreaText}` : `${info.atchBldCnt}동`}
+            />
+          )}
+          {info.oudrAutoUtcnt > 0 && <BRow label="옥외주차" value={`${info.oudrAutoUtcnt}대`} />}
+          {info.hhldCnt > 0 && <BRow label="세대" value={`${info.hhldCnt}세대`} />}
+          {info.fmlyCnt > 0 && <BRow label="가구" value={`${info.fmlyCnt}가구`} />}
+          {info.hoCnt > 0 && <BRow label="호수" value={`${info.hoCnt}`} />}
+        </BSection>
+      )}
+
+      {(info.mgmBldrgstPk || info.mainPurpsCd) && (
+        <BSection title="🆔 식별 정보">
+          {info.mgmBldrgstPk && <BRow label="대장PK" value={info.mgmBldrgstPk} mono muted />}
+          {info.mainPurpsCd && <BRow label="용도코드" value={info.mainPurpsCd} mono muted />}
+        </BSection>
+      )}
+    </>
+  );
+}
+
+/** 공매 OnbidTab Section 패턴 미러 — 필지 탭은 회색 톤. */
+/**
+ * BSection — 필지 탭 정보 그룹 컨테이너.
+ *
+ * 모드 색상 = violet (registry.facility 모드와 통일).
+ * 다른 탭과 동일한 패턴 (헤더 strip + 박스 본문) — 시각 일관성.
+ */
+function BSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-violet-100 overflow-hidden">
+      <div className="px-2.5 py-1.5 bg-violet-100/40 border-b border-violet-100">
+        <div className="text-[12px] font-semibold text-violet-900">{title}</div>
+      </div>
+      <div className="px-2.5 py-2 bg-violet-50/30">{children}</div>
+    </div>
+  );
+}
+
+function BRow({
+  label,
+  value,
+  highlight,
+  mono,
+  muted,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  mono?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 text-[13px] py-0.5">
+      <span className="text-gray-500 w-16 shrink-0">{label}</span>
+      <span
+        className={`flex-1 min-w-0 ${
+          highlight
+            ? "text-gray-900 font-semibold"
+            : muted
+              ? "text-gray-500"
+              : "text-gray-800"
+        } ${mono ? "font-mono text-[11px] break-all" : ""} tabular-nums`}
+      >
+        {value}
+      </span>
     </div>
   );
 }

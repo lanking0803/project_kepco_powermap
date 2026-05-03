@@ -23,10 +23,18 @@ const KEY = process.env.DATA_GO_KR_KEY || "";
 
 export interface BuildingTitleInfo {
   // ── 식별 / TL;DR
+  /** 관리건축물대장PK (예: "11680-700402") — 한 동 unique 키. 시설 모드 적재 시 PRIMARY. */
+  mgmBldrgstPk: string | null;
   bldNm: string | null; // 건물명 (대부분 빈 값)
   mainPurpsCdNm: string; // 주용도 ("공장", "단독주택", ...)
+  /** 주용도 5자리 코드 — 시설 모드 SQL 필터용. 예: "21000"=동·식물관련시설 */
+  mainPurpsCd: string | null;
+  /** 기타용도 — 유리온실/축사/돈사 세부 식별 */
+  etcPurps: string | null;
   regstrKindCdNm: string | null; // 건축물 종류 ("일반건축물", "집합건축물")
   mainAtchGbCdNm: string | null; // "주건축물" / "부속건축물"
+  /** 주부속구분코드 — "0"=주건축물 / "1"=부속건축물. 시설 모드 1차 필터(부속 제외) */
+  mainAtchGbCd: string | null;
   useAprDay: string | null; // 사용승인일 YYYYMMDD
   pmsDay: string | null; // 허가일 YYYYMMDD
   stcnsDay: string | null; // 착공일 YYYYMMDD
@@ -35,6 +43,8 @@ export interface BuildingTitleInfo {
   archArea: number | null; // 건축면적 ㎡ (≈ 옥상 가용)
   totArea: number; // 연면적 ㎡
   roofCdNm: string | null; // 지붕 ("평슬래브", "기타지붕" 등)
+  /** 지붕 코드 — 시설 모드: "41" = 유리 (유리온실 식별) */
+  roofCd: string | null;
   etcRoof: string | null; // 기타지붕일 때 실제 자재 ("판넬", "슬레이트" 등)
   strctCdNm: string | null; // 구조 ("일반철골구조", "철근콘크리트구조" 등)
   heit: number | null; // 건축물 높이 m
@@ -57,35 +67,64 @@ export interface BuildingTitleInfo {
   // ── 주소 (헤더 중복이지만 대장 권위 출처용)
   newPlatPlc: string | null;
   platPlc: string | null;
+
+  // ── PNU 합성 원천 (lib/facility/pnu.buildPnuFromRawItem 가 사용)
+  sigunguCd: string | null;
+  bjdongCd: string | null;
+  platGbCd: string | null;
+  bun: string | null;
+  ji: string | null;
 }
 
-interface BrTitleItem {
-  bldNm?: string;
-  mainPurpsCdNm?: string;
-  regstrKindCdNm?: string;
-  mainAtchGbCdNm?: string;
-  useAprDay?: string;
-  pmsDay?: string;
-  stcnsDay?: string;
-  archArea?: string;
-  totArea?: string;
-  roofCdNm?: string;
-  etcRoof?: string;
-  strctCdNm?: string;
-  heit?: string;
-  grndFlrCnt?: string;
-  ugrndFlrCnt?: string;
-  platArea?: string;
-  bcRat?: string;
-  vlRat?: string;
-  atchBldCnt?: string;
-  atchBldArea?: string;
-  hhldCnt?: string;
-  fmlyCnt?: string;
-  hoCnt?: string;
-  oudrAutoUtcnt?: string;
-  newPlatPlc?: string;
-  platPlc?: string;
+/**
+ * 건축HUB 응답 단일 item — 78개 필드 중 우리가 발췌한 것만 선언.
+ *
+ * 외부 API 가 string 으로 보내는 게 보통이지만 일부 필드(mgmBldrgstPk, archArea 등)는
+ * 응답 환경에 따라 number 로 떨어지는 경우가 실측됨 (2026-05-03 일괄 조회 검증).
+ * → 타입은 `string | number` 둘 다 허용, normalize 가 흡수.
+ */
+type RawCell = string | number | null | undefined;
+
+export interface BrTitleItem {
+  mgmBldrgstPk?: RawCell;
+  bldNm?: RawCell;
+  mainPurpsCdNm?: RawCell;
+  mainPurpsCd?: RawCell;
+  etcPurps?: RawCell;
+  regstrKindCdNm?: RawCell;
+  mainAtchGbCdNm?: RawCell;
+  mainAtchGbCd?: RawCell;
+  useAprDay?: RawCell;
+  pmsDay?: RawCell;
+  stcnsDay?: RawCell;
+  archArea?: RawCell;
+  totArea?: RawCell;
+  roofCdNm?: RawCell;
+  roofCd?: RawCell;
+  etcRoof?: RawCell;
+  strctCdNm?: RawCell;
+  heit?: RawCell;
+  grndFlrCnt?: RawCell;
+  ugrndFlrCnt?: RawCell;
+  platArea?: RawCell;
+  bcRat?: RawCell;
+  vlRat?: RawCell;
+  atchBldCnt?: RawCell;
+  atchBldArea?: RawCell;
+  hhldCnt?: RawCell;
+  fmlyCnt?: RawCell;
+  hoCnt?: RawCell;
+  oudrAutoUtcnt?: RawCell;
+  newPlatPlc?: RawCell;
+  platPlc?: RawCell;
+  // PNU 합성 원천 (lib/facility/pnu)
+  sigunguCd?: RawCell;
+  bjdongCd?: RawCell;
+  platGbCd?: RawCell;
+  bun?: RawCell;
+  ji?: RawCell;
+  // 페이지네이션 메타 (응답 envelope 안에 같이 박혀있는 케이스 — 일괄 조회용)
+  rnum?: RawCell;
 }
 
 interface BrTitleResponse {
@@ -144,12 +183,17 @@ export async function getBuildingTitleByPnu(
   return arr.map(normalize);
 }
 
-function normalize(it: BrTitleItem): BuildingTitleInfo {
+/** BrTitleItem → BuildingTitleInfo 정규화 (단건/목록 공용) */
+export function normalize(it: BrTitleItem): BuildingTitleInfo {
   return {
+    mgmBldrgstPk: clean(it.mgmBldrgstPk),
     bldNm: clean(it.bldNm),
     mainPurpsCdNm: clean(it.mainPurpsCdNm) ?? "",
+    mainPurpsCd: clean(it.mainPurpsCd),
+    etcPurps: clean(it.etcPurps),
     regstrKindCdNm: clean(it.regstrKindCdNm),
     mainAtchGbCdNm: clean(it.mainAtchGbCdNm),
+    mainAtchGbCd: clean(it.mainAtchGbCd),
     useAprDay: clean(it.useAprDay),
     pmsDay: clean(it.pmsDay),
     stcnsDay: clean(it.stcnsDay),
@@ -157,6 +201,7 @@ function normalize(it: BrTitleItem): BuildingTitleInfo {
     archArea: numOrNull(it.archArea),
     totArea: num(it.totArea),
     roofCdNm: clean(it.roofCdNm),
+    roofCd: clean(it.roofCd),
     etcRoof: clean(it.etcRoof),
     strctCdNm: clean(it.strctCdNm),
     heit: numOrNull(it.heit),
@@ -176,21 +221,45 @@ function normalize(it: BrTitleItem): BuildingTitleInfo {
 
     newPlatPlc: clean(it.newPlatPlc),
     platPlc: clean(it.platPlc),
+
+    sigunguCd: clean(it.sigunguCd),
+    bjdongCd: clean(it.bjdongCd),
+    platGbCd: clean(it.platGbCd),
+    bun: clean(it.bun),
+    ji: clean(it.ji),
   };
 }
 
-function clean(v: string | undefined): string | null {
-  const t = v?.trim();
+/**
+ * 외부 API 응답 필드는 보통 string 인데 일부 (mgmBldrgstPk, archArea 등)는
+ * 숫자로 떨어지는 경우가 있어서 `string | number | null | undefined` 모두 방어.
+ *
+ * 큰 숫자(예: 25자리 mgmBldrgstPk) 가 number 로 떨어지면 정밀도 손실 +
+ * scientific notation 직렬화로 같은 키가 여러 행에서 충돌함 (2026-05-03 React duplicate key 사고).
+ * → number 일 때는 toFixed(0) 으로 정수 표기 보존.
+ */
+function clean(v: unknown): string | null {
+  if (v == null) return null;
+  let s: string;
+  if (typeof v === "string") {
+    s = v;
+  } else if (typeof v === "number") {
+    s = Number.isFinite(v) ? v.toFixed(0) : String(v);
+  } else {
+    s = String(v);
+  }
+  const t = s.trim();
   return t ? t : null;
 }
 
-function num(v: string | undefined): number {
-  const n = Number(v);
+function num(v: unknown): number {
+  if (v == null || v === "") return 0;
+  const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
-function numOrNull(v: string | undefined): number | null {
+function numOrNull(v: unknown): number | null {
   if (v == null || v === "") return null;
-  const n = Number(v);
+  const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
 }

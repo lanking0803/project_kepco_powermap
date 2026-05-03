@@ -11,12 +11,24 @@
  *   3. Supabase                                    — 실제 도달은 30일에 1회
  */
 import type { SigunguEntry } from "@/lib/regions/sigungu";
-export type { SigunguEntry };
+import type {
+  EupmyeondongEntry,
+  EupmyeondongChild,
+} from "@/lib/regions/eupmyeondong";
+export type { SigunguEntry, EupmyeondongEntry, EupmyeondongChild };
 
 interface SigunguApiResponse {
   ok: boolean;
   count?: number;
   items?: SigunguEntry[];
+  error?: string;
+}
+
+interface EupmyeondongApiResponse {
+  ok: boolean;
+  sigungu_code?: string;
+  count?: number;
+  items?: EupmyeondongEntry[];
   error?: string;
 }
 
@@ -47,4 +59,56 @@ export async function fetchSigungus(): Promise<SigunguEntry[]> {
 /** 캐시 비우기 — 보통 호출 X (행정구역 거의 안 변함). 테스트/디버깅용. */
 export function clearSigunguCache(): void {
   cache = null;
+}
+
+// ────────────────────────────────────────────────────────────
+//  읍·면·동 (시군구별 lazy)
+// ────────────────────────────────────────────────────────────
+
+/** 시군구 5자리 → 그 시군구 안의 읍·면·동 목록. 시군구별 영구 캐시. */
+const eupmCache = new Map<string, EupmyeondongEntry[]>();
+const eupmInflight = new Map<string, Promise<EupmyeondongEntry[]>>();
+
+/**
+ * /api/regions/eupmyeondong?sigungu_code=XXXXX
+ *
+ * 한 시군구 안의 읍·면·동 30~80건. 시군구별 모듈 캐시로
+ * 같은 시군구 두 번째 호출부터 외부 호출 0.
+ */
+export async function fetchEupmyeondongs(
+  sigunguCode: string,
+): Promise<EupmyeondongEntry[]> {
+  if (!/^\d{5}$/.test(sigunguCode)) return [];
+
+  const cached = eupmCache.get(sigunguCode);
+  if (cached) return cached;
+  const flight = eupmInflight.get(sigunguCode);
+  if (flight) return flight;
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(
+        `/api/regions/eupmyeondong?sigungu_code=${sigunguCode}`,
+      );
+      const data = (await res.json()) as EupmyeondongApiResponse;
+      if (!data.ok) throw new Error(data.error || "읍·면·동 조회 실패");
+      const items = data.items ?? [];
+      eupmCache.set(sigunguCode, items);
+      return items;
+    } finally {
+      eupmInflight.delete(sigunguCode);
+    }
+  })();
+
+  eupmInflight.set(sigunguCode, promise);
+  return promise;
+}
+
+/** 읍·면·동 캐시 비우기 (특정 시군구 또는 전체). 테스트/디버깅용. */
+export function clearEupmyeondongCache(sigunguCode?: string): void {
+  if (sigunguCode) {
+    eupmCache.delete(sigunguCode);
+  } else {
+    eupmCache.clear();
+  }
 }

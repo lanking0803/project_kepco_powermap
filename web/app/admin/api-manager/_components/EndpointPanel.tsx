@@ -179,9 +179,9 @@ export default function EndpointPanel({ endpoint, selectedMethod }: Props) {
             {!meta.inputs || meta.inputs.length === 0 ? (
               <div className="text-xs text-gray-400">없음</div>
             ) : (
-              <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
+              <table className="w-full text-xs border border-gray-200 rounded overflow-hidden text-gray-900">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-600 text-[11px]">
+                  <tr className="bg-gray-100 text-gray-800 text-[11px]">
                     <th className="text-left px-2 py-1.5 border-b border-gray-200">name</th>
                     <th className="text-left px-2 py-1.5 border-b border-gray-200">type</th>
                     <th className="text-left px-2 py-1.5 border-b border-gray-200">required</th>
@@ -192,17 +192,17 @@ export default function EndpointPanel({ endpoint, selectedMethod }: Props) {
                 <tbody>
                   {meta.inputs.map((inp) => (
                     <tr key={inp.name} className="border-b border-gray-100 last:border-b-0">
-                      <td className="px-2 py-1.5 font-mono">{inp.name}</td>
-                      <td className="px-2 py-1.5 text-gray-600">{inp.type}</td>
+                      <td className="px-2 py-1.5 font-mono text-gray-900">{inp.name}</td>
+                      <td className="px-2 py-1.5 text-gray-800">{inp.type}</td>
                       <td className="px-2 py-1.5">
                         {inp.required ? (
                           <span className="text-red-600">✓</span>
                         ) : (
-                          <span className="text-gray-300">—</span>
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="px-2 py-1.5 font-mono text-gray-700">{inp.sample}</td>
-                      <td className="px-2 py-1.5 text-gray-600">{inp.description ?? ""}</td>
+                      <td className="px-2 py-1.5 font-mono text-gray-900">{inp.sample}</td>
+                      <td className="px-2 py-1.5 text-gray-800">{inp.description ?? ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -217,12 +217,20 @@ export default function EndpointPanel({ endpoint, selectedMethod }: Props) {
             </pre>
           </Section>
 
-          {/* 특이사항 */}
-          {meta.notes && (
-            <Section title="📌 특이사항 / 메모">
-              <PreText>{meta.notes}</PreText>
-            </Section>
-          )}
+          {/* 특이사항 — manifest scanner 가 비-리터럴(문자열 concat 등)을 파싱하면
+              `{ __nonLiteral, kind }` 객체로 들어옴. 객체일 땐 안내 문구로 대체. */}
+          {meta.notes &&
+            (typeof meta.notes === "string" ? (
+              <Section title="📌 특이사항 / 메모">
+                <PreText>{meta.notes}</PreText>
+              </Section>
+            ) : (
+              <Section title="📌 특이사항 / 메모">
+                <PreText>
+                  (notes 가 단일 문자열 리터럴이 아니라 표시 불가 — route.ts 의 notes 를 한 줄 문자열로 합쳐주세요.)
+                </PreText>
+              </Section>
+            ))}
 
           {/* 라이브 테스터 — endpoint/method 변경 시 입력 sample 재초기화를 위해 key 부여 */}
           <LiveTester

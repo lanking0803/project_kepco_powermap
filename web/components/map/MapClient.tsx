@@ -61,6 +61,7 @@ import {
 import type { UqVillage } from "@/lib/vworld/uq-villages";
 import type { UqVillageWithMatches } from "@/lib/uq/match-village";
 import type { FacilitySearchResult } from "@/lib/modes/modes/facility";
+import { buildPnuFromRawItem } from "@/lib/facility/pnu";
 import { enrichKepcoCapaRowsWithVillageInfo } from "@/lib/api/enrich";
 import { buildLatIndex, type LatIndex } from "@/lib/uq/sorted-by-lat";
 import {
@@ -642,15 +643,21 @@ export default function MapClient({ isAdmin, email }: Props) {
   );
 
   /**
-   * 시설 모드 — 결과 카드/마커 클릭. PNU → 필지 폴리곤/centroid 받아 카메라 이동.
-   * Phase 4 마커 작업 시 추가 강조 처리. 지금은 카메라 이동만.
+   * 시설 모드 — 결과 카드/지번핀 클릭. 응답 5필드로 PNU 19자리 합성 후
+   * 통합 진입점 openParcelPanelByPnu 호출 (공매·경매와 동일 흐름).
+   *
+   * 합성 알고리즘 100% 정확 (검증 2026-05-03). 매칭 실패 시 기존 토스트 자동 처리.
    */
   const handleFacilityItemClick = useCallback(
     (result: FacilitySearchResult) => {
-      // Phase 4 에서 마커 + 카메라 이동 + 강조 추가. 지금은 클릭 로깅만.
-      console.log("[Facility] item click:", result.building.platPlc, result.building.mgmBldrgstPk);
+      const pnu = buildPnuFromRawItem(result.building);
+      if (!pnu) {
+        setSimpleToast("이 건물의 지번 정보가 부족해 위치를 표시할 수 없어요.");
+        return;
+      }
+      void openParcelPanelByPnu(pnu);
     },
-    [],
+    [openParcelPanelByPnu],
   );
 
   // 검색 결과 클릭 — ri (마을) → 마을 흐름, ji (지번) → 지번 흐름 으로 분기

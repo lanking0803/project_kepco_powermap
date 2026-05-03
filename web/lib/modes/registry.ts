@@ -138,8 +138,8 @@ export const DATA_MODES: Record<DataModeId, DataModeConfig> = {
   },
   facility: {
     id: "facility",
-    label: "시설(온실/축사/50평+)",
-    description: "유리온실·축사·창고·50평 이상 건물 발굴",
+    label: "필지",
+    description: "유리온실·축사·공장·창고·대형건물 발굴",
     icon: "🏭",
     colors: {
       primary: "#8b5cf6",
@@ -147,8 +147,7 @@ export const DATA_MODES: Record<DataModeId, DataModeConfig> = {
       textClass: "text-violet-700",
       borderClass: "border-violet-300",
     },
-    status: "planned",
-    comingSoonLabel: "예정",
+    status: "live",
     searchPanel: null,
     sessionKey: "facility_search_state_v1",
   },
