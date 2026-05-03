@@ -60,13 +60,9 @@ export const meta: EndpointMeta = {
   ],
   outputSchema:
     "{ ok: true, pnu, items: OnbidDetail[], fallback, village_empty, fetchedAt }",
-  externalDeps: ["data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)", "supabase (bjd_master)"],
+  externalDeps: ["onbid", "supabase"],
   notes:
-    "PNU 만으로 상세 조회 불가 (캠코는 cltrMngNo 키). " +
-    "그래서 1) bjd_master 한글주소 → 2) 목록 호출 → 3) 매물의 보정 PNU 매칭 → 4) cltrMngNo 로 상세 호출. " +
-    "외부 호출: 매물 없을 때 1번, 1건 있을 때 2번, N건 있을 때 1+N번. " +
-    "⚠️ 캠코 ltnoPnu 의 산구분(11번째 자리)이 비표준(0=일반, 1=산) 으로 와서 행안부 표준(1=일반, 2=산) 으로 변환해 매칭. " +
-    "변환 로직 lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증).",
+    "캠코 OnbidRlstListSrvc2/getRlstCltrList2 + OnbidRlstDtlSrvc2/getRlstDtlInf2 + supabase bjd_master JOIN. PNU 만으로 상세 조회 불가 (캠코는 cltrMngNo 키). 그래서 1) bjd_master 한글주소 → 2) 목록 호출 → 3) 매물의 보정 PNU 매칭 → 4) cltrMngNo 로 상세 호출. 외부 호출: 매물 없을 때 1번, 1건 있을 때 2번, N건 있을 때 1+N번. ⚠️ 캠코 ltnoPnu 의 산구분(11번째 자리)이 비표준(0=일반, 1=산) 으로 와서 행안부 표준(1=일반, 2=산) 으로 변환해 매칭. 변환 로직 lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증).",
 };
 
 export async function GET(req: NextRequest) {

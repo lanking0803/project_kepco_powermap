@@ -67,13 +67,9 @@ export const meta: EndpointMeta = {
   ],
   outputSchema:
     "{ ok: true, apiStatus, items: AuctionListItem[], totalCountAll, truncated, fetchedAt }",
-  externalDeps: ["hyphen", "supabase (bjd_master)"],
+  externalDeps: ["hyphen", "supabase"],
   notes:
-    "다중 yongdo 는 Hyphen 단일 코드 한계로 코드별 병렬 sweep + 경매번호 dedup. " +
-    "응답에 종결매물(매각/취하) 도 포함되므로 progressStatus 클라이언트 필터 필수 — " +
-    "기본 권장: ['신건','진행','유찰']. 매각기일 미래 윈도우(예: 오늘 ~ +6개월) 도 함께 적용 권장. " +
-    "테스트 모드(HYPHEN_OPERATION_MODE !== 'Y')에선 20초 레이트리밋으로 다중 sweep 시 매우 느림 — " +
-    "운영 모드 전환 후 정상 속도. 인증/잔액 실패 시 apiStatus 로 UI 배너 안내.",
+    "Hyphen 진행물건검색 + supabase bjd_master 역조회로 좌표/PNU 보강. 다중 yongdo 는 Hyphen 단일 코드 한계로 코드별 병렬 sweep + 경매번호 dedup. 응답에 종결매물(매각/취하) 도 포함되므로 progressStatus 클라이언트 필터 필수 — 기본 권장: ['신건','진행','유찰']. 매각기일 미래 윈도우(예: 오늘 ~ +6개월) 도 함께 적용 권장. 테스트 모드(HYPHEN_OPERATION_MODE !== 'Y')에선 20초 레이트리밋으로 다중 sweep 시 매우 느림 — 운영 모드 전환 후 정상 속도. 인증/잔액 실패 시 apiStatus 로 UI 배너 안내.",
 };
 
 export async function GET(req: NextRequest) {

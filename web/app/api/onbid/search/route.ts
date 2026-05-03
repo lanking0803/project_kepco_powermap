@@ -59,11 +59,9 @@ export const meta: EndpointMeta = {
   ],
   outputSchema:
     "{ ok: true, items: OnbidListItem[], totalCount: number, fetchedAt: string }",
-  externalDeps: ["data.go.kr (캠코 OnbidRlstListSrvc2)", "supabase (bjd_master)"],
+  externalDeps: ["onbid", "supabase"],
   notes:
-    "다중 카테고리는 캠코가 단일 코드만 받아 응답 후 클라이언트 사이드 필터로 처리. " +
-    "토지/건물50plus 는 응답 sclsId/bldSqms 로 분류. " +
-    "응답에 lat/lng 누락된 매물(bjd_master 미수록)은 클라이언트 마커 표시에서 자동 제외.",
+    "캠코 OnbidRlstListSrvc2/getRlstCltrList2 + supabase bjd_master JOIN 으로 좌표 보강. 다중 카테고리는 캠코가 단일 코드만 받아 응답 후 클라이언트 사이드 필터로 처리. 토지/건물50plus 는 응답 sclsId/bldSqms 로 분류. 응답에 lat/lng 누락된 매물(bjd_master 미수록)은 클라이언트 마커 표시에서 자동 제외.",
 };
 
 export async function GET(req: NextRequest) {

@@ -440,9 +440,9 @@ export const MANIFEST: GeneratedManifest = {
             "outputSchema": "{ ok: true, pnu, apiStatus, errCd, errMsg, items: AuctionListItem[], fallback, village_empty, truncated, fetchedAt }",
             "externalDeps": [
               "hyphen",
-              "supabase (bjd_master)"
+              "supabase"
             ],
-            "notes": "면(里) 단위까지만 호출 (dong=pnu[0:10]). 최대 20페이지(= 200건) cap. 응답에 종결 매물(매각/취하 등) 도 포함됨 — UI 에서 진행상태 배지로 구분. Hyphen dong 필터는 실제로 '면' 단위 매칭 → 응답에 다른 리도 섞여 옴 → PNU 매칭으로 정확 필터. apiStatus=auth_failed 면 의뢰자 비즈머니 충전 또는 결제 만료 — UI 가 배너로 안내."
+            "notes": "Hyphen 진행물건검색 + supabase bjd_master 역조회로 좌표/PNU 보강. 면(里) 단위까지만 호출 (dong=pnu[0:10]). 최대 20페이지(= 200건) cap. 응답에 종결 매물(매각/취하 등) 도 포함됨 — UI 에서 진행상태 배지로 구분. Hyphen dong 필터는 실제로 '면' 단위 매칭 → 응답에 다른 리도 섞여 옴 → PNU 매칭으로 정확 필터. apiStatus=auth_failed 면 의뢰자 비즈머니 충전 또는 결제 만료 — UI 가 배너로 안내."
           },
           "metaLine": 45,
           "metaExportName": "meta"
@@ -476,6 +476,150 @@ export const MANIFEST: GeneratedManifest = {
             "notes": "사건번호코드와 product_id 는 다름 — 검색 응답의 '경매번호' 필드를 productId 로 전달해야 함. 응답에 이미지/감정평가서/임차인/등기부/명도비/예상배당/인근물건 등 45개 필드 포함."
           },
           "metaLine": 23,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/auction/search",
+      "id": "auction-search",
+      "filePath": "app/api/auction/search/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "Hyphen 경매다 /au0147001252 (진행물건검색) + bjd_master 역조회. 다중 yongdo 병렬 sweep + 클라이언트 사이드 필터.",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "sigunguCode",
+                "type": "string",
+                "required": true,
+                "sample": "41570",
+                "description": "행안부 5자리. 비용 가드 — 시도만 검색 거부"
+              },
+              {
+                "name": "emdong",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "읍면동 텍스트. 응답 후 클라이언트 LIKE 필터"
+              },
+              {
+                "name": "yongdoCodes",
+                "type": "string",
+                "required": false,
+                "sample": "31,33",
+                "description": "Hyphen 용도코드 다중 (콤마, 빈 문자=전체)"
+              },
+              {
+                "name": "progressStatus",
+                "type": "string",
+                "required": false,
+                "sample": "신건,진행,유찰",
+                "description": "한글 진행상태 다중 (콤마, 빈 문자=전체). 응답 후 필터"
+              },
+              {
+                "name": "landMin",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "토지면적 ㎡"
+              },
+              {
+                "name": "landMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "bareaMin",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "건물면적 ㎡"
+              },
+              {
+                "name": "bareaMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "gamMin",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "감정가 만원"
+              },
+              {
+                "name": "gamMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "lowMin",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "최저가 만원"
+              },
+              {
+                "name": "lowMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "bidStart",
+                "type": "string",
+                "required": false,
+                "sample": "2026-05-03",
+                "description": "매각기일 시작 YYYY-MM-DD"
+              },
+              {
+                "name": "bidEnd",
+                "type": "string",
+                "required": false,
+                "sample": "2026-11-03"
+              },
+              {
+                "name": "usbdMin",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "유찰횟수 — 응답 후 필터"
+              },
+              {
+                "name": "usbdMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              },
+              {
+                "name": "discountMin",
+                "type": "number",
+                "required": false,
+                "sample": "30",
+                "description": "할인율 % — 응답 후 계산 + 필터"
+              },
+              {
+                "name": "discountMax",
+                "type": "number",
+                "required": false,
+                "sample": ""
+              }
+            ],
+            "outputSchema": "{ ok: true, apiStatus, items: AuctionListItem[], totalCountAll, truncated, fetchedAt }",
+            "externalDeps": [
+              "hyphen",
+              "supabase"
+            ],
+            "notes": "Hyphen 진행물건검색 + supabase bjd_master 역조회로 좌표/PNU 보강. 다중 yongdo 는 Hyphen 단일 코드 한계로 코드별 병렬 sweep + 경매번호 dedup. 응답에 종결매물(매각/취하) 도 포함되므로 progressStatus 클라이언트 필터 필수 — 기본 권장: ['신건','진행','유찰']. 매각기일 미래 윈도우(예: 오늘 ~ +6개월) 도 함께 적용 권장. 테스트 모드(HYPHEN_OPERATION_MODE !== 'Y')에선 20초 레이트리밋으로 다중 sweep 시 매우 느림 — 운영 모드 전환 후 정상 속도. 인증/잔액 실패 시 apiStatus 로 UI 배너 안내."
+          },
+          "metaLine": 43,
           "metaExportName": "meta"
         }
       ]
@@ -733,13 +877,10 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "outputSchema": "{ ok: true, pnu, items: OnbidDetail[], fallback, village_empty, fetchedAt }",
             "externalDeps": [
-              "data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)",
-              "supabase (bjd_master)"
+              "onbid",
+              "supabase"
             ],
-            "notes": {
-              "__nonLiteral": true,
-              "kind": "BinaryExpression"
-            }
+            "notes": "캠코 OnbidRlstListSrvc2/getRlstCltrList2 + OnbidRlstDtlSrvc2/getRlstDtlInf2 + supabase bjd_master JOIN. PNU 만으로 상세 조회 불가 (캠코는 cltrMngNo 키). 그래서 1) bjd_master 한글주소 → 2) 목록 호출 → 3) 매물의 보정 PNU 매칭 → 4) cltrMngNo 로 상세 호출. 외부 호출: 매물 없을 때 1번, 1건 있을 때 2번, N건 있을 때 1+N번. ⚠️ 캠코 ltnoPnu 의 산구분(11번째 자리)이 비표준(0=일반, 1=산) 으로 와서 행안부 표준(1=일반, 2=산) 으로 변환해 매칭. 변환 로직 lib/onbid/pnu-fix.ts (실측 100% 매칭, 500건 검증)."
           },
           "metaLine": 47,
           "metaExportName": "meta"
@@ -851,13 +992,10 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "outputSchema": "{ ok: true, items: OnbidListItem[], totalCount: number, fetchedAt: string }",
             "externalDeps": [
-              "data.go.kr (캠코 OnbidRlstListSrvc2)",
-              "supabase (bjd_master)"
+              "onbid",
+              "supabase"
             ],
-            "notes": {
-              "__nonLiteral": true,
-              "kind": "BinaryExpression"
-            }
+            "notes": "캠코 OnbidRlstListSrvc2/getRlstCltrList2 + supabase bjd_master JOIN 으로 좌표 보강. 다중 카테고리는 캠코가 단일 코드만 받아 응답 후 클라이언트 사이드 필터로 처리. 토지/건물50plus 는 응답 sclsId/bldSqms 로 분류. 응답에 lat/lng 누락된 매물(bjd_master 미수록)은 클라이언트 마커 표시에서 자동 제외."
           },
           "metaLine": 34,
           "metaExportName": "meta"
@@ -1009,6 +1147,30 @@ export const MANIFEST: GeneratedManifest = {
             "notes": "사이드바 새로고침 버튼에서 호출. RPC 측에서 60s cooldown + advisory lock + 5분 statement_timeout. maxDuration=300 (라우트 timeout)."
           },
           "metaLine": 21,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/regions/sigungu",
+      "id": "regions-sigungu",
+      "filePath": "app/api/regions/sigungu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "Supabase bjd_master (행안부 법정동 코드, 월 1회 갱신).",
+            "cache": "public, s-maxage=2592000, stale-while-revalidate=86400",
+            "auth": "user",
+            "inputs": [],
+            "outputSchema": "{ ok, count, items: Array<{ sido: string, si: string|null, gu: string|null, label: string, code: string }> }",
+            "externalDeps": [],
+            "notes": {
+              "__nonLiteral": true,
+              "kind": "BinaryExpression"
+            }
+          },
+          "metaLine": 23,
           "metaExportName": "meta"
         }
       ]
@@ -1346,7 +1508,8 @@ export const MANIFEST: GeneratedManifest = {
       "metaLine": 3,
       "consumedBy": [
         "auction-by-pnu",
-        "auction-detail"
+        "auction-detail",
+        "auction-search"
       ]
     },
     {
@@ -1483,7 +1646,10 @@ export const MANIFEST: GeneratedManifest = {
       },
       "filePath": "app/admin/api-manager/_lib/services/onbid.ts",
       "metaLine": 3,
-      "consumedBy": []
+      "consumedBy": [
+        "onbid-by-pnu",
+        "onbid-search"
+      ]
     },
     {
       "id": "rtms-land",
@@ -1649,11 +1815,15 @@ export const MANIFEST: GeneratedManifest = {
       "consumedBy": [
         "admin-crawl",
         "admin-users",
+        "auction-by-pnu",
+        "auction-search",
         "capa-by-bjd",
         "capa-refresh-by-pnu",
         "capa-summary-by-bjd",
         "health",
         "map-summary",
+        "onbid-by-pnu",
+        "onbid-search",
         "reconcile",
         "refresh-mv",
         "search"
@@ -1729,12 +1899,6 @@ export const MANIFEST: GeneratedManifest = {
   "warnings": [
     "/api/admin/external-test POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
     "/api/admin/health-check-all POST: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
-    "/api/auction/by-pnu GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
-    "/api/onbid/by-pnu GET: externalDeps \"data.go.kr (캠코 OnbidRlstListSrvc2 + OnbidRlstDtlSrvc2)\" 가 _lib/services/ 에 정의 안 됨",
-    "/api/onbid/by-pnu GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
-    "/api/onbid/by-pnu GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능",
-    "/api/onbid/search GET: externalDeps \"data.go.kr (캠코 OnbidRlstListSrvc2)\" 가 _lib/services/ 에 정의 안 됨",
-    "/api/onbid/search GET: externalDeps \"supabase (bjd_master)\" 가 _lib/services/ 에 정의 안 됨",
-    "/api/onbid/search GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능"
+    "/api/regions/sigungu GET: meta 가 변수 참조/함수 호출 포함 — 정적 리터럴만 가능"
   ]
 } as GeneratedManifest;

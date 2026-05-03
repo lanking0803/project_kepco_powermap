@@ -58,8 +58,8 @@ export const meta: EndpointMeta = {
   ],
   outputSchema:
     "{ ok: true, pnu, apiStatus, errCd, errMsg, items: AuctionListItem[], fallback, village_empty, truncated, fetchedAt }",
-  externalDeps: ["hyphen", "supabase (bjd_master)"],
-  notes: "면(里) 단위까지만 호출 (dong=pnu[0:10]). 최대 20페이지(= 200건) cap. 응답에 종결 매물(매각/취하 등) 도 포함됨 — UI 에서 진행상태 배지로 구분. Hyphen dong 필터는 실제로 '면' 단위 매칭 → 응답에 다른 리도 섞여 옴 → PNU 매칭으로 정확 필터. apiStatus=auth_failed 면 의뢰자 비즈머니 충전 또는 결제 만료 — UI 가 배너로 안내.",
+  externalDeps: ["hyphen", "supabase"],
+  notes: "Hyphen 진행물건검색 + supabase bjd_master 역조회로 좌표/PNU 보강. 면(里) 단위까지만 호출 (dong=pnu[0:10]). 최대 20페이지(= 200건) cap. 응답에 종결 매물(매각/취하 등) 도 포함됨 — UI 에서 진행상태 배지로 구분. Hyphen dong 필터는 실제로 '면' 단위 매칭 → 응답에 다른 리도 섞여 옴 → PNU 매칭으로 정확 필터. apiStatus=auth_failed 면 의뢰자 비즈머니 충전 또는 결제 만료 — UI 가 배너로 안내.",
 };
 
 export async function GET(req: NextRequest) {
