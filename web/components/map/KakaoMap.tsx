@@ -389,6 +389,71 @@ function makeMarkerHtml(
   </div>`;
 }
 
+// ─────────────────────────────────────────────
+// 줌별 그룹핑 (Tier 3) — 줌 8~12 에서 sep 단위로 마을을 묶어 적은 수의 마커로 표시.
+// 줌 ≤ 7 은 마을 카드 그대로 (현재 동작 유지).
+//
+// 카카오 SDK 클러스터러 대신 직접 그룹핑하는 이유:
+//   - 클러스터러는 4,325개 마커를 매번 픽셀 격자로 인덱싱 (1.5~2초)
+//   - sep 단위 = 한국 행정구역 기반, 데이터에 이미 있음 (DB 변경 0)
+//   - 사용자에게 "도 → 시군 → 읍면 → 마을" 자연스러운 흐름
+// ─────────────────────────────────────────────
+
+/** 줌 레벨 → 그룹 단위 */
+type GroupTier = "sido" | "sigungu" | "emd" | "ri";
+function tierForLevel(level: number): GroupTier {
+  if (level >= 12) return "sido";       // 시도 (~17개)
+  if (level >= 9) return "sigungu";     // 시군구 (~250개)
+  if (level >= 8) return "emd";         // 읍면동 (~3,500개)
+  return "ri";                          // 마을 (현재 카드)
+}
+
+/**
+ * 그룹 키 — 폴백으로 빈값 안전 + 상위 단위 포함으로 동명 안전.
+ *  - 광역시/세종은 sep_1 비어있어 sep_2 사용
+ *  - 세종은 sep_3 도 비어있어 sep_2 그대로 시군구 키로 사용
+ *  - "동구" 같은 동명 시군구는 상위(시도) 키 포함으로 다른 그룹으로 분리
+ */
+function groupKey(row: MapSummaryRow, tier: GroupTier): string {
+  const pick = (...vals: (string | null | undefined)[]) =>
+    vals.find((v) => v && v.trim().length > 0)?.trim() ?? "";
+  const sido = pick(row.addr_do, row.addr_si);
+  const sigungu = pick(row.addr_gu, row.addr_si, row.addr_do);
+  const emd = pick(row.addr_dong);
+  if (tier === "sido") return sido;
+  if (tier === "sigungu") return `${sido}|${sigungu}`;
+  if (tier === "emd") return `${sido}|${sigungu}|${emd}`;
+  return ""; // ri 은 그룹핑 안 함
+}
+
+/** 그룹 마커에 보일 라벨 (사용자 시각용).
+ *  세분 단위가 비면(예: 세종 시군구 = null) 상위 단위로 자연 폴백. */
+function groupLabel(row: MapSummaryRow, tier: GroupTier): string {
+  // 빈 문자열도 falsy 로 취급하기 위해 명시적으로 trim 후 검사
+  const pick = (...vals: (string | null | undefined)[]) =>
+    vals.find((v) => v && v.trim().length > 0)?.trim() ?? "";
+  const sido = pick(row.addr_do, row.addr_si);
+  const sigungu = pick(row.addr_gu, row.addr_si, row.addr_do);
+  const emd = pick(row.addr_dong);
+  if (tier === "sido") return sido;
+  if (tier === "sigungu") return sigungu;
+  if (tier === "emd") return emd || sigungu || sido;
+  return "";
+}
+
+/** 줌별 그룹 마커 HTML — 푸른 원 + 라벨 + 마을 수.
+ *  globals.css 의 .kepco-group-marker 클래스와 함께 동작. */
+function makeGroupMarkerHtml(label: string, count: number, tier: GroupTier, key: string): string {
+  // tier 별 크기 — 시도(가장 줌아웃) 가 가장 큼
+  const sizeClass = tier === "sido" ? "lg" : tier === "sigungu" ? "md" : "sm";
+  const safeLabel = label.replace(/"/g, "&quot;");
+  const safeKey = key.replace(/"/g, "&quot;");
+  return `<div class="kepco-group-marker ${sizeClass}" data-group-key="${safeKey}">
+    <div class="name">${safeLabel}</div>
+    <div class="count">${count.toLocaleString()}</div>
+  </div>`;
+}
+
 /** 마커 사이즈 헬퍼 — 카드 폭/총 높이 + 우측 배지 영역 고려 */
 function markerSize(count: number): { w: number; h: number } {
   const cardW = 28;
@@ -615,6 +680,9 @@ export default function KakaoMap({
       center: new window.kakao.maps.LatLng(36.5, 127.8),
       level: 12,
     });
+    // 최대 줌아웃 레벨 제한 — 13/14 는 한반도보다 더 넓은 시각이라 의미 없고
+    // 화면 안 row 수 폭증으로 프리징 유발. 12 = 한반도 전체 범위로 충분.
+    map.setMaxLevel(12);
     mapInstanceRef.current = map;
     (window as any).__kepcoMap = map;
 
@@ -673,6 +741,9 @@ export default function KakaoMap({
   // 같은 addr 인 오버레이는 innerHTML + position + zIndex 만 갱신해 DOM 재사용.
   // 줌 ≤ 7 (카드 표시) 영역 내 패닝/리렌더 시 가장 무거운 비용을 직접 절감.
   const overlayPoolRef = useRef<Map<string, any>>(new Map());
+  // 그룹 마커 풀 — `${tier}:${groupKey}` → CustomOverlay. 줌 ≥ 8 일 때 사용.
+  // 카드 풀과 분리 — tier 가 바뀌면 다른 키 공간이라 자연스럽게 격리됨.
+  const groupOverlayPoolRef = useRef<Map<string, any>>(new Map());
   const lastBoundsKeyRef = useRef<string>("");
   const renderingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -680,11 +751,10 @@ export default function KakaoMap({
   useEffect(() => {
     rebuildRef.current = () => {
       const map = mapInstanceRef.current;
-      const clusterer = clustererRef.current;
-      if (!map || !clusterer) return;
+      if (!map) return;
 
-      // 클러스터러는 풀링 안 함 — Marker 객체는 가벼움 + SDK 자체 인덱싱 비용이 더 큼.
-      clusterer.clear();
+      // 매 rebuild 시 markersByAddr 만 비움 (위임 클릭 핸들러가 참조).
+      // 카드/그룹 오버레이는 풀링되어 보존됨.
       markersByAddrRef.current.clear();
 
       // 전기 마커는 공매 토글과 무관하게 항상 표시 (2026-05-02 의뢰자 결정)
@@ -692,7 +762,8 @@ export default function KakaoMap({
 
       const bounds = map.getBounds();
       const level = map.getLevel();
-      const showCard = level <= LABEL_VISIBLE_LEVEL;
+      const tier = tierForLevel(level);
+      const showCard = tier === "ri";
 
       // 색상/가시성/뷰포트 필터 — 화면 안 + 활성 색상 + 검색 결과만
       const filtered = rows.filter((r) => {
@@ -701,43 +772,27 @@ export default function KakaoMap({
         return bounds.contain(new window.kakao.maps.LatLng(r.lat, r.lng));
       });
 
-      // 카드 표시 줌이 아니거나 결과 0 이면 풀의 모든 카드 숨김(객체는 보존).
-      if (!showCard || filtered.length === 0) {
+      // tier 가 'ri' 가 아니면 카드 풀 모두 숨김. 'ri' 이면 그룹 풀 모두 숨김.
+      // (다른 tier 끼리는 키 공간이 달라 자동 격리되지만, 명시적으로 끄는 게 안전)
+      if (!showCard) {
         overlayPoolRef.current.forEach((o) => o.setMap(null));
+      } else {
+        groupOverlayPoolRef.current.forEach((o) => o.setMap(null));
       }
 
-      if (filtered.length === 0) return;
+      // 결과 0 이면 양쪽 풀 모두 숨기고 종료.
+      if (filtered.length === 0) {
+        overlayPoolRef.current.forEach((o) => o.setMap(null));
+        groupOverlayPoolRef.current.forEach((o) => o.setMap(null));
+        return;
+      }
 
       if (showCard) {
-        // 카드 표시 줌(≤7): 클러스터/마커 없이 HTML 오버레이만.
-        // markersByAddrRef 에 row 만 저장 (위임 클릭 핸들러가 row 조회용)
+        // ───── 줌 ≤ 7: 마을 카드 (기존 동작 — 카드 풀링) ─────
         filtered.forEach((row) => {
           markersByAddrRef.current.set(row.geocode_address, { marker: null, row });
         });
-      } else {
-        // 클러스터 표시 줌(≥8): 위치만 가진 마커로 클러스터링.
-        // 단독으로 표시되는 마커 클릭 → 카드 보이는 줌(7)으로 자동 줌인.
-        const hiddenMarkers = filtered.map((row) => {
-          const position = new window.kakao.maps.LatLng(row.lat, row.lng);
-          const marker = new window.kakao.maps.Marker({ position });
-          markersByAddrRef.current.set(row.geocode_address, { marker, row });
-          window.kakao.maps.event.addListener(marker, "click", () => {
-            if (measureModeRef.current) {
-              measureAddPointRef?.current?.(position);
-              return;
-            }
-            // 단독 마커 → 부드럽게 중앙 이동 후 1단계 줌인
-            map.panTo(position);
-            setTimeout(() => map.setLevel(map.getLevel() - 1, { animate: true }), 350);
-          });
-          return marker;
-        });
-        clusterer.addMarkers(hiddenMarkers);
-      }
 
-      // 카드 오버레이 풀링 — 같은 addr 면 setContent/setPosition/setZIndex 만,
-      // 새로 보이는 addr 만 신규 생성, 사라진 addr 는 setMap(null) 로 숨김(객체 보존).
-      if (showCard) {
         const pool = overlayPoolRef.current;
         const usedAddrs = new Set<string>();
         for (const row of filtered) {
@@ -759,13 +814,11 @@ export default function KakaoMap({
 
           let overlay = pool.get(addr);
           if (overlay) {
-            // 재사용 — DOM 노드는 그대로, 내용/위치/zIndex 만 갱신.
             overlay.setContent(html);
             overlay.setPosition(position);
             overlay.setZIndex(zIndex);
-            overlay.setMap(map); // 직전 rebuild 에서 숨겼다가 다시 보이는 케이스 대응
+            overlay.setMap(map);
           } else {
-            // 신규 — 처음 화면에 들어온 addr.
             overlay = new window.kakao.maps.CustomOverlay({
               position,
               content: html,
@@ -777,9 +830,70 @@ export default function KakaoMap({
             pool.set(addr, overlay);
           }
         }
-        // 화면 밖으로 사라진 addr 는 숨김(객체는 보존 → 다시 들어올 때 재사용).
         for (const [addr, overlay] of pool) {
           if (!usedAddrs.has(addr)) overlay.setMap(null);
+        }
+      } else {
+        // ───── 줌 ≥ 8: sep 단위 그룹 마커 (Tier 3 신규) ─────
+        // 1) 화면 안 마을을 tier 별 그룹으로 묶음 + centroid + count 계산
+        interface Group {
+          key: string;
+          label: string;
+          latSum: number;
+          lngSum: number;
+          count: number;
+        }
+        const groups = new Map<string, Group>();
+        for (const row of filtered) {
+          const key = groupKey(row, tier);
+          if (!key) continue;
+          const existing = groups.get(key);
+          if (existing) {
+            existing.latSum += row.lat;
+            existing.lngSum += row.lng;
+            existing.count += 1;
+          } else {
+            groups.set(key, {
+              key,
+              label: groupLabel(row, tier),
+              latSum: row.lat,
+              lngSum: row.lng,
+              count: 1,
+            });
+          }
+        }
+
+        // 2) 그룹 풀링 — 같은 키면 setContent/setPosition 만, 새 키만 신규 생성.
+        const pool = groupOverlayPoolRef.current;
+        const usedKeys = new Set<string>();
+        for (const g of groups.values()) {
+          const poolKey = `${tier}:${g.key}`;
+          usedKeys.add(poolKey);
+          const centerLat = g.latSum / g.count;
+          const centerLng = g.lngSum / g.count;
+          const position = new window.kakao.maps.LatLng(centerLat, centerLng);
+          const html = makeGroupMarkerHtml(g.label, g.count, tier, poolKey);
+
+          let overlay = pool.get(poolKey);
+          if (overlay) {
+            overlay.setContent(html);
+            overlay.setPosition(position);
+            overlay.setMap(map);
+          } else {
+            overlay = new window.kakao.maps.CustomOverlay({
+              position,
+              content: html,
+              yAnchor: 0.5,
+              xAnchor: 0.5,
+              zIndex: 3,
+            });
+            overlay.setMap(map);
+            pool.set(poolKey, overlay);
+          }
+        }
+        // 사라진 그룹 키는 숨김 (다른 tier 의 키도 자동 포함 — tier 전환 시 안전)
+        for (const [k, overlay] of pool) {
+          if (!usedKeys.has(k)) overlay.setMap(null);
         }
       }
     };
@@ -877,12 +991,39 @@ export default function KakaoMap({
     };
     containerEl?.addEventListener("click", onCardClick);
 
+    // 그룹 마커 클릭 위임 (Tier 3) — data-group-key 로 식별.
+    // 클릭 시 해당 그룹의 centroid 로 panTo + 2단계 줌인 (자연스러운 흐름).
+    // 측정 모드면 그 점만 측정 점으로 추가.
+    const onGroupClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const groupEl = target.closest<HTMLElement>(".kepco-group-marker");
+      if (!groupEl) return;
+      const key = groupEl.dataset.groupKey;
+      if (!key) return;
+      const overlay = groupOverlayPoolRef.current.get(key);
+      if (!overlay) return;
+      e.stopPropagation();
+      const pos = overlay.getPosition();
+      if (measureModeRef.current) {
+        measureAddPointRef?.current?.(pos);
+        return;
+      }
+      map.panTo(pos);
+      // 2단계 줌인 — sido(12)→sigungu(10), sigungu(11)→emd(9) 등 자연스럽게.
+      setTimeout(() => {
+        const next = Math.max(1, map.getLevel() - 2);
+        map.setLevel(next, { animate: true });
+      }, 350);
+    };
+    containerEl?.addEventListener("click", onGroupClick);
+
     // 초기 렌더 (bounds 키 미설정 상태에서 1회)
     runRebuild();
 
     return () => {
       window.kakao.maps.event.removeListener(map, "idle", onIdle);
       containerEl?.removeEventListener("click", onCardClick);
+      containerEl?.removeEventListener("click", onGroupClick);
       if (idleTimer) clearTimeout(idleTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -911,8 +1052,9 @@ export default function KakaoMap({
   }, [loaded, fitBoundsKey]);
 
   // props 변경 시 rebuild 직접 호출 (idle 안 기다림)
+  // Tier 3 이후 rebuild 는 클러스터러를 안 쓰므로 clustererRef 가드 제거.
   useEffect(() => {
-    if (!loaded || !mapInstanceRef.current || !clustererRef.current) return;
+    if (!loaded || !mapInstanceRef.current) return;
     rebuildRef.current();
   }, [rows, colorFilter, visibleAddrs, selectedAddr, loaded]);
 
