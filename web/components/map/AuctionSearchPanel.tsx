@@ -175,6 +175,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
     try {
       const qs = new URLSearchParams();
       qs.set("sigunguCode", params.sigunguCode);
+      if (params.sido) qs.set("sidoName", params.sido);
       if (params.emdong) qs.set("emdong", params.emdong);
       if (params.yongdoCodes.length > 0)
         qs.set("yongdoCodes", params.yongdoCodes.join(","));

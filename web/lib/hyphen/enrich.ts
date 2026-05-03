@@ -82,6 +82,7 @@ function enrichOne(
     // 추가 필드
     사건명칭,
     pnuStandard,
+    bjdCode,
     lat: coord.lat,
     lng: coord.lng,
     discountRatio,

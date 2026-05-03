@@ -69,11 +69,14 @@ export function groupAuctionItemsByVillage(
   const map = new Map<string, AuctionVillageGroup>();
   for (const it of items) {
     if (it.lat == null || it.lng == null) continue;
-    // 키 우선순위: BJD 10자리 (정상) → 좌표 fallback (PNU 추출 실패 매물도 마커 표시)
+    // 키 우선순위: PNU 10자리 → bjdCode (지번추출 실패) → 좌표 fallback (모두 실패).
+    // 같은 동의 PNU 성공/실패 매물이 같은 그룹에 묶이도록 BJD 10자리 우선.
     const key =
       it.pnuStandard && it.pnuStandard.length >= 10
         ? it.pnuStandard.slice(0, 10)
-        : `coord:${it.lat.toFixed(5)},${it.lng.toFixed(5)}`;
+        : it.bjdCode && it.bjdCode.length >= 10
+          ? it.bjdCode
+          : `coord:${it.lat.toFixed(5)},${it.lng.toFixed(5)}`;
     let g = map.get(key);
     if (!g) {
       g = {

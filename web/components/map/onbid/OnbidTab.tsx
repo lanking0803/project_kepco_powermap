@@ -787,10 +787,10 @@ function Section({
 }) {
   return (
     <div className="rounded-md border border-rose-100 overflow-hidden">
-      <div className="px-2.5 py-1.5 bg-rose-50 border-b border-rose-100">
-        <div className="text-xs font-bold text-rose-900">{title}</div>
+      <div className="px-2.5 py-1.5 bg-rose-100/40 border-b border-rose-100">
+        <div className="text-[12px] font-semibold text-rose-900">{title}</div>
       </div>
-      <div className="px-2.5 py-2 bg-white">{children}</div>
+      <div className="px-2.5 py-2 bg-rose-50/30">{children}</div>
     </div>
   );
 }
@@ -810,15 +810,15 @@ function Row({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="text-gray-500 w-20 shrink-0">{label}</span>
+      <span className="text-[12px] text-gray-500 w-16 shrink-0">{label}</span>
       <span
-        className={`flex-1 ${
+        className={`flex-1 text-[13px] ${
           highlight
             ? "text-rose-700 font-semibold"
             : muted
               ? "text-gray-500"
               : "text-gray-900"
-        } ${mono ? "font-mono text-[11px]" : ""} tabular-nums`}
+        } ${mono ? "font-mono text-[12px]" : ""} tabular-nums`}
       >
         {value}
       </span>

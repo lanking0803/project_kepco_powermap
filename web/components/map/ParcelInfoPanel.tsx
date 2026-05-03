@@ -412,23 +412,24 @@ function ParcelTab({
     <div className="space-y-3">
       <ParcelHero jibun={jibun} geometry={geometry} />
 
-      <div>
-        <div className="text-[10px] md:text-[11px] font-bold text-gray-500 mb-1.5 tracking-wider uppercase">
-          건축물대장
-        </div>
+      <BSection title="🏢 건축물대장">
         {bldgLoading ? (
-          <div className="text-xs text-gray-500 py-1">건축물 정보 불러오는 중...</div>
+          <div className="text-[13px] text-gray-500 py-1">
+            건축물 정보 불러오는 중...
+          </div>
         ) : bldgError ? (
-          <div className="text-xs text-red-600 py-1">조회 실패: {bldgError}</div>
+          <div className="text-[13px] text-red-600 py-1">
+            조회 실패: {bldgError}
+          </div>
         ) : buildings.length === 0 ? (
-          <div className="text-xs text-gray-500 py-3 text-center bg-gray-50 rounded border border-dashed border-gray-200">
+          <div className="text-[13px] text-gray-500 py-3 text-center bg-white rounded border border-dashed border-gray-200">
             등록된 건축물 없음 <span className="text-gray-400">(빈 땅)</span>
           </div>
         ) : (
           <div className="space-y-2">
             {/* 견적 모드 한정: 대장은 있지만 폴리곤 0건 → 도로명주소 미부여 의심 */}
             {polygonCount === 0 && (
-              <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5 leading-snug">
+              <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5 leading-snug">
                 ⚠️ 도로명주소가 부여되지 않은 건물입니다 (시골 농업시설 등에서 흔함).
                 <br />
                 자동 폴리곤이 잡히지 않으니 견적 모드에서{" "}
@@ -440,7 +441,7 @@ function ParcelTab({
             ))}
           </div>
         )}
-      </div>
+      </BSection>
 
       {!inQuoteMode && <QuoteEntryButton pnu={jibun.pnu} />}
 
@@ -472,6 +473,12 @@ function QuoteEntryButton({ pnu }: { pnu: string }) {
   );
 }
 
+/**
+ * 필지 Hero — 지목 + 평수 강조 (영업 의사결정 첫 한 줄).
+ *
+ * violet 그라데이션 컨테이너로 영역 시각화. 평수가 가장 큰 글씨 (영업이 평당 단가
+ * 계산할 때 가장 먼저 보는 정보).
+ */
 function ParcelHero({
   jibun,
   geometry,
@@ -482,32 +489,37 @@ function ParcelHero({
   const pyeong = geometry ? toPyeong(geometry.area_m2) : null;
   const jimokFull = geometry?.jimok ? expandJimok(geometry.jimok) : null;
   return (
-    <div className="pb-3 border-b border-gray-100">
+    <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-lg p-3">
+      <div className="text-[12px] font-bold text-violet-800 uppercase tracking-wider mb-1.5">
+        🏞 필지 정보
+      </div>
       <div className="flex items-baseline gap-x-2 gap-y-1 flex-wrap">
         {jimokFull && (
-          <span className="text-base md:text-lg font-bold text-gray-900">
+          <span className="text-[17px] md:text-[18px] font-bold text-gray-900">
             {jimokFull}
           </span>
         )}
         {pyeong != null && geometry && (
           <>
             {jimokFull && <span className="text-gray-300">·</span>}
-            <span className="text-xl md:text-2xl font-bold text-gray-900 tabular-nums leading-none">
+            <span className="text-[22px] md:text-[24px] font-bold text-gray-900 tabular-nums leading-none">
               {pyeong.toLocaleString()}
-              <span className="text-sm font-semibold text-gray-500 ml-0.5">평</span>
+              <span className="text-[14px] font-semibold text-gray-500 ml-0.5">
+                평
+              </span>
             </span>
-            <span className="text-[11px] text-gray-500 tabular-nums">
+            <span className="text-[12px] text-gray-500 tabular-nums">
               ({Math.round(geometry.area_m2).toLocaleString()}㎡)
             </span>
           </>
         )}
         {jibun.isSan && (
-          <span className="text-[10px] text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200 font-medium">
+          <span className="text-[11px] text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200 font-medium">
             산
           </span>
         )}
         {!geometry && (
-          <span className="text-xs text-gray-400">필지 형상 정보 없음</span>
+          <span className="text-[12px] text-gray-400">필지 형상 정보 없음</span>
         )}
       </div>
     </div>
@@ -516,7 +528,7 @@ function ParcelHero({
 
 function ParcelFooter({ jibun }: { jibun: JibunInfo }) {
   return (
-    <div className="pt-2 border-t border-gray-100 flex items-center gap-3 text-[10px] text-gray-400 font-mono">
+    <div className="pt-2 border-t border-gray-100 flex items-center gap-3 text-[12px] text-gray-400 font-mono">
       <span className="shrink-0">지번 {jibun.jibun}</span>
       <span className="truncate" title={jibun.pnu}>
         PNU {jibun.pnu}
@@ -606,16 +618,16 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
         )}
       </div>
 
-      {/* 영업 결론 — 등급별 톤 분기 */}
+      {/* 영업 결론 — 등급별 톤 분기 (emerald/gray 는 영업매력도 의미, 모드색 violet 과 별개) */}
       <div className={`px-3 py-2.5 ${boxBg}`}>
         <div className="flex items-baseline gap-1.5 mb-1.5 flex-wrap">
           <span
-            className={`text-[10px] font-bold tracking-wider uppercase ${boxLabelCls}`}
+            className={`text-[12px] font-bold tracking-wider uppercase ${boxLabelCls}`}
           >
             {boxLabel}
           </span>
           {skipNote && (
-            <span className="text-[10px] text-gray-500">— {skipNote}</span>
+            <span className="text-[12px] text-gray-500">— {skipNote}</span>
           )}
         </div>
 
@@ -674,7 +686,7 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
           </span>
           상세 정보 펼치기
         </summary>
-        <div className="px-3 pb-3 pt-1 space-y-2 bg-gray-50/40">
+        <div className="px-3 pb-3 pt-1 bg-gray-50/40">
           <BuildingDetailSections info={info} />
         </div>
       </details>
@@ -711,7 +723,17 @@ function BuildingDetailSections({ info }: { info: BuildingTitleInfo }) {
   const hasExtras = info.atchBldCnt > 0 || info.oudrAutoUtcnt > 0 || info.hhldCnt > 0 || info.fmlyCnt > 0 || info.hoCnt > 0;
 
   return (
-    <>
+    /*
+     * 자동 반응형 그리드 — 컨테이너 너비에 따라 1↔2 컬럼 자동 전환.
+     * - 패널 좁음 (sidebar 기본 폭, < 460px): 1컬럼 (가독성 우선)
+     * - 패널 넓음 (확대 풀스크린): 2컬럼 (빈공간 채움)
+     * - Section 갯수 가변 (1~6) — 마지막 행 홀수 자동 정렬
+     * - minmax(220px, 1fr) = 한 컬럼 최소 220px 보장 → 라벨+값 줄바꿈 방지
+     */
+    <div
+      className="grid gap-2"
+      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
+    >
       {hasClassification && (
         <BSection title="🏷 분류">
           {info.mainPurpsCdNm && <BRow label="주용도" value={info.mainPurpsCdNm} highlight />}
@@ -788,7 +810,7 @@ function BuildingDetailSections({ info }: { info: BuildingTitleInfo }) {
           {info.mainPurpsCd && <BRow label="용도코드" value={info.mainPurpsCd} mono muted />}
         </BSection>
       )}
-    </>
+    </div>
   );
 }
 

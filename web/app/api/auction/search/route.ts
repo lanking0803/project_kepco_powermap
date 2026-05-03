@@ -47,6 +47,7 @@ export const meta: EndpointMeta = {
   auth: "user",
   inputs: [
     { name: "sigunguCode", type: "string", required: true, sample: "41570", description: "행안부 5자리. 비용 가드 — 시도만 검색 거부" },
+    { name: "sidoName", type: "string", required: false, sample: "경기도", description: "시도 한글명 — enrich 동명이리 충돌 방지용 (sep_1 매칭). 비우면 매칭 생략" },
     { name: "emdong", type: "string", required: false, sample: "", description: "읍면동 텍스트. 응답 후 클라이언트 LIKE 필터" },
     { name: "yongdoCodes", type: "string", required: false, sample: "31,33", description: "Hyphen 용도코드 다중 (콤마, 빈 문자=전체)" },
     { name: "progressStatus", type: "string", required: false, sample: "신건,진행,유찰", description: "한글 진행상태 다중 (콤마, 빈 문자=전체). 응답 후 필터" },
@@ -93,6 +94,8 @@ export async function GET(req: NextRequest) {
     );
   }
   const sido = sigunguCode.slice(0, 2);
+  // 시도 한글명 — enrich 단계 동명이리 충돌 방지용. 빈 문자열이면 sep_1 매칭 생략.
+  const sidoName = (sp.get("sidoName") ?? "").trim() || null;
 
   // ── 입력 파싱 ─────────────────────────────────────────
   const yongdoCodesRaw = sp.get("yongdoCodes") ?? "";
@@ -201,7 +204,7 @@ export async function GET(req: NextRequest) {
     const rawItems = Array.from(merged.values());
 
     // ── enrich (PNU 19자리 + 좌표 + daysLeft + discountRatio + 사건명칭) ──
-    const enriched = await enrichRawItems(rawItems);
+    const enriched = await enrichRawItems(rawItems, sidoName);
 
     // ── 클라이언트 사이드 필터 ────────────────────────
     const filtered = enriched.filter((it) => {

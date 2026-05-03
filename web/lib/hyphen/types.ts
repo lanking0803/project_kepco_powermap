@@ -235,6 +235,11 @@ export interface AuctionListItem {
    * 매물명에서 지번 추출 실패 시 null.
    */
   pnuStandard: string | null;
+  /**
+   * BJD 10자리 — bjd_master 매칭 결과. 지번 추출 실패해도 면/리 매칭은 성공한 매물에 박힘.
+   * 마을 그룹화 fallback 키로 사용 (PNU null 이어도 같은 동끼리 그룹 유지).
+   */
+  bjdCode: string | null;
   /** 동/리 좌표 (PNU 앞 10자리 → bjd_master JOIN 결과) */
   lat: number | null;
   lng: number | null;
@@ -280,7 +285,7 @@ export interface AuctionRawDetailItem {
   기일신건문구: string | null;
   /** 회차별 기일 리스트 */
   기일리스트: AuctionDateEntry[];
-  /** 매물 사진 — auctionall.co.kr + 사진경로 */
+  /** 매물 사진 — filelab.co.kr + 사진경로 + 파일명 (실호출 검증, AuctionImage 주석 참조) */
   이미지리스트: AuctionImage[];
   /** 감정평가서 요약 (배열) */
   감정평가서요약: unknown[];
@@ -318,7 +323,12 @@ export interface AuctionRawDetailItem {
 export interface AuctionImage {
   이미지일련번호: number;
   사진설명: string;
-  /** "/auctionimg/2025/20250410/" — auctionall.co.kr 도메인 prefix 필요 */
+  /**
+   * "/auctionimg/2025/20250410/" — 도메인 prefix 필요.
+   * Hyphen 명세는 "auctionall.co.kr+경로" 라고 적혀있지만 그쪽은 404 응답.
+   * 실제 호스트는 https://filelab.co.kr (auctionall.co.kr 의 자체 페이지가
+   * 이미지를 거기서 불러옴 — 실호출 검증 2026-05-03). CORS 허용.
+   */
   사진경로: string;
   파일명: string;
 }
