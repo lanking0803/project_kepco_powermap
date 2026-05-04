@@ -20,7 +20,7 @@
 - 🔨 [경매 D4 완료 — 진입 흐름 통합](project_auction_d4_done.md) ⭐ — 검색 카드/마커/카드/모달 4경로 모두 ParcelPanel [경매] 탭으로 수렴 (2026-05-03)
 - 🪤 [sessionStorage 복원 패턴](feedback_session_restore_pattern.md) ⚠️ — 모드 패널 마운트 시 복원된 results 를 부모로 흘려야 마커 회귀 안 함
 - 🗄 [Hyphen — 백업 채널](project_hyphen_billing.md) — 2026-05-04 법원경매 채택으로 미운영. 가격 인상/차단 시 swap 카드. 멤버십 11만/월 + 호출당 종량 (참고)
-- ✅ [경매 직접 호출 — 전체 swap 완료](project_court_auction_direct.md) ⭐ — env AUCTION_CHANNEL 토글(기본=court). 목록+by-pnu(2단계 lazy)+상세모달(전용 컴포넌트) 모두 적용. 회차별 가격이력 + 권리분석 단서 + 법원경매사이트 바로가기 (2026-05-04)
+- ✅ [경매 직접 호출 — 전체 swap + 풍부화](project_court_auction_direct.md) ⭐ — env AUCTION_CHANNEL 토글(기본=court). 목록/by-pnu/상세모달. **사건 단위 그룹핑(2026-05-05)** key=(boCd,saNo) — maemulSer 분리 함정 해결. 매각비고+회차별진행+다음예정행 풍부화. 읍면동 드롭다운 적용. raw 응답 한계: 기일이력 1행/이미지 별도 endpoint(미구현)
 - 🪞 [기존 endpoint 패턴 미러 우선](feedback_mirror_existing_endpoint.md) ⚠️ — 새 채널 by-pnu/search 짤 때 기존 공매(onbid) 패턴 끝까지 읽고 따라가기. 자체 로직 짜다가 동명이리 충돌 발생(court 사례)
 - 🪤 [외부 API 빈값 검색조건 함정](feedback_external_api_default_filter.md) ⚠️ — 검색조건 빈값 ≠ 전체 응답. court 사이트는 매각기일 빈값 시 종결매물 위주 응답해 진행매물 누락. 사이트 기본값 확인 필수
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
