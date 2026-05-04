@@ -24,19 +24,40 @@ type: project
 ## 🧩 row 그룹핑 (2026-05-04 추가)
 
 **문제**: court 응답이 한 매물의 토지/건물을 별도 row 로 보냄
-- 예: 2023타경57289 / 252-1 → mok=1 토지(공장용지 4566㎡) + mok=2 건물(빈값) = 2 row
-- → 같은 사건+지번이 카드 2개로 노출 (노이즈)
+- 예: 2023타경57289 / 252-1 → mok=1 토지(공장용지 4566㎡, addrGbncd=A) + mok=2 건물(addrGbncd=R, "조은길 16") = 2 row
+- 같은 매물의 지번주소(A) row 와 도로명주소(R) row 가 따로 옴 → 카드 중복 노이즈
 
-**해결** (`web/lib/court-auction/adapter.ts` 의 `groupCourtRawItems`):
-- 키: `(boCd, saNo, daepyoLotno, addrGbncd)` — 사건+지번+주소구분
-- 다른 사건 / 다른 지번 / 일괄매각은 그룹 안 됨 (각각 별개 매물)
-- 대표 row: jimokList 채워진 row 우선 → areaList → mokmulSer 작은 쪽
-- 토지면적/건물면적: 그룹 내 합산
-- 물건번호갯수: 그룹 크기 (≥2 면 기존 UI 카드 배지 자동 표시)
+**그룹핑 키** (`web/lib/court-auction/adapter.ts` 의 `groupCourtRawItems`):
+```
+(boCd, saNo, maemulSer, daepyoLotno)
+   |     |       |          |
+   법원  사건   매물ID(⭐)   지번
+```
 
-**검증 결과 (전남 여수, 1개월 매각기일)**: raw 343건 → 카드 242건 (101건 감소, 29%)
+**Why** (한글 텍스트 회피 + 사이트 정식 코드 우선):
+- `maemulSer` = 사이트가 설계한 매물 단위 식별자 — 같은 매물의 토지/건물 row 는 같은 값
+- `addrGbncd` 제외 — A/R 분리 함정 회피 (실측 발견)
+- `daepyoLotno` (지번) 는 같은 매물 안에서도 다른 필지 분리용 보조 키
+- 핵심 코드 빈값 시 단독 처리 (잘못된 묶임 방지)
 
-**UI 변경 0** — 기존 [AuctionSearchPanel.tsx:882](../../web/components/map/AuctionSearchPanel.tsx) 의 `showUnitBadge = 물건번호갯수 > 1` 로직 그대로 재활용.
+**대표 row 선정**: jimokList 채워진 row → areaList → mokmulSer 작은 쪽
+**합산**: 토지면적(jimok 채워진 row), 건물면적(buldList 또는 jimok 빈 row 의 건물 키워드)
+**그룹 크기**: 기존 `물건번호갯수` 필드에 박음
+
+**검증 결과 (전남 여수, 6개월 매각기일)**: raw 343건 → 카드 299건 (44건 감소, 약 13%)
+
+## 🏷 카드 배지 — 분류별 표시 (2026-05-04 추가)
+
+**문제**: 분수 표기 "물건 1/2" 의미 헷갈림 + 분자>분모 깨짐 사례 (대표 row 의 mokmulSer=3, 그룹 크기=2 → "3/2")
+
+**해결**: court 합쳐진 카드는 mokGbncd 분류별 카운트로 표시
+- `01` 토지 / `02` 건물 / `03` 집합건물 (아파트/오피스텔)
+- 카드 배지: **"토지 1·건물 1"** / **"토지 1·건물 3"** / **"토지 1·집합 1"**
+- 0인 분류 생략
+
+**필드**: `AuctionListItem.groupBreakdown?` (court 전용 옵셔널). hyphen 채널/단일 row 면 미존재 → 기존 분수 표기 fallback
+
+**표본 142건 통계**: 합쳐진 그룹 13개 중 11개(85%) "토지 1·건물 1", 최대 "토지 1·건물 3"
 
 남은 미완 작업:
 - 사건 상세 조회 (`/api/auction/detail`) 는 아직 hyphen 만 — court 어댑터 추가 필요
