@@ -495,7 +495,7 @@ export const MANIFEST: GeneratedManifest = {
         {
           "method": "GET",
           "meta": {
-            "source": "법원경매정보재공 직접 호출 (/pgj/pgjsearch/searchControllerMain.on) + bjd_master JOIN. 인증/세션 불필요. 응답 후 500ms 직렬화 + WAF 재시도.",
+            "source": "법원경매정보재공 직접 호출 (/pgj/pgjsearch/searchControllerMain.on, 물건상세검색 PGJ151F01) + bjd_master JOIN. 인증/세션 불필요. 응답 후 500ms 직렬화 + WAF 재시도. 단일 페이지 호출 (sweep 은 /api/auction/search 에서 수행).",
             "cache": "no-store",
             "auth": "user",
             "inputs": [
@@ -512,6 +512,118 @@ export const MANIFEST: GeneratedManifest = {
                 "required": false,
                 "sample": "전라남도",
                 "description": "시도 한글명 — bjd_master sep_1 매칭으로 동명이리 충돌 방지"
+              },
+              {
+                "name": "lclCd",
+                "type": "string",
+                "required": false,
+                "sample": "20000",
+                "description": "용도 대분류 (10000=토지, 20000=건물, 빈값=전체)"
+              },
+              {
+                "name": "mclCd",
+                "type": "string",
+                "required": false,
+                "sample": "20100",
+                "description": "용도 중분류 (예: 20100 주거용건물, 21100 상업용및업무용)"
+              },
+              {
+                "name": "sclCd",
+                "type": "string",
+                "required": false,
+                "sample": "20104",
+                "description": "용도 소분류 (예: 20104 아파트, 10101 전)"
+              },
+              {
+                "name": "bidBgngYmd",
+                "type": "string",
+                "required": false,
+                "sample": "20260504",
+                "description": "매각기일 시작 YYYYMMDD"
+              },
+              {
+                "name": "bidEndYmd",
+                "type": "string",
+                "required": false,
+                "sample": "20261104",
+                "description": "매각기일 종료 YYYYMMDD"
+              },
+              {
+                "name": "aeeEvlAmtMin",
+                "type": "string",
+                "required": false,
+                "sample": "10000000",
+                "description": "감정평가액 최소 (원)"
+              },
+              {
+                "name": "aeeEvlAmtMax",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "감정평가액 최대 (원)"
+              },
+              {
+                "name": "lwsDspslPrcMin",
+                "type": "string",
+                "required": false,
+                "sample": "50000000",
+                "description": "최저매각가격 최소 (원)"
+              },
+              {
+                "name": "lwsDspslPrcMax",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "최저매각가격 최대 (원)"
+              },
+              {
+                "name": "lwsDspslPrcRateMin",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "최저매각가율 최소 (% 정수, 예: 30)"
+              },
+              {
+                "name": "lwsDspslPrcRateMax",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "최저매각가율 최대 (% 정수)"
+              },
+              {
+                "name": "objctArDtsMin",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "면적 최소 ㎡ (토지+건물 통합)"
+              },
+              {
+                "name": "objctArDtsMax",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "면적 최대 ㎡"
+              },
+              {
+                "name": "flbdNcntMin",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "유찰횟수 최소"
+              },
+              {
+                "name": "flbdNcntMax",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "유찰횟수 최대"
+              },
+              {
+                "name": "specialCondCodes",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "특이사항 코드 콤마 join. (0004301법정지상권/0004302별도등기/0004303유치권/0004304분묘기지권/0004305재매각/0004306특별매각조건/0004307농지취득/0004308예고등기/0004309선순위/0004310우선매수신고)"
               },
               {
                 "name": "pageNo",
@@ -561,7 +673,7 @@ export const MANIFEST: GeneratedManifest = {
               "court-auction-direct",
               "supabase"
             ],
-            "notes": "법원경매 사이트 직접 호출 채널 (hyphen 대비 응답 70배 가벼움 — 140KB/50건). 인증/세션/쿠키 0. WAF 회피용 모듈 전역 직렬화 500ms + 차단 키워드 감지 시 800ms+jitter 1회 재시도. 출력은 hyphen 과 같은 AuctionListItem 타입 — 채널 swap 시 route 만 교체. 페이지네이션 echo: 2페이지 이상 호출 시 bfPageNo/totalCnt/groupTotalCount 를 1p 응답에서 가져와 전달 필요."
+            "notes": "법원경매 물건상세검색 (PGJ151F01) 직접 호출. hyphen 대비 응답 70배 가벼움 (140KB/50건). 인증/세션/쿠키 0. WAF 회피용 모듈 전역 직렬화 500ms + 차단 키워드 감지 시 800ms+jitter 1회 재시도. 출력은 hyphen 과 같은 AuctionListItem 타입 — 채널 swap 시 route 만 교체. 검색 파라미터 풍부 (용도 대중소/매각기일/감정가/최저가/할인율/면적/유찰/특이사항). 용도 다중 선택 시 코드별 sweep 은 호출자 책임 (이 atomic 은 단일 코드만). 페이지네이션 echo: 2페이지 이상 호출 시 bfPageNo/totalCnt/groupTotalCount 를 1p 응답에서 가져와 전달 필요. notifyLoc='on' / cortStDvs='2' / mvprpRletDvsCd='00031R' 는 fetch 빌더에 하드코딩 (사용자 노출 X)."
           },
           "metaLine": 28,
           "metaExportName": "meta"
@@ -607,7 +719,7 @@ export const MANIFEST: GeneratedManifest = {
         {
           "method": "GET",
           "meta": {
-            "source": "Hyphen 경매다 /au0147001252 (진행물건검색) + bjd_master 역조회. 다중 yongdo 병렬 sweep + 클라이언트 사이드 필터.",
+            "source": "법원경매(기본) 또는 Hyphen 경매다 (env AUCTION_CHANNEL 토글). 출력 타입은 양쪽 채널 동일 (AuctionListItem).",
             "cache": "no-store",
             "auth": "user",
             "inputs": [
@@ -615,14 +727,14 @@ export const MANIFEST: GeneratedManifest = {
                 "name": "sigunguCode",
                 "type": "string",
                 "required": true,
-                "sample": "41570",
+                "sample": "46770",
                 "description": "행안부 5자리. 비용 가드 — 시도만 검색 거부"
               },
               {
                 "name": "sidoName",
                 "type": "string",
                 "required": false,
-                "sample": "경기도",
+                "sample": "전라남도",
                 "description": "시도 한글명 — enrich 동명이리 충돌 방지용 (sep_1 매칭). 비우면 매칭 생략"
               },
               {
@@ -630,28 +742,28 @@ export const MANIFEST: GeneratedManifest = {
                 "type": "string",
                 "required": false,
                 "sample": "",
-                "description": "읍면동 텍스트. 응답 후 클라이언트 LIKE 필터"
+                "description": "읍면동 텍스트. 응답 후 클라이언트 LIKE 필터 (양쪽 채널 공통 사후)"
               },
               {
                 "name": "yongdoCodes",
                 "type": "string",
                 "required": false,
                 "sample": "31,33",
-                "description": "Hyphen 용도코드 다중 (콤마, 빈 문자=전체)"
+                "description": "Hyphen 용도코드 다중 (콤마, 빈 문자=전체). court 채널에선 내부 매핑 후 sweep"
               },
               {
                 "name": "progressStatus",
                 "type": "string",
                 "required": false,
                 "sample": "신건,진행,유찰",
-                "description": "한글 진행상태 다중 (콤마, 빈 문자=전체). 응답 후 필터"
+                "description": "한글 진행상태 다중 (콤마, 빈 문자=전체). 응답 후 필터 (양쪽 채널 공통)"
               },
               {
                 "name": "landMin",
                 "type": "number",
                 "required": false,
                 "sample": "",
-                "description": "토지면적 ㎡"
+                "description": "토지면적 ㎡ (court 채널에선 통합 면적 으로 매핑)"
               },
               {
                 "name": "landMax",
@@ -664,7 +776,7 @@ export const MANIFEST: GeneratedManifest = {
                 "type": "number",
                 "required": false,
                 "sample": "",
-                "description": "건물면적 ㎡"
+                "description": "건물면적 ㎡ (court 채널에선 통합 면적 으로 매핑)"
               },
               {
                 "name": "bareaMax",
@@ -716,7 +828,7 @@ export const MANIFEST: GeneratedManifest = {
                 "type": "number",
                 "required": false,
                 "sample": "",
-                "description": "유찰횟수 — 응답 후 필터"
+                "description": "유찰횟수 (court=서버, hyphen=사후)"
               },
               {
                 "name": "usbdMax",
@@ -729,7 +841,7 @@ export const MANIFEST: GeneratedManifest = {
                 "type": "number",
                 "required": false,
                 "sample": "30",
-                "description": "할인율 % — 응답 후 계산 + 필터"
+                "description": "할인율 % (court=서버 lwsDspslPrcRate, hyphen=사후)"
               },
               {
                 "name": "discountMax",
@@ -740,12 +852,13 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "outputSchema": "{ ok: true, apiStatus, items: AuctionListItem[], totalCountAll, truncated, fetchedAt }",
             "externalDeps": [
+              "court-auction-direct",
               "hyphen",
               "supabase"
             ],
-            "notes": "Hyphen 진행물건검색 + supabase bjd_master 역조회로 좌표/PNU 보강. 다중 yongdo 는 Hyphen 단일 코드 한계로 코드별 병렬 sweep + 경매번호 dedup. 응답에 종결매물(매각/취하) 도 포함되므로 progressStatus 클라이언트 필터 필수 — 기본 권장: ['신건','진행','유찰']. 매각기일 미래 윈도우(예: 오늘 ~ +6개월) 도 함께 적용 권장. 테스트 모드(HYPHEN_OPERATION_MODE !== 'Y')에선 20초 레이트리밋으로 다중 sweep 시 매우 느림 — 운영 모드 전환 후 정상 속도. 인증/잔액 실패 시 apiStatus 로 UI 배너 안내."
+            "notes": "운영 채널은 환경변수 AUCTION_CHANNEL 로 결정 (기본=court). 의뢰자 합의 — 채널 결정 자율권 + 월 10만 유지보수비. court 채널은 풍부한 서버 필터(용도/매각기일/감정가/할인율/유찰/특이사항) 사용 — 사후 필터는 진행상태/읍면동/면적 일부만. hyphen 채널은 기존 동작 그대로."
           },
-          "metaLine": 43,
+          "metaLine": 51,
           "metaExportName": "meta"
         }
       ]
@@ -1726,8 +1839,8 @@ export const MANIFEST: GeneratedManifest = {
       "expiry": null,
       "dailyLimit": "공식 한도 미공개. 운영 시 응답 후 500ms 직렬화 + 차단 감지 시 800ms+jitter 1회 재시도. 5초 간격 호출 시 차단 0 (실측 2026-05-04).",
       "issueGuide": "1. 별도 발급 절차 없음 — 공개 사이트 ajax endpoint 직접 호출\n2. 인증/세션/쿠키 모두 불필요 (실측 검증 완료)\n3. 환경변수도 없음\n4. 운영 즉시 가능\n\n⚠️ 채택 사유 (의뢰자 합의 2026-05-04):\n   - 의뢰자 합의: \"hyphen / 법원경매 / 그 외 채널 자율 선택 — 서비스 정상 동작 책임\"\n   - 경매 유지보수비 월 10만 합의 (서버비 5만과 별개)\n   - hyphen 대비 응답 70배 가벼움 (140KB / 50건), 인증 부담 0",
-      "usageExample": "# 목록 (시군구 단위, 페이지네이션)\nPOST https://www.courtauction.go.kr/pgj/pgjsearch/searchControllerMain.on\nHeaders:\n  Content-Type: application/json;charset=UTF-8\n  Origin: https://www.courtauction.go.kr\n  Referer: https://www.courtauction.go.kr/pgj/index.on?w2xPath=/pgj/ui/pgj100/PGJ151F00.xml\n  SC-Pgmid: PGJ151F02\n  submissionid: mf_wfm_mainFrame_sbm_selectGdsDtlSrch\nBody:\n  {\n    \"dma_pageInfo\": {\n      \"pageNo\": 1,\n      \"pageSize\": 50,                        # 10/50 만 허용 (60+ 거부)\n      \"bfPageNo\": \"\", \"startRowNo\": \"\",\n      \"totalCnt\": \"\", \"totalYn\": \"Y\",\n      \"groupTotalCount\": \"\"\n    },\n    \"dma_srchGdsDtlSrchInfo\": {\n      \"mvprpRletDvsCd\": \"00031R\",            # 부동산 카테고리 고정\n      \"cortAuctnSrchCondCd\": \"0004601\",\n      \"rprsAdongSdCd\": \"46\",                 # bjd_code [0:2]\n      \"rprsAdongSggCd\": \"130\",               # bjd_code [2:5]\n      \"rprsAdongEmdCd\": \"\",                  # 옵션\n      \"pgmId\": \"PGJ151M01\",\n      \"cortStDvs\": \"2\",\n      ...                                    # 그 외 미사용 빈값 필드\n    }\n  }\n\n# 사건 상세 (1건)\nPOST https://www.courtauction.go.kr/pgj/pgj15A/selectAuctnCsSrchRslt.on\nBody: { \"dma_srchCsDtlInf\": { \"cortOfcCd\": \"B000513\", \"csNo\": \"20210130004007\" } }\n\n# 응답 12개 섹션:\n#   dma_csBasInf (사건기본) / dlt_dspslGdsDspslObjctLst (물건) /\n#   dlt_rletCsDspslObjctLst (목록) / dlt_rletCsGdsDtsDxdyInf (기일) /\n#   dlt_rletCsIntrpsLst (당사자) / dlt_dstrtDemnLstprdDts (배당요구) /\n#   dlt_csApalRaplDts (항고) / dlt_rletReltCsLst (관련사건) /\n#   dlt_dpcnMrgTrnscsCsRlet (중복병합) / dlt_rletCsSugtExclBldLst (제시외건물)",
-      "notes": "**검증 결과 (2026-05-04 실측, scripts/test_court_auction/)**:\n\n- ✅ 인증/쿠키/세션 모두 불필요\n- ✅ bjd_code 5자리 prefix 그대로 분리 ([0:2]/[2:5]) — 5개 표본 전부 매칭\n- ✅ 페이지네이션 일관성 (1p/2p/3p totalCnt 동일, docid 중복 0)\n- ✅ 페이지 사이즈 50 max (60+ HTTP 400 거부)\n- ✅ 5초 간격 호출 시 차단 0\n- ✅ 응답에 117개 필드 (감정가/최저가/유찰/매각기일/주소/면적/사진메타 등)\n- ✅ 위경도 — wgs84Xcordi/Ycordi 는 정수만 (사용 X), xCordi/yCordi (TM) 는 정밀\n\n**주의 사항**:\n\n- ⚠️ wgs84Xcordi/Ycordi 가 모든 매물에서 정수 (예: \"127\", \"34\") — **사용 불가**\n- ⚠️ TM 좌표 (xCordi/yCordi) 는 EPSG:5174 또는 5181 추정 — proj4js 변환 필요. 현재 어댑터는 bjd_master 동/리 좌표 사용 (정밀도는 마을 단위로 충분 — 의뢰자 의도)\n- ⚠️ PNU 직접 필드 없음 — srchHjguDongCd(8) + 한글주소 + daepyoLotno 합성\n- ⚠️ 진행상태 한글 직접 필드 없음 — yuchalCnt + maeGiil 휴리스틱 추정\n\n**Vercel 배포 시 IP 정책**:\n\n- vercel.json regions=[\"icn1\"] 한국 리전 고정 → 법원경매 측 한국 IP 로 인식\n- KEPCO 수집기 1년 무사고 선례 → 법원경매도 같은 안정성 기대\n- 다만 데이터센터 IP 차단 정책이 있다면 차단 가능 — 배포 전 preview 검증 필수",
+      "usageExample": "# 목록 — 물건상세검색 (PGJ151F01) 호출\nPOST https://www.courtauction.go.kr/pgj/pgjsearch/searchControllerMain.on\nHeaders:\n  Content-Type: application/json;charset=UTF-8\n  Origin: https://www.courtauction.go.kr\n  Referer: https://www.courtauction.go.kr/pgj/index.on?w2xPath=/pgj/ui/pgj100/PGJ151F00.xml\n  SC-Pgmid: PGJ151F02\n  submissionid: mf_wfm_mainFrame_sbm_selectGdsDtlSrch\nBody (의뢰자 캡처 cURL 패턴 그대로):\n  {\n    \"dma_pageInfo\": {\n      \"pageNo\": 1, \"pageSize\": 50,            # 10/50 만 허용 (60+ 거부)\n      \"bfPageNo\": \"\", \"startRowNo\": \"\",\n      \"totalCnt\": \"\", \"totalYn\": \"Y\",\n      \"groupTotalCount\": \"\"\n    },\n    \"dma_srchGdsDtlSrchInfo\": {\n      # ── 고정값 (사용자 노출 X) ──\n      \"mvprpRletDvsCd\": \"00031R\",             # 부동산 카테고리\n      \"cortAuctnSrchCondCd\": \"0004601\",       # 검색 모드\n      \"pgmId\": \"PGJ151F01\",                   # 물건상세검색 화면 ID\n      \"cortStDvs\": \"2\",                       # 부동산 사건 종류\n      \"notifyLoc\": \"on\",                      # 공고중 매물만 (영업 의도)\n      \"csNo\": \"\", \"bidDvsCd\": \"\", \"cortOfcCd\": \"\",  # 단건/입찰/법원 빈값\n      # ── 지역 ──\n      \"rprsAdongSdCd\": \"46\",                  # bjd_code [0:2]\n      \"rprsAdongSggCd\": \"130\",                # bjd_code [2:5]\n      \"rprsAdongEmdCd\": \"\",                   # 옵션\n      # ── 용도 (단일 코드만, 다중은 sweep 분리 호출) ──\n      \"lclDspslGdsLstUsgCd\": \"20000\",         # 대분류 (10000 토지 / 20000 건물)\n      \"mclDspslGdsLstUsgCd\": \"20100\",         # 중분류 (예: 주거용건물)\n      \"sclDspslGdsLstUsgCd\": \"20104\",         # 소분류 (예: 아파트)\n      # ── 매각기일 / 가격 / 면적 / 유찰 / 특이사항 ──\n      \"bidBgngYmd\": \"20260504\", \"bidEndYmd\": \"20261104\",\n      \"aeeEvlAmtMin\": \"10000000\", \"aeeEvlAmtMax\": \"\",\n      \"lwsDspslPrcMin\": \"50000000\", \"lwsDspslPrcMax\": \"\",\n      \"lwsDspslPrcRateMin\": \"\", \"lwsDspslPrcRateMax\": \"\",\n      \"objctArDtsMin\": \"\", \"objctArDtsMax\": \"\",\n      \"flbdNcntMin\": \"\", \"flbdNcntMax\": \"\",\n      \"rletDspslSpcCondCd\": \"0004301,0004303\",   # 콤마 join (법정지상권+유치권)\n      ...\n    }\n  }\n\n# 용도 코드 트리 (의뢰자 캡처 2026-05-04):\n#   대분류: 10000=토지 / 20000=건물\n#   토지 중분류: 10100=지목 (소분류 28개 — 전/답/과수원/임야/대지/...)\n#   건물 중분류: 20100=주거용건물 (소분류 11개 — 단독/다가구/아파트/빌라...)\n#                21100=상업용및업무용 (소분류 18개 — 근린상가/숙박/의료/...)\n#                22100=산업용및기타특수용 (소분류 6개 — 공장/창고/위험물/자동차...)\n#                23100=용도복합용 (소분류 3개 — 주상복합/주산복합/기타)\n\n# 특이사항 코드 (콤마 join):\n#   0004301 법정지상권 / 0004302 별도등기 / 0004303 유치권 / 0004304 분묘기지권\n#   0004305 재매각 / 0004306 특별매각조건 / 0004307 농지취득 / 0004308 예고등기\n#   0004309 선순위 / 0004310 우선매수신고\n\n# 사건 상세 (1건)\nPOST https://www.courtauction.go.kr/pgj/pgj15A/selectAuctnCsSrchRslt.on\nBody: { \"dma_srchCsDtlInf\": { \"cortOfcCd\": \"B000513\", \"csNo\": \"20210130004007\" } }\n\n# 응답 12개 섹션:\n#   dma_csBasInf (사건기본) / dlt_dspslGdsDspslObjctLst (물건) /\n#   dlt_rletCsDspslObjctLst (목록) / dlt_rletCsGdsDtsDxdyInf (기일) /\n#   dlt_rletCsIntrpsLst (당사자) / dlt_dstrtDemnLstprdDts (배당요구) /\n#   dlt_csApalRaplDts (항고) / dlt_rletReltCsLst (관련사건) /\n#   dlt_dpcnMrgTrnscsCsRlet (중복병합) / dlt_rletCsSugtExclBldLst (제시외건물)",
+      "notes": "**검증 결과 (2026-05-04 실측, scripts/test_court_auction/ + 의뢰자 캡처)**:\n\n- ✅ 인증/쿠키/세션 모두 불필요\n- ✅ bjd_code 5자리 prefix 그대로 분리 ([0:2]/[2:5]) — 5개 표본 전부 매칭\n- ✅ 페이지네이션 일관성 (1p/2p/3p totalCnt 동일, docid 중복 0)\n- ✅ 페이지 사이즈 50 max (60+ HTTP 400 거부)\n- ✅ 5초 간격 호출 시 차단 0\n- ✅ 응답에 117개 필드 (감정가/최저가/유찰/매각기일/주소/면적/사진메타 등)\n- ✅ 위경도 — wgs84Xcordi/Ycordi 는 정수만 (사용 X), xCordi/yCordi (TM) 는 정밀\n- ✅ 풍부한 검색 파라미터 — 용도 대중소(3단계)/매각기일/감정가/최저가/할인율(서버)/면적/유찰횟수(서버)/특이사항 10종 모두 서버 필터로 거름\n\n**주의 사항**:\n\n- ⚠️ wgs84Xcordi/Ycordi 가 모든 매물에서 정수 (예: \"127\", \"34\") — **사용 불가**\n- ⚠️ TM 좌표 (xCordi/yCordi) 는 EPSG:5174 또는 5181 추정 — proj4js 변환 필요. 현재 어댑터는 bjd_master 동/리 좌표 사용 (정밀도는 마을 단위로 충분 — 의뢰자 의도)\n- ⚠️ PNU 직접 필드 없음 — srchHjguDongCd(8) + 한글주소 + daepyoLotno 합성\n- ⚠️ 진행상태 한글 직접 필드 없음 — yuchalCnt + maeGiil 휴리스틱 추정\n\n**Vercel 배포 시 IP 정책**:\n\n- vercel.json regions=[\"icn1\"] 한국 리전 고정 → 법원경매 측 한국 IP 로 인식\n- KEPCO 수집기 1년 무사고 선례 → 법원경매도 같은 안정성 기대\n- 다만 데이터센터 IP 차단 정책이 있다면 차단 가능 — 배포 전 preview 검증 필수",
       "sampleRequest": {
         "method": "POST",
         "url": "https://www.courtauction.go.kr/pgj/pgjsearch/searchControllerMain.on",
@@ -1745,7 +1858,8 @@ export const MANIFEST: GeneratedManifest = {
       "metaLine": 3,
       "consumedBy": [
         "auction-court-detail",
-        "auction-court-search"
+        "auction-court-search",
+        "auction-search"
       ]
     },
     {

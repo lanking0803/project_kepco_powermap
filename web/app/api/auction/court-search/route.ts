@@ -27,10 +27,11 @@ import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
 export const meta: EndpointMeta = {
   source:
-    "법원경매정보재공 직접 호출 (/pgj/pgjsearch/searchControllerMain.on) + bjd_master JOIN. 인증/세션 불필요. 응답 후 500ms 직렬화 + WAF 재시도.",
+    "법원경매정보재공 직접 호출 (/pgj/pgjsearch/searchControllerMain.on, 물건상세검색 PGJ151F01) + bjd_master JOIN. 인증/세션 불필요. 응답 후 500ms 직렬화 + WAF 재시도. 단일 페이지 호출 (sweep 은 /api/auction/search 에서 수행).",
   cache: "no-store",
   auth: "user",
   inputs: [
+    // ── 지역 ─────────────────────────────────────────
     {
       name: "sigunguCode",
       type: "string",
@@ -46,6 +47,125 @@ export const meta: EndpointMeta = {
       sample: "전라남도",
       description: "시도 한글명 — bjd_master sep_1 매칭으로 동명이리 충돌 방지",
     },
+    // ── 용도 (대/중/소) ─────────────────────────────
+    {
+      name: "lclCd",
+      type: "string",
+      required: false,
+      sample: "20000",
+      description: "용도 대분류 (10000=토지, 20000=건물, 빈값=전체)",
+    },
+    {
+      name: "mclCd",
+      type: "string",
+      required: false,
+      sample: "20100",
+      description: "용도 중분류 (예: 20100 주거용건물, 21100 상업용및업무용)",
+    },
+    {
+      name: "sclCd",
+      type: "string",
+      required: false,
+      sample: "20104",
+      description: "용도 소분류 (예: 20104 아파트, 10101 전)",
+    },
+    // ── 매각기일 ────────────────────────────────────
+    {
+      name: "bidBgngYmd",
+      type: "string",
+      required: false,
+      sample: "20260504",
+      description: "매각기일 시작 YYYYMMDD",
+    },
+    {
+      name: "bidEndYmd",
+      type: "string",
+      required: false,
+      sample: "20261104",
+      description: "매각기일 종료 YYYYMMDD",
+    },
+    // ── 가격 (원) ───────────────────────────────────
+    {
+      name: "aeeEvlAmtMin",
+      type: "string",
+      required: false,
+      sample: "10000000",
+      description: "감정평가액 최소 (원)",
+    },
+    {
+      name: "aeeEvlAmtMax",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "감정평가액 최대 (원)",
+    },
+    {
+      name: "lwsDspslPrcMin",
+      type: "string",
+      required: false,
+      sample: "50000000",
+      description: "최저매각가격 최소 (원)",
+    },
+    {
+      name: "lwsDspslPrcMax",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "최저매각가격 최대 (원)",
+    },
+    {
+      name: "lwsDspslPrcRateMin",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "최저매각가율 최소 (% 정수, 예: 30)",
+    },
+    {
+      name: "lwsDspslPrcRateMax",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "최저매각가율 최대 (% 정수)",
+    },
+    // ── 면적 / 유찰 ────────────────────────────────
+    {
+      name: "objctArDtsMin",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "면적 최소 ㎡ (토지+건물 통합)",
+    },
+    {
+      name: "objctArDtsMax",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "면적 최대 ㎡",
+    },
+    {
+      name: "flbdNcntMin",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "유찰횟수 최소",
+    },
+    {
+      name: "flbdNcntMax",
+      type: "string",
+      required: false,
+      sample: "",
+      description: "유찰횟수 최대",
+    },
+    // ── 특이사항 ───────────────────────────────────
+    {
+      name: "specialCondCodes",
+      type: "string",
+      required: false,
+      sample: "",
+      description:
+        "특이사항 코드 콤마 join. (0004301법정지상권/0004302별도등기/0004303유치권/0004304분묘기지권/0004305재매각/0004306특별매각조건/0004307농지취득/0004308예고등기/0004309선순위/0004310우선매수신고)",
+    },
+    // ── 페이지네이션 ────────────────────────────────
     {
       name: "pageNo",
       type: "number",
@@ -94,7 +214,7 @@ export const meta: EndpointMeta = {
     "{ ok: true, apiStatus, items: AuctionListItem[], totalCnt, groupTotalCount, pageNo, pageSize, hasMore, fetchedAt }",
   externalDeps: ["court-auction-direct", "supabase"],
   notes:
-    "법원경매 사이트 직접 호출 채널 (hyphen 대비 응답 70배 가벼움 — 140KB/50건). 인증/세션/쿠키 0. WAF 회피용 모듈 전역 직렬화 500ms + 차단 키워드 감지 시 800ms+jitter 1회 재시도. 출력은 hyphen 과 같은 AuctionListItem 타입 — 채널 swap 시 route 만 교체. 페이지네이션 echo: 2페이지 이상 호출 시 bfPageNo/totalCnt/groupTotalCount 를 1p 응답에서 가져와 전달 필요.",
+    "법원경매 물건상세검색 (PGJ151F01) 직접 호출. hyphen 대비 응답 70배 가벼움 (140KB/50건). 인증/세션/쿠키 0. WAF 회피용 모듈 전역 직렬화 500ms + 차단 키워드 감지 시 800ms+jitter 1회 재시도. 출력은 hyphen 과 같은 AuctionListItem 타입 — 채널 swap 시 route 만 교체. 검색 파라미터 풍부 (용도 대중소/매각기일/감정가/최저가/할인율/면적/유찰/특이사항). 용도 다중 선택 시 코드별 sweep 은 호출자 책임 (이 atomic 은 단일 코드만). 페이지네이션 echo: 2페이지 이상 호출 시 bfPageNo/totalCnt/groupTotalCount 를 1p 응답에서 가져와 전달 필요. notifyLoc='on' / cortStDvs='2' / mvprpRletDvsCd='00031R' 는 fetch 빌더에 하드코딩 (사용자 노출 X).",
 };
 
 export async function GET(req: NextRequest) {
@@ -150,6 +270,24 @@ export async function GET(req: NextRequest) {
   // totalYn — 1p="Y", 2p+="N"
   const totalYn: "Y" | "N" = pageNo === 1 ? "Y" : "N";
 
+  // ── 신규 검색 파라미터 (전부 옵션, 빈값=전체) ──
+  const lclCd = (sp.get("lclCd") ?? "").trim();
+  const mclCd = (sp.get("mclCd") ?? "").trim();
+  const sclCd = (sp.get("sclCd") ?? "").trim();
+  const bidBgngYmd = (sp.get("bidBgngYmd") ?? "").trim();
+  const bidEndYmd = (sp.get("bidEndYmd") ?? "").trim();
+  const aeeEvlAmtMin = (sp.get("aeeEvlAmtMin") ?? "").trim();
+  const aeeEvlAmtMax = (sp.get("aeeEvlAmtMax") ?? "").trim();
+  const lwsDspslPrcMin = (sp.get("lwsDspslPrcMin") ?? "").trim();
+  const lwsDspslPrcMax = (sp.get("lwsDspslPrcMax") ?? "").trim();
+  const lwsDspslPrcRateMin = (sp.get("lwsDspslPrcRateMin") ?? "").trim();
+  const lwsDspslPrcRateMax = (sp.get("lwsDspslPrcRateMax") ?? "").trim();
+  const objctArDtsMin = (sp.get("objctArDtsMin") ?? "").trim();
+  const objctArDtsMax = (sp.get("objctArDtsMax") ?? "").trim();
+  const flbdNcntMin = (sp.get("flbdNcntMin") ?? "").trim();
+  const flbdNcntMax = (sp.get("flbdNcntMax") ?? "").trim();
+  const specialCondCodes = (sp.get("specialCondCodes") ?? "").trim();
+
   try {
     const result = await fetchCourtList({
       sdCd,
@@ -162,6 +300,22 @@ export async function GET(req: NextRequest) {
       totalCnt: totalCntEcho,
       totalYn,
       groupTotalCount,
+      lclCd,
+      mclCd,
+      sclCd,
+      bidBgngYmd,
+      bidEndYmd,
+      aeeEvlAmtMin,
+      aeeEvlAmtMax,
+      lwsDspslPrcMin,
+      lwsDspslPrcMax,
+      lwsDspslPrcRateMin,
+      lwsDspslPrcRateMax,
+      objctArDtsMin,
+      objctArDtsMax,
+      flbdNcntMin,
+      flbdNcntMax,
+      rletDspslSpcCondCd: specialCondCodes,
     });
 
     if (result.apiStatus === "blocked" || result.apiStatus === "unavailable") {

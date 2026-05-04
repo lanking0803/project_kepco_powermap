@@ -125,23 +125,64 @@ export async function fetchCourtList(
       groupTotalCount: params.groupTotalCount ?? "",
     },
     dma_srchGdsDtlSrchInfo: {
+      // ── 고정값 (사용자 노출 X — UI 와 무관) ─────────────
       // 부동산 (Mvprp) 카테고리 고정
       mvprpRletDvsCd: "00031R",
       cortAuctnSrchCondCd: "0004601",
-      pgmId: "PGJ151M01",
+      // 물건상세검색 화면 ID (의뢰자 cURL 캡처와 동일)
+      pgmId: "PGJ151F01",
       cortStDvs: "2",
+      // 공고중소재지 항상 ON — 영업 의도: 입찰가능 매물만
+      notifyLoc: "on",
+      statNum: 1,
+      // 사건번호/입찰구분/법원 — 빈값 (전체)
+      csNo: "",
+      bidDvsCd: "",
+      cortOfcCd: "",
+      jdbnCd: "",
+      execrOfcDvsCd: "",
+      cortAuctnMbrsId: "",
 
-      // 지역 입력 — bjd_code 5자리 prefix 분리
+      // ── 지역 ────────────────────────────────────────
       rprsAdongSdCd: params.sdCd,
       rprsAdongSggCd: params.sggCd,
       rprsAdongEmdCd: params.emdCd ?? "",
 
-      // 정렬 (옵션)
+      // ── 용도 (단일 코드, 다중은 sweep 으로 분리 호출) ─
+      lclDspslGdsLstUsgCd: params.lclCd ?? "",
+      mclDspslGdsLstUsgCd: params.mclCd ?? "",
+      sclDspslGdsLstUsgCd: params.sclCd ?? "",
+
+      // ── 매각기일 ────────────────────────────────────
+      bidBgngYmd: params.bidBgngYmd ?? "",
+      bidEndYmd: params.bidEndYmd ?? "",
+      dspslDxdyYmd: "",
+      fstDspslHm: "",
+      scndDspslHm: "",
+      thrdDspslHm: "",
+      fothDspslHm: "",
+
+      // ── 가격 ────────────────────────────────────────
+      aeeEvlAmtMin: params.aeeEvlAmtMin ?? "",
+      aeeEvlAmtMax: params.aeeEvlAmtMax ?? "",
+      lwsDspslPrcMin: params.lwsDspslPrcMin ?? "",
+      lwsDspslPrcMax: params.lwsDspslPrcMax ?? "",
+      lwsDspslPrcRateMin: params.lwsDspslPrcRateMin ?? "",
+      lwsDspslPrcRateMax: params.lwsDspslPrcRateMax ?? "",
+
+      // ── 면적 / 유찰 ────────────────────────────────
+      objctArDtsMin: params.objctArDtsMin ?? "",
+      objctArDtsMax: params.objctArDtsMax ?? "",
+      flbdNcntMin: params.flbdNcntMin ?? "",
+      flbdNcntMax: params.flbdNcntMax ?? "",
+
+      // ── 특이사항 ───────────────────────────────────
+      rletDspslSpcCondCd: params.rletDspslSpcCondCd ?? "",
+
+      // ── 정렬 (옵션) ────────────────────────────────
       lafjOrderBy: params.orderBy ?? "",
 
-      // 그 외 미사용 필드 — 캡쳐 패턴 보존 (서버가 expect 함)
-      rletDspslSpcCondCd: "",
-      bidDvsCd: "",
+      // ── 도로명/그 외 빈값 (서버 expect — 캡쳐 패턴 보존) ─
       rdnmSdCd: "",
       rdnmSggCd: "",
       rdnmNo: "",
@@ -151,37 +192,10 @@ export async function fetchCourtList(
       rdDspslPlcAdongSdCd: "",
       rdDspslPlcAdongSggCd: "",
       rdDspslPlcAdongEmdCd: "",
-      cortOfcCd: "",
-      jdbnCd: "",
-      execrOfcDvsCd: "",
-      lclDspslGdsLstUsgCd: "",
-      mclDspslGdsLstUsgCd: "",
-      sclDspslGdsLstUsgCd: "",
-      cortAuctnMbrsId: "",
-      aeeEvlAmtMin: "",
-      aeeEvlAmtMax: "",
-      lwsDspslPrcRateMin: "",
-      lwsDspslPrcRateMax: "",
-      flbdNcntMin: "",
-      flbdNcntMax: "",
-      objctArDtsMin: "",
-      objctArDtsMax: "",
       mvprpArtclKndCd: "",
       mvprpArtclNm: "",
       mvprpAtchmPlcTypCd: "",
-      notifyLoc: "",
-      csNo: "",
-      statNum: "",
-      bidBgngYmd: "",
-      bidEndYmd: "",
-      dspslDxdyYmd: "",
-      fstDspslHm: "",
-      scndDspslHm: "",
-      thrdDspslHm: "",
-      fothDspslHm: "",
       dspslPlcNm: "",
-      lwsDspslPrcMin: "",
-      lwsDspslPrcMax: "",
       grbxTypCd: "",
       gdsVendNm: "",
       fuelKndCd: "",
@@ -314,7 +328,10 @@ function makeBlockedResult(pageNo: number, pageSize: number): CourtListPageResul
 /** 페이지네이션 헬퍼 — 다음 페이지 호출용 echo 파라미터 생성. */
 export function buildNextPageParams(
   prev: CourtListPageResult,
-  base: Pick<CourtSearchParams, "sdCd" | "sggCd" | "emdCd" | "orderBy" | "pageSize">,
+  base: Omit<
+    CourtSearchParams,
+    "pageNo" | "bfPageNo" | "startRowNo" | "totalCnt" | "totalYn" | "groupTotalCount"
+  >,
 ): CourtSearchParams {
   const nextPageNo = prev.pageNo + 1;
   return {

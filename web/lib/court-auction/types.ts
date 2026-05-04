@@ -21,12 +21,15 @@
 
 /** 목록 검색 입력 — bjd_code 5자리 prefix 분리해서 사용. */
 export interface CourtSearchParams {
+  // ── 지역 ────────────────────────────────────────
   /** 시도 코드 2자리 (= bjd_code[0:2], 예: "46" 전남) */
   sdCd: string;
   /** 시군구 코드 3자리 (= bjd_code[2:5], 예: "130" 여수시) */
   sggCd: string;
   /** 읍면동 코드 3자리 (옵션, 보통 빈값 — 의뢰자 의도: 시군구까지만) */
   emdCd?: string;
+
+  // ── 페이지네이션 ────────────────────────────────
   /** 페이지 번호 (1-base) */
   pageNo: number;
   /** 페이지 크기 (10/50 만 허용. 50 권장) */
@@ -42,6 +45,53 @@ export interface CourtSearchParams {
   totalCnt?: string;
   totalYn?: "Y" | "N";
   groupTotalCount?: number | "";
+
+  // ── 용도 (대/중/소 단일 코드, 다중은 호출 분리) ─────
+  /** 대분류 코드 (예: "10000"=토지 / "20000"=건물 / 빈값=전체) */
+  lclCd?: string;
+  /** 중분류 코드 (옵션) */
+  mclCd?: string;
+  /** 소분류 코드 (옵션) */
+  sclCd?: string;
+
+  // ── 매각기일 (YYYYMMDD) ─────────────────────────
+  /** 매각기일 시작 (YYYYMMDD, 예: "20260504") */
+  bidBgngYmd?: string;
+  /** 매각기일 종료 (YYYYMMDD, 예: "20261104") */
+  bidEndYmd?: string;
+
+  // ── 가격 (원 단위 문자열, 빈문자열=전체) ─────────
+  /** 감정평가액 최소 (원) */
+  aeeEvlAmtMin?: string;
+  /** 감정평가액 최대 (원) */
+  aeeEvlAmtMax?: string;
+  /** 최저매각가격 최소 (원) */
+  lwsDspslPrcMin?: string;
+  /** 최저매각가격 최대 (원) */
+  lwsDspslPrcMax?: string;
+  /** 최저매각가율 최소 (% 정수, 예: "30") */
+  lwsDspslPrcRateMin?: string;
+  /** 최저매각가율 최대 */
+  lwsDspslPrcRateMax?: string;
+
+  // ── 면적 (㎡, 토지+건물 통합) ───────────────────
+  /** 면적 최소 (㎡, 정수 문자열) */
+  objctArDtsMin?: string;
+  /** 면적 최대 */
+  objctArDtsMax?: string;
+
+  // ── 유찰 ───────────────────────────────────────
+  /** 유찰횟수 최소 */
+  flbdNcntMin?: string;
+  /** 유찰횟수 최대 */
+  flbdNcntMax?: string;
+
+  // ── 특이사항 ───────────────────────────────────
+  /**
+   * 특이사항 코드 콤마 join (예: "0004301,0004303").
+   * special-cond.ts 의 buildSpecialCondParam 으로 생성.
+   */
+  rletDspslSpcCondCd?: string;
 }
 
 /** 상세 호출 입력 — 사건 1건. */
