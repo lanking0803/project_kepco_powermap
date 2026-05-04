@@ -41,6 +41,8 @@ import {
 import { formatWon } from "@/lib/format/won";
 import { jibunFromPnu } from "@/lib/geo/pnu";
 import type { AuctionListItem } from "@/lib/hyphen/types";
+import { getClientAuctionChannel } from "@/lib/modes/auction-channel";
+import CourtCategorySelector from "@/components/map/auction/CourtCategorySelector";
 
 const MODE_ID = "auction";
 
@@ -62,6 +64,11 @@ interface Props {
 
 
 export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
+  // ─── 경매 채널 (court=법원경매 직접 / hyphen=백업) ─────────
+  // env NEXT_PUBLIC_AUCTION_CHANNEL 으로 분기. 미설정 시 court (현 운영).
+  // 카테고리 UI / 검색 호출 두 군데에서 분기됨 — 두 분기 모두 같은 채널 보고 결정.
+  const channel = getClientAuctionChannel();
+
   // ─── 상태 복원 ─────────────────────────────────────────────
   const persisted =
     typeof window !== "undefined"
@@ -229,6 +236,9 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
       if (params.emdong) qs.set("emdong", params.emdong);
       if (params.yongdoCodes.length > 0)
         qs.set("yongdoCodes", params.yongdoCodes.join(","));
+      // court 채널 — 직접 court 소분류 코드 흘림 (Phase C 에서 route.ts 가 사용)
+      if (params.courtSclCodes.length > 0)
+        qs.set("courtSclCodes", params.courtSclCodes.join(","));
       if (params.progressStatus.length > 0)
         qs.set("progressStatus", params.progressStatus.join(","));
       if (params.landMin != null) qs.set("landMin", String(params.landMin));
@@ -422,11 +432,18 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
           </div>
         </Section>
 
-        {/* 카테고리(용도) — 영업 2순위 축.
-            그룹 6개 칩 (토지농지/공장창고/주거/상업업무/공공시설/동산).
-            그룹 클릭 = 그룹 멤버 모두 토글 ON↔OFF.
-            그룹 펼치기 = 그룹 안 yongdo 코드 개별 다중 선택. */}
+        {/* 카테고리(용도) — 영업 2순위 축. 채널별로 다른 셀렉터 사용.
+            · court: CourtCategorySelector (court 분류 트리 직접 사용, 검증됨)
+            · hyphen: 기존 6그룹 칩 (Hyphen yongdo 59종 기반, 백업 채널) */}
         <Section title="카테고리">
+          {channel === "court" ? (
+            <CourtCategorySelector
+              sclCodes={params.courtSclCodes}
+              onChange={(next) =>
+                setParams((p) => ({ ...p, courtSclCodes: next }))
+              }
+            />
+          ) : (
           <div className="space-y-1.5">
             {/* [전체] — 빈 배열 = 전체 의미. 그룹 칩과 동일 알약형. */}
             <div className="flex flex-wrap gap-1">
@@ -535,6 +552,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
               </div>
             )}
           </div>
+          )}
         </Section>
 
         {/* 진행상태 — 영업 핵심 필터.

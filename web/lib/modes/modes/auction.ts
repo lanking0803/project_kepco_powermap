@@ -40,8 +40,18 @@ export interface AuctionSearchUiParams {
   emdong: string;
 
   // ── 카테고리 ──
-  /** 선택된 Hyphen 용도코드 다중 (예: ["31","33"] = 농지+임야). 빈 배열 = 전체. */
+  /**
+   * 선택된 Hyphen 용도코드 다중 (예: ["31","33"] = 농지+임야). 빈 배열 = 전체.
+   * channel="hyphen" 일 때만 의미. court 채널은 `courtSclCodes` 사용.
+   */
   yongdoCodes: string[];
+
+  /**
+   * 선택된 Court 소분류 코드 다중 (예: ["10101","10102"] = 전+답). 빈 배열 = 전체.
+   * channel="court" 일 때만 의미. hyphen 채널은 `yongdoCodes` 사용.
+   * court 분류 트리: lib/court-auction/categories.ts (검증된 76개 코드).
+   */
+  courtSclCodes: string[];
 
   // ── 진행상태 ──
   /**
@@ -207,6 +217,7 @@ export const AUCTION_EMPTY_PARAMS: AuctionSearchUiParams = (() => {
     sigunguCode: "",
     emdong: "",
     yongdoCodes: [],
+    courtSclCodes: [],
     progressStatus: ["신건", "진행", "유찰"],
     landMin: null,
     landMax: null,
