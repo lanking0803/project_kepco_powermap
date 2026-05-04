@@ -46,7 +46,12 @@ interface AggKeys {
   prefix?: string;
 }
 
-function aggregate(items: KepcoDataRow[], k: AggKeys) {
+interface AggregateResult {
+  stats: FacilityStat[];
+  hasStep: boolean;
+}
+
+function aggregate(items: KepcoDataRow[], k: AggKeys): AggregateResult {
   const map = new Map<string, FacilityStat>();
   let hasStep = false;
 
@@ -85,27 +90,26 @@ function aggregate(items: KepcoDataRow[], k: AggKeys) {
     }
   });
 
-  const arr = Array.from(map.values()).sort((a, b) => b.count - a.count);
-  (arr as any)._hasStep = hasStep;
-  return arr;
+  const stats = Array.from(map.values()).sort((a, b) => b.count - a.count);
+  return { stats, hasStep };
 }
 
 export function summarizeLocation(items: KepcoDataRow[]): LocationSummary {
   const total = items.length;
-  const substations = aggregate(items, {
+  const substAgg = aggregate(items, {
     nameKey: "subst_nm",
     capaKey: "subst_capa",
     pwrKey: "subst_pwr",
     gCapaKey: "g_subst_capa",
   });
-  const transformers = aggregate(items, {
+  const mtrAgg = aggregate(items, {
     nameKey: "mtr_no",
     capaKey: "mtr_capa",
     pwrKey: "mtr_pwr",
     gCapaKey: "g_mtr_capa",
     prefix: "#",
   });
-  const distributionLines = aggregate(items, {
+  const dlAgg = aggregate(items, {
     nameKey: "dl_nm",
     capaKey: "dl_capa",
     pwrKey: "dl_pwr",
@@ -139,16 +143,13 @@ export function summarizeLocation(items: KepcoDataRow[]): LocationSummary {
     };
   };
 
-  const hasStepData =
-    (substations as any)._hasStep ||
-    (transformers as any)._hasStep ||
-    (distributionLines as any)._hasStep;
+  const hasStepData = substAgg.hasStep || mtrAgg.hasStep || dlAgg.hasStep;
 
   return {
     total,
-    substations,
-    transformers,
-    distributionLines,
+    substations: substAgg.stats,
+    transformers: mtrAgg.stats,
+    distributionLines: dlAgg.stats,
     substCounts: countsFor("subst_capa", "subst_pwr", "g_subst_capa"),
     mtrCounts: countsFor("mtr_capa", "mtr_pwr", "g_mtr_capa"),
     dlCounts: countsFor("dl_capa", "dl_pwr", "g_dl_capa"),

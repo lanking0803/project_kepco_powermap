@@ -37,8 +37,6 @@ interface Props {
   onSearchPick?: (pick: SearchPick) => void;
   /** 지번 핀 표시 */
   onJibunPin?: (row: KepcoDataRow) => void;
-  /** 검색바 포커스 시 (카드 숨기기 등) */
-  onSearchFocus?: () => void;
   /** 데이터 새로고침 */
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -149,7 +147,6 @@ export default function Sidebar({
   onToggle,
   onSearchPick,
   onJibunPin,
-  onSearchFocus: _onSearchFocus,
   onRefresh,
   refreshing,
   selectedAddr,

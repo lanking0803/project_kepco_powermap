@@ -969,9 +969,6 @@ export default function MapClient({ isAdmin, email }: Props) {
         onToggle={() => setSidebarOpen((v) => !v)}
         onSearchPick={handleSearchResultPick}
         onJibunPin={openParcelPanelOnJibunClick}
-        onSearchFocus={() => {
-          /* TODO: 검색 포커스 시 선택 마을 해제 */
-        }}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         selectedAddr={null}
