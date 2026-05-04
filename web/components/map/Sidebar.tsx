@@ -149,7 +149,7 @@ export default function Sidebar({
   onToggle,
   onSearchPick,
   onJibunPin,
-  onSearchFocus,
+  onSearchFocus: _onSearchFocus,
   onRefresh,
   refreshing,
   selectedAddr,
@@ -171,7 +171,6 @@ export default function Sidebar({
 }: Props) {
   /** 현재 모드 설정 — 색/라벨/패널 분기 기준 (단일 진실 공급원 = registry) */
   const modeCfg = getDataMode(mode);
-  const onbidActive = mode === "onbid";
   const [activeTab, setActiveTab] = useState<SidebarTab>("search");
 
   // 탭 전환 시: 지도 필터 해제 (패널은 언마운트되므로 자동 리셋)

@@ -214,7 +214,7 @@ export function parseExcel(buffer: ArrayBuffer): ParseResult {
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
-  } catch (err) {
+  } catch {
     throw new ExcelFormatError(
       "엑셀 파일을 읽을 수 없습니다. 파일이 손상되었거나 비밀번호로 보호되어 있을 수 있습니다."
     );

@@ -157,7 +157,7 @@ export default function AuctionDetailCard({
           )}
 
         {expanded && detail && (
-          <DetailExtra detail={detail} item={item} />
+          <DetailExtra detail={detail} />
         )}
       </div>
     </div>
@@ -317,13 +317,7 @@ function OverviewCard({
 
 // ─── 상세 응답 표시 (lazy 로드 후) ────────────────────────
 
-function DetailExtra({
-  detail,
-  item,
-}: {
-  detail: AuctionRawDetailItem;
-  item: AuctionListItem;
-}) {
+function DetailExtra({ detail }: { detail: AuctionRawDetailItem }) {
   return (
     <>
       {/* 사진 갤러리 — 공매 PhotoGallery 미러 (메인 + 썸네일 + 라이트박스) */}

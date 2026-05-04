@@ -1776,15 +1776,6 @@ function SectionHeader({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-gray-500 text-xs">{label}</span>
-      <span className="font-semibold text-gray-900 tabular-nums">{value}</span>
-    </div>
-  );
-}
-
 // ── 5단계 수지분석 보조 ──────────────────────────────
 
 /** 큰 금액 → 짧게 (억/만 단위, 봉남리 영업 자료 톤) */

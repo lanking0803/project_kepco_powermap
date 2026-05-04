@@ -21,7 +21,6 @@ import type {
   CourtListPageResult,
   CourtListResponse,
   CourtRawDetailItem,
-  CourtRawListItem,
   CourtSearchParams,
 } from "./types";
 

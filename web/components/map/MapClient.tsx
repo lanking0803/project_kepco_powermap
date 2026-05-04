@@ -536,7 +536,8 @@ export default function MapClient({ isAdmin, email }: Props) {
   const [selectedPnu, setSelectedPnu] = useState<string | null>(null);
   // 지도 위 필지 폴리곤(주황 음영) 표시용 — VWorld 응답의 geometry.
   // 패널과 별개 출처지만 모듈 캐시(lib/api/vworld) 가 같으므로 PNU hit 시 추가 호출 0.
-  const [selectedJibun, setSelectedJibun] = useState<JibunInfo | null>(null);
+  // selectedJibun 은 setter 만 사용 (UI 직접 read X) — 호환 위해 state 유지
+  const [, setSelectedJibun] = useState<JibunInfo | null>(null);
   const [selectedGeometry, setSelectedGeometry] = useState<ParcelGeometry | null>(
     null,
   );

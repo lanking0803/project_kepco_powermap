@@ -361,9 +361,6 @@ function CompactTable({
 function JibunRow({ row, onJibunPin }: { row: KepcoDataRow; onJibunPin?: (row: KepcoDataRow) => void }) {
   const [open, setOpen] = useState(false);
 
-  const substRemain = (row.subst_capa ?? 0) - (row.subst_pwr ?? 0);
-  const mtrRemain = (row.mtr_capa ?? 0) - (row.mtr_pwr ?? 0);
-  const dlRemain = (row.dl_capa ?? 0) - (row.dl_pwr ?? 0);
   const substOk = hasCapacity(row.subst_capa, row.subst_pwr, row.g_subst_capa);
   const mtrOk = hasCapacity(row.mtr_capa, row.mtr_pwr, row.g_mtr_capa);
   const dlOk = hasCapacity(row.dl_capa, row.dl_pwr, row.g_dl_capa);

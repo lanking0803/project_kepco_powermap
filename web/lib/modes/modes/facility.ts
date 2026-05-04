@@ -9,7 +9,6 @@
  *
  * 본 파일은 "모드 디테일" 만 담당 — UI/검색 로직은 FacilitySearchPanel.
  */
-import type { BuildingTitleInfo } from "@/lib/building-hub/title";
 import type { FacilityListItem } from "@/lib/facility/enrich";
 import {
   type FacilityCategory,

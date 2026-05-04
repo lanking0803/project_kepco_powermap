@@ -17,8 +17,6 @@
  *   - sigunguCd/bjdongCd 가 5자리 숫자 아님
  *   - bun 이 빈값/0 (메타 row — 빈 platPlc 응답 케이스)
  */
-import type { BuildingTitleInfo } from "@/lib/building-hub/title";
-
 /** 외부 응답 item 의 PNU 합성 필수 필드 — title.ts BrTitleItem 의 부분집합 */
 export interface PnuSourceFields {
   sigunguCd?: string | number | null;

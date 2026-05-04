@@ -396,11 +396,6 @@ export default function GpsTracker({
   );
 }
 
-function degToDir(deg: number): string {
-  const dirs = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
-  return dirs[Math.round(deg / 45) % 8];
-}
-
 /** 브라우저별 '정확한 위치' 활성화 안내 메시지 */
 function getLowAccuracyGuide(): string {
   const ua = navigator.userAgent;

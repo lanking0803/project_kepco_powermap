@@ -561,9 +561,9 @@ function BuildingCard({ info }: { info: BuildingTitleInfo }) {
     info.fmlyCnt > 0 ||
     info.hoCnt > 0;
   const hasSiteInfo = info.bcRat != null || info.vlRat != null;
-  // 새 상세 영역은 항상 노출 가능한 정보가 있어 hasDetails 대신 buildings.length>0 만 보면 됨
-  const hasDetails = true;
-  void hasExtras; void hasSiteInfo;
+  // 새 상세 영역은 항상 노출 가능한 정보가 있어 hasDetails 대신 buildings.length>0 만 보면 됨.
+  void hasExtras;
+  void hasSiteInfo;
 
   // 등급별 영업결론 박스 톤 — skip 은 회색·차분, go/review 는 초록·강조
   const boxBg = isSkip ? "bg-gray-50" : "bg-emerald-50/50";
@@ -940,23 +940,6 @@ function PurposeBadge({
     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${cls}`}>
       {children}
     </span>
-  );
-}
-
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-baseline gap-1.5 flex-wrap">
-      <dt className="text-gray-500 w-16 shrink-0">{label}</dt>
-      <dd className="flex-1 min-w-0 flex items-baseline flex-wrap gap-x-1.5">
-        {children}
-      </dd>
-    </div>
   );
 }
 
@@ -2657,19 +2640,3 @@ function LocationTab({
 // 공용 컴포넌트
 // ───────────────────────────────────────────
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-3">
-      <dt className="text-gray-500 text-xs w-16 shrink-0 mt-0.5">{label}</dt>
-      <dd className="flex-1 min-w-0">{children}</dd>
-    </div>
-  );
-}
-
-function ComingSoon() {
-  return (
-    <div className="text-sm text-gray-500 py-6 text-center">
-      2차 개발 예정 기능입니다.
-    </div>
-  );
-}

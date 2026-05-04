@@ -6,8 +6,6 @@ import type { SolarMarker } from "@/lib/api/solar-permits";
 import {
   colorForMarker,
   ratiosForMarker,
-  STATUS_RED,
-  STATUS_BLUE,
   type MarkerRatios,
 } from "@/lib/markerColor";
 
