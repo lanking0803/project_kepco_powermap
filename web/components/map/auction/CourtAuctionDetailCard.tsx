@@ -85,17 +85,15 @@ export default function CourtAuctionDetailCard({
       {/* 헤더 — 배지/사건명/주소 + 평당 metric */}
       <CardHeader item={item} />
 
-      <div className="p-3 space-y-3">
-        {/* 영업 OverviewCard — 풀폭 강조 */}
+      <div className="p-3 space-y-2.5">
+        {/* 1. 매각 일정 — 의식①: 언제까지 결정해야 하나 */}
+        <ScheduleSection item={item} />
+
+        {/* 2. 매각 / 가격 — 의식②③④ */}
         <OverviewCard item={item} discountPct={discountPct} />
 
-        {/* 짧은 Section 들 — 데스크톱 2컬럼 / 모바일 1컬럼 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2.5">
-          <CourtSection item={item} />
-          <AreaSection item={item} />
-          <ProgressSection item={item} />
-          <ClassSection item={item} />
-        </div>
+        {/* 3. 매물 제원 — 의식⑤ */}
+        <PropertySection item={item} />
 
         {/* 상세 펼치기 버튼 */}
         <button
@@ -136,72 +134,47 @@ export default function CourtAuctionDetailCard({
 // ─── 헤더 ──────────────────────────────────────────────────
 
 function CardHeader({ item }: { item: AuctionListItem }) {
-  const perPyeong = pricePerPyeong(item.최저가, item.토지면적);
+  // 식별 정보 한 줄: "사건번호 2025타경284 · 광주지방법원 경매2계"
+  const courtLine = [
+    item.사건명칭 ? `사건번호 ${item.사건명칭}` : "",
+    item.법원간략명 || "",
+    item.담당계 || "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="px-3 py-2.5 bg-amber-50 border-b border-amber-100">
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-          <StatusBadge status={item.진행상태} />
-          {item.용도 && (
-            <span className="text-[11px] text-gray-700 bg-white px-1.5 py-0.5 rounded border border-amber-200">
-              {item.용도}
-            </span>
-          )}
-          {item.daysLeft >= -9000 && (
-            <span
-              className={`text-[11px] font-semibold ${
-                item.isUrgent ? "text-red-600" : "text-gray-600"
-              }`}
-            >
-              {formatDday(item.daysLeft)}
-            </span>
-          )}
-          <span className="text-[11px] text-gray-400">·</span>
-          <span className="text-[11px] text-gray-500">{item.사건명칭}</span>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {perPyeong != null && (
-            <MetricChip
-              label="평당"
-              value={`${perPyeong.toLocaleString()}만`}
-              tone="primary"
-            />
-          )}
-          {item.유찰수 > 0 && (
-            <MetricChip
-              label="유찰"
-              value={`${item.유찰수}회`}
-              tone="warning"
-            />
-          )}
-        </div>
+      <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+        <StatusBadge status={item.진행상태} />
+        {item.용도 && (
+          <span className="text-[11px] text-gray-700 bg-white px-1.5 py-0.5 rounded border border-amber-200">
+            {item.용도}
+          </span>
+        )}
+        {item.daysLeft >= -9000 && (
+          <span
+            className={`px-1.5 py-0.5 rounded text-[11px] font-bold tabular-nums ${
+              item.daysLeft < 0
+                ? "bg-gray-200 text-gray-600"
+                : item.daysLeft <= 3
+                  ? "bg-red-100 text-red-700"
+                  : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {formatDday(item.daysLeft)}
+            {item.isUrgent ? " 임박" : ""}
+          </span>
+        )}
       </div>
-      <div className="text-[15px] font-bold text-gray-900 leading-tight">
-        {item.대표소재지 || item.리스트지번주소}
+      <div className="text-[15px] font-bold text-gray-900 leading-tight mb-1">
+        📍 {item.대표소재지 || item.리스트지번주소}
       </div>
-    </div>
-  );
-}
-
-function MetricChip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "primary" | "warning";
-}) {
-  const cls =
-    tone === "primary"
-      ? "bg-amber-600 text-white"
-      : "bg-orange-100 text-orange-800 border border-orange-200";
-  return (
-    <div
-      className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold whitespace-nowrap ${cls}`}
-    >
-      <span className="opacity-80 text-[10px]">{label}</span>
-      <span className="tabular-nums">{value}</span>
+      {courtLine && (
+        <div className="text-[11px] text-gray-600 leading-tight">
+          {courtLine}
+        </div>
+      )}
     </div>
   );
 }
@@ -218,164 +191,195 @@ function OverviewCard({
   const showNextEstimate = item.daysLeft >= 0 && item.최저가 > 0;
   const nextEstimate = showNextEstimate ? estimateNextLowest(item.최저가) : 0;
 
-  return (
-    <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-[12px] font-bold text-amber-800 uppercase tracking-wider">
-          💰 매각 / 가격
-        </div>
-        <div className="text-[12px] text-gray-600 tabular-nums">
-          {item.매각기일일자 || item.매각기일?.slice(0, 10)}
-          {item.매각기일일시 ? ` ${item.매각기일일시}` : ""}
-        </div>
-      </div>
+  const perPyeong = pricePerPyeong(item.최저가, item.토지면적);
 
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <div className="text-[11px] text-gray-500">감정가</div>
-          <div className="text-[15px] text-gray-700 tabular-nums">
-            {formatWon(item.감정가)}
+  return (
+    <Section title="💰 매각 / 가격">
+      <div className="space-y-1.5">
+        {/* 감정가 → 최저가 메인 라인 */}
+        <div className="flex items-end gap-2 py-0.5">
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-gray-500">감정가</div>
+            <div className="text-[14px] text-gray-700 tabular-nums">
+              {formatWon(item.감정가)}
+            </div>
           </div>
-        </div>
-        <div className="text-gray-400 text-xl pb-0.5">→</div>
-        <div className="flex-1">
-          <div className="text-[11px] text-gray-500">최저가</div>
-          <div className="text-[22px] font-bold text-gray-900 tabular-nums leading-tight">
-            {formatWon(item.최저가)}
+          <div className="text-gray-400 text-lg pb-0.5">→</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-gray-500">최저가</div>
+            <div className="text-[20px] font-bold text-gray-900 tabular-nums leading-tight">
+              {formatWon(item.최저가)}
+            </div>
           </div>
+          {discountPct > 0 && (
+            <div className="flex flex-col items-end">
+              <div className="text-[10px] text-gray-500">할인율</div>
+              <div className="text-[20px] font-bold text-red-600 tabular-nums leading-tight">
+                -{discountPct}%
+              </div>
+            </div>
+          )}
         </div>
-        {discountPct > 0 && (
-          <div className="text-[26px] font-bold text-red-600 tabular-nums leading-tight">
-            -{discountPct}%
+
+        {/* 평당 단가 — 영업 멘트 핵심 */}
+        {perPyeong != null && (
+          <Row
+            label="평당 단가"
+            value={`약 ${perPyeong.toLocaleString()}만원/평`}
+            highlight
+          />
+        )}
+
+        {/* 회차별 최저가 — 영업 시각: 가격 하락 추이 */}
+        {item.회차별최저가 && item.회차별최저가.length > 1 && (
+          <div className="border-t border-amber-100 pt-1.5 mt-1.5">
+            <div className="text-[11px] text-gray-500 mb-1">
+              📉 회차별 최저가
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              {item.회차별최저가.map((r) => (
+                <div
+                  key={r.회차}
+                  className="flex items-center gap-1 bg-white border border-amber-200 rounded px-1.5 py-0.5"
+                >
+                  <span className="text-[10px] text-gray-500 font-semibold">
+                    {r.회차}회
+                  </span>
+                  <span className="text-[12px] tabular-nums text-gray-900">
+                    {formatWon(r.가격)}
+                  </span>
+                  {r.감정대비비율 != null && (
+                    <span className="text-[10px] text-amber-600 tabular-nums">
+                      ({r.감정대비비율}%)
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 다음 회차 추정 */}
+        {showNextEstimate && (
+          <div className="border-t border-amber-100 pt-1.5 mt-1.5">
+            <Row
+              label="다음 회차 추정"
+              value={
+                <span className="tabular-nums">
+                  약 {formatWon(nextEstimate)}
+                  <span className="ml-1 text-[11px] text-red-500 font-normal">
+                    (-30%)
+                  </span>
+                </span>
+              }
+            />
+            <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+              * 회차당 -30% 보수 추정 · 정확한 금액은 법원 공고
+            </p>
           </div>
         )}
       </div>
-
-      {/* 회차별 가격 이력 — 영업 시각: 가격 하락 추이 */}
-      {item.회차별최저가 && item.회차별최저가.length > 1 && (
-        <div className="mt-2.5 pt-2.5 border-t border-amber-200/60">
-          <div className="text-[11px] font-semibold text-amber-800 mb-1.5">
-            📉 회차별 최저가
-          </div>
-          <div className="flex items-center gap-1 flex-wrap">
-            {item.회차별최저가.map((r) => (
-              <div
-                key={r.회차}
-                className="flex items-center gap-1 bg-white border border-amber-200 rounded px-1.5 py-0.5"
-              >
-                <span className="text-[10px] text-gray-500 font-semibold">
-                  {r.회차}회
-                </span>
-                <span className="text-[12px] tabular-nums text-gray-900">
-                  {formatWon(r.가격)}
-                </span>
-                {r.감정대비비율 != null && (
-                  <span className="text-[10px] text-amber-600 tabular-nums">
-                    ({r.감정대비비율}%)
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {showNextEstimate && (
-        <div className="mt-2.5 pt-2.5 border-t border-amber-200/60">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] text-gray-600">
-              다음 회차 추정<sup className="text-gray-400">*</sup>
-            </span>
-            <span className="text-[14px] font-semibold text-gray-800 tabular-nums">
-              약 {formatWon(nextEstimate)}
-              <span className="ml-1 text-[11px] text-red-500 font-normal">
-                (-30%)
-              </span>
-            </span>
-          </div>
-          <p className="text-[10px] text-gray-400 mt-1 leading-tight">
-            * 회차당 -30% 보수 추정. 정확한 다음 회차 금액은 법원이 매각기일 후 공고
-          </p>
-        </div>
-      )}
-    </div>
+    </Section>
   );
 }
 
 // ─── Section 들 (목록 데이터만으로 표시) ───────────────────
 
-function CourtSection({ item }: { item: AuctionListItem }) {
+/**
+ * 매각 일정 — 의식①: 언제까지 결정?
+ *  - 매각기일 + D-day
+ *  - 진행상태 (유찰 N회)
+ */
+function ScheduleSection({ item }: { item: AuctionListItem }) {
+  const saleDate = item.매각기일일자 || item.매각기일?.slice(0, 10) || "";
+  const saleTime = item.매각기일일시 || "";
+  const saleDateLabel = saleDate
+    ? saleTime
+      ? `${saleDate} ${saleTime}`
+      : saleDate
+    : "—";
+
+  const progressLabel =
+    item.유찰수 > 0 ? `유찰 ${item.유찰수}회` : "신건 (유찰 없음)";
+
   return (
-    <Section title="🏛 법원 / 담당계">
+    <Section title="📅 매각 일정">
       <div className="space-y-1">
-        <Row label="법원" value={item.법원간략명 || "—"} />
-        <Row label="담당계" value={item.담당계 || "—"} />
-        <Row label="사건번호" value={item.사건명칭} mono />
+        <Row
+          label="매각기일"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              <span className="tabular-nums">{saleDateLabel}</span>
+              {item.daysLeft >= -9000 && (
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums ${
+                    item.daysLeft < 0
+                      ? "bg-gray-200 text-gray-600"
+                      : item.daysLeft <= 3
+                        ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {formatDday(item.daysLeft)}
+                </span>
+              )}
+            </span>
+          }
+        />
+        <Row
+          label="진행상태"
+          value={progressLabel}
+          highlight={item.유찰수 > 0}
+        />
       </div>
     </Section>
   );
 }
 
-function AreaSection({ item }: { item: AuctionListItem }) {
+/**
+ * 매물 제원 — 의식⑤: 뭐가 들었나, 얼마나 큰가
+ *  - 매물 구성 (토지/건물/집합 건수)
+ *  - 토지 면적 / 건물 면적
+ */
+function PropertySection({ item }: { item: AuctionListItem }) {
   const landSqm = item.토지면적;
   const bldgSqm = item.건물면적;
   const showLand = hasArea(landSqm);
   const showBldg = hasArea(bldgSqm);
-  const perPyeong = pricePerPyeong(item.최저가, landSqm);
 
-  if (!showLand && !showBldg) return null;
+  // 매물 구성 (groupBreakdown)
+  const breakdown = item.groupBreakdown;
+  const compositionParts: string[] = [];
+  if (breakdown) {
+    if (breakdown.land > 0) compositionParts.push(`토지 ${breakdown.land}건`);
+    if (breakdown.building > 0)
+      compositionParts.push(`건물 ${breakdown.building}건`);
+    if (breakdown.aggregate > 0)
+      compositionParts.push(`집합 ${breakdown.aggregate}건`);
+  }
+  const compositionLabel = compositionParts.join(" · ");
+
+  if (!showLand && !showBldg && !compositionLabel) return null;
 
   return (
-    <Section title="📐 면적 / 단가">
-      <div className="text-xs text-gray-700 space-y-1">
+    <Section title="🏷 매물 제원">
+      <div className="space-y-1">
+        {compositionLabel && (
+          <Row label="매물 구성" value={compositionLabel} />
+        )}
         {showLand && (
           <Row
-            label="토지"
+            label="토지 면적"
             value={`${landSqm!.toLocaleString()} ㎡ (${toPyeong(landSqm!)}평)`}
           />
         )}
         {showBldg && (
           <Row
-            label="건물"
+            label="건물 면적"
             value={`${bldgSqm!.toLocaleString()} ㎡ (${toPyeong(bldgSqm!)}평)`}
           />
         )}
-        {perPyeong != null && (
-          <div className="border-t border-gray-100 mt-1.5 pt-1.5">
-            <Row
-              label="평당 단가"
-              value={`약 ${perPyeong.toLocaleString()}만원/평`}
-              highlight
-            />
-          </div>
-        )}
       </div>
-    </Section>
-  );
-}
-
-function ProgressSection({ item }: { item: AuctionListItem }) {
-  if (item.유찰수 === 0) return null;
-  return (
-    <Section title="📊 진행">
-      <div className="space-y-1">
-        <Row label="유찰" value={`${item.유찰수}회`} highlight />
-      </div>
-    </Section>
-  );
-}
-
-function ClassSection({ item }: { item: AuctionListItem }) {
-  if (!item.groupBreakdown) return null;
-  const { land, building, aggregate } = item.groupBreakdown;
-  const parts: string[] = [];
-  if (land > 0) parts.push(`토지 ${land}건`);
-  if (building > 0) parts.push(`건물 ${building}건`);
-  if (aggregate > 0) parts.push(`집합 ${aggregate}건`);
-  if (parts.length === 0) return null;
-  return (
-    <Section title="🏷 매물 구성">
-      <div className="text-[13px] text-gray-700">{parts.join(" · ")}</div>
     </Section>
   );
 }
@@ -513,7 +517,14 @@ function BasicInfoSection({
     <Section title="🏛 사건 기본">
       <div className="space-y-1">
         <Row label="사건명" value={bas.csNm || "—"} />
-        <Row label="법원" value={bas.cortOfcNm || bas.cortSptNm || "—"} />
+        <Row
+          label="법원"
+          value={
+            bas.cortSptNm
+              ? `${bas.cortOfcNm} ${bas.cortSptNm}`
+              : bas.cortOfcNm || "—"
+          }
+        />
         <Row label="담당계" value={bas.cortAuctnJdbnNm || "—"} />
         {phones.length > 0 && (
           <div className="space-y-0.5">
@@ -544,8 +555,10 @@ function BasicInfoSection({
       </div>
 
       {/* 법원경매 사이트 바로가기 — POST 폼이라 자동 입력 불가, 안내만 */}
+      {/* 사이트 드롭다운 라벨이 cortSptNm/cortOfcNm 과 1:1 일치 (예: "속초지원", "춘천지방법원") */}
+      {/* 지원 사건은 cortSptNm 우선 — 본원명만 입력하면 사이트가 "잘못된 번호" 응답 */}
       <CourtSiteShortcut
-        cortOfcNm={bas.cortOfcNm || bas.cortSptNm || ""}
+        cortOfcNm={bas.cortSptNm || bas.cortOfcNm || ""}
         userCsNo={bas.userCsNo || ""}
       />
     </Section>
@@ -598,32 +611,32 @@ function CourtSiteShortcut({
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         {cortOfcNm && (
-          <button
-            type="button"
-            onClick={() => copyToClipboard(cortOfcNm, "court")}
-            className="text-[11px] px-2 py-1 bg-white border border-amber-200 hover:bg-amber-50 rounded transition-colors"
-            title="법원명 복사"
-          >
-            <span className="text-gray-500">법원</span>{" "}
+          <div className="inline-flex items-center gap-1 text-[11px] px-2 py-1 bg-white border border-amber-200 rounded">
+            <span className="text-gray-500">법원</span>
             <span className="font-semibold text-gray-900">{cortOfcNm}</span>
-            <span className="ml-1 text-[10px] text-amber-600">
-              {copied === "court" ? "✓ 복사됨" : "📋"}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(cortOfcNm, "court")}
+              className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded transition-colors"
+              title="법원명 복사"
+            >
+              {copied === "court" ? "복사됨" : "복사"}
+            </button>
+          </div>
         )}
         {csYear && csNum && (
-          <button
-            type="button"
-            onClick={() => copyToClipboard(userCsNo, "case")}
-            className="text-[11px] px-2 py-1 bg-white border border-amber-200 hover:bg-amber-50 rounded transition-colors tabular-nums"
-            title="사건번호 복사"
-          >
-            <span className="text-gray-500">사건</span>{" "}
+          <div className="inline-flex items-center gap-1 text-[11px] px-2 py-1 bg-white border border-amber-200 rounded tabular-nums">
+            <span className="text-gray-500">사건</span>
             <span className="font-semibold text-gray-900">{userCsNo}</span>
-            <span className="ml-1 text-[10px] text-amber-600">
-              {copied === "case" ? "✓ 복사됨" : "📋"}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(csNum, "case")}
+              className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded transition-colors"
+              title="사건번호 복사"
+            >
+              {copied === "case" ? "복사됨" : "복사"}
+            </button>
+          </div>
         )}
       </div>
       <a
@@ -1077,7 +1090,7 @@ function Row({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="text-[12px] text-gray-500 w-16 shrink-0">{label}</span>
+      <span className="text-[12px] text-gray-500 w-20 shrink-0">{label}</span>
       <span
         className={`text-[13px] ${
           mono ? "font-mono" : ""
