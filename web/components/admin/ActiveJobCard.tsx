@@ -7,7 +7,9 @@ interface Props {
   onDelete: (jobId: number) => void;
 }
 
-export function ActiveJobCard({ job, onStop, onDelete }: Props) {
+export function ActiveJobCard({ job, onStop }: Props) {
+  // onDelete 는 호출처에서 전달되지만 active 카드 안에선 미사용 (정지만 노출).
+  // history 영역에서 삭제 액션 별도 처리.
   const processed = job.progress.processed || 0;
   const found = job.progress.found || 0;
   const errors = job.progress.errors || 0;

@@ -72,7 +72,8 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
   const [rawItems, setRawItems] = useState<FacilityListItem[]>(
     persisted?.rawItems ?? [],
   );
-  const [totalCount, setTotalCount] = useState<number>(persisted?.totalCount ?? 0);
+  // totalCount 는 sessionStorage 영속화에만 사용, UI 직접 표시 X.
+  const [, setTotalCount] = useState<number>(persisted?.totalCount ?? 0);
   const [capped, setCapped] = useState<boolean>(persisted?.capped ?? false);
   const [hasSearched, setHasSearched] = useState(
     (persisted?.rawItems?.length ?? 0) > 0,

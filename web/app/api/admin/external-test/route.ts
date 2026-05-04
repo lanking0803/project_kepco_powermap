@@ -18,10 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { MANIFEST } from "@/app/admin/api-manager/_lib/manifest.generated";
-import type {
-  ExternalSampleRequest,
-  MetaInput,
-} from "@/app/admin/api-manager/_lib/types";
+import type { MetaInput } from "@/app/admin/api-manager/_lib/types";
 
 export const meta = {
   source: "외부 서비스 라이브 호출 프록시 — manifest sampleRequest 기반",
@@ -151,7 +148,7 @@ export async function POST(request: NextRequest) {
   let statusText = "";
   let bodyText = "";
   let bodyJson: unknown | null = null;
-  let respHeaders: Record<string, string> = {};
+  const respHeaders: Record<string, string> = {};
   let error: string | null = null;
   try {
     const res = await fetch(requestUrl, init);

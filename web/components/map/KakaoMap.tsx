@@ -204,37 +204,6 @@ interface Props {
 /** 고해상도(Retina) 디스플레이에서 선명하게 렌더링하기 위한 스케일 */
 const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 3) : 1;
 
-/**
- * SVG data-URI → Canvas(DPR 해상도) → PNG data-URI 변환.
- * 카카오맵 SDK가 MarkerImage를 CSS 픽셀 크기로 래스터화하기 때문에
- * 미리 고해상도 비트맵(PNG)으로 변환해 전달해야 레티나 디스플레이에서 선명하다.
- */
-const _pngCache = new Map<string, string>();
-
-function svgToPng(
-  svgDataUri: string,
-  logicalW: number,
-  logicalH: number,
-): Promise<string> {
-  if (_pngCache.has(svgDataUri)) return Promise.resolve(_pngCache.get(svgDataUri)!);
-
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(logicalW * DPR);
-      canvas.height = Math.round(logicalH * DPR);
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const png = canvas.toDataURL("image/png");
-      _pngCache.set(svgDataUri, png);
-      resolve(png);
-    };
-    img.onerror = () => resolve(svgDataUri); // fallback: SVG 그대로
-    img.src = svgDataUri;
-  });
-}
-
 function makeMarkerSvg(
   ratios: MarkerRatios,
   count: number,
@@ -623,10 +592,6 @@ export default function KakaoMap({
   const mapInstanceRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
   const lastFitKeyRef = useRef(-1);
-  // 마커 위 마을명 라벨(CustomOverlay) — 줌 인 했을 때만 표시
-  const labelOverlaysRef = useRef<any[]>([]);
-  // 줌 변경 리스너 핸들 (마커 effect 재실행 시 정리)
-  const zoomListenerRef = useRef<any>(null);
   // 공매 마을 마커 오버레이 — onbidVillages 변경 시 재구성
   const onbidOverlaysRef = useRef<any[]>([]);
   // 솔라 발전소 마커 오버레이 — solarMarkers 변경 시 재구성 (입지 탭 토글)

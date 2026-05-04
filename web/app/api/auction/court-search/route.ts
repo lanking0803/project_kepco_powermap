@@ -243,8 +243,8 @@ export async function GET(req: NextRequest) {
   const sdCd = sigunguCode.slice(0, 2);
   const sggCd = sigunguCode.slice(2, 5);
 
-  // sidoName — 어댑터 단계 동명이리 방지용 (옵션)
-  const sidoName = (sp.get("sidoName") ?? "").trim() || null;
+  // sidoName 입력은 manifest 호환을 위해 받지만 현재 채널 어댑터에선 미사용.
+  // (향후 동명이리 방지 enrich 추가 시 sp.get("sidoName") 으로 복구)
 
   // 페이지네이션
   const pageNo = clampInt(numOrZero(sp.get("pageNo")) || 1, 1, 9999);

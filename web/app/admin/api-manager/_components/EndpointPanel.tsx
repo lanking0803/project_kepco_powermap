@@ -20,7 +20,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
-import type { CollectedEndpoint, EndpointMeta, HttpMethod } from "../_lib/types";
+import type { CollectedEndpoint, HttpMethod } from "../_lib/types";
 import LiveTester from "./LiveTester";
 
 interface Props {
