@@ -4,24 +4,47 @@ description: 법원경매정보재공 사이트 직접 호출 채널. atomic end
 type: project
 ---
 
-## 🚦 현재 상태 (2026-05-04 갱신 — by-pnu + 모달 + 풍부화 완료)
+## 🚦 현재 상태 (2026-05-05 갱신 — 카테고리 시스템 분리 완료)
 
-**✅ 목록/by-pnu/상세모달 완전 swap — 운영 적용 완료**
+**✅ 목록/by-pnu/상세모달 + 카테고리 시스템 완전 swap — 운영 적용 완료**
 
 | 단계 | 결과 |
 |---|---|
 | atomic endpoint | ✅ court-search / court-detail |
 | /api/auction/search 채널 swap | ✅ env `AUCTION_CHANNEL` (기본=court) |
-| **/api/auction/by-pnu 채널 swap** | ✅ 2단계 lazy fallback (emdCd → 시군구) |
-| **법원경매 전용 모달 컴포넌트** | ✅ CourtAuctionDetailCard.tsx |
-| **AuctionTab 채널 분기** | ✅ courtCaseKey 유무로 자동 분기 |
-| **세종시 시군구 자동 처리** | ✅ 36110 자동 세팅 |
+| /api/auction/by-pnu 채널 swap | ✅ 2단계 lazy fallback (emdCd → 시군구) |
+| 법원경매 전용 모달 컴포넌트 | ✅ CourtAuctionDetailCard.tsx |
+| AuctionTab 채널 분기 | ✅ courtCaseKey 유무로 자동 분기 |
+| 세종시 시군구 자동 처리 | ✅ 36110 자동 세팅 |
 | 가격 표기 통일 | ✅ formatWon 공통 헬퍼 (1억+ 소수점1) |
-| 회차별 최저가 이력 | ✅ 모달 OverviewCard |
 | 권리분석 단서 (청구 vs 최저) | ✅ 잉여/부족 인사이트 |
 | 법원경매 사이트 바로가기 | ✅ 사건번호 복사 + 입력 가이드 |
+| **카테고리 시스템 분리 (court 전용)** | ✅ 2026-05-05 — Phase A/B/C/D |
+| 회차별 최저가 이력 | ❌ 롤백 (raw 필드 의미 불명, 2026-05-05) |
 
 **의뢰자 합의**: "법원경매가 차단되기 전까지는 법원경매를 기본값으로 밀고간다" (2026-05-04)
+
+## 🌳 카테고리 시스템 — court 전용 트리 (2026-05-05 신설)
+
+**Why**: 이전 구조는 hyphen yongdo 코드(59종) → court 트리플 변환 호출. 의뢰자
+지적 — court 가 운영 채널인데 hyphen 종속 구조는 불합리. 신규 분류 추가/검증/swap
+관리 모두 어려움.
+
+**How**:
+- `web/lib/court-auction/categories.ts` — court 분류 트리(검증된 76개 코드) +
+  영업 6그룹(토지농지/공장창고/주거/상업업무/공공시설/특수) + 헬퍼
+- `web/components/map/auction/CourtCategorySelector.tsx` — court 전용 셀렉터 UI
+- `web/lib/modes/auction-channel.ts` — `getClientAuctionChannel()` 단일 진입점
+- AuctionSearchPanel: `channel === "court"` 면 court 셀렉터, 아니면 기존 hyphen 6그룹 칩
+- `route.ts` runCourtChannel: `courtSclCodes` 비어있지 않으면 우선 사용,
+  비어있으면 `mapHyphenYongdoToCourt` fallback (hyphen 채널 또는 역호환 호출자용)
+
+**검증 출처**: `docs/api_specs/법원경매/` 응답 캡처 8건 보존.
+다음에 매핑 의심 시 이 폴더와 1:1 비교.
+
+**hyphen 채널 swap 시**: env `NEXT_PUBLIC_AUCTION_CHANNEL=hyphen` 설정 →
+UI 가 자동으로 hyphen 6그룹 칩 (이전 모습) 으로 회귀. hyphen 코드/매핑/UI 코드
+한 줄도 안 건드림 — 회귀 안전.
 
 ## 🧩 row 그룹핑 — 사건 단위 통합 (2026-05-04 / 갱신 2026-05-05)
 
