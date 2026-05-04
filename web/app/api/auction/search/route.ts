@@ -14,7 +14,8 @@
  *
  * 입력 파라미터 (UI 와 동일):
  *   - sigunguCode (필수, 5자리 BJD prefix) / sidoName / emdong
- *   - yongdoCodes (콤마 join, hyphen 코드체계 — court 분기에서 자동 변환)
+ *   - yongdoCodes (콤마 join, hyphen 코드체계 — channel="hyphen" 또는 court 역호환)
+ *   - courtSclCodes (콤마 join, court 소분류 5자리 — channel="court" 정상 흐름. yongdoCodes 보다 우선)
  *   - progressStatus (콤마 join — 양쪽 채널 모두 사후 필터)
  *   - landMin/Max, bareaMin/Max (㎡)
  *   - gamMin/Max, lowMin/Max (만원 단위 입력)
@@ -34,6 +35,7 @@ import { getCurrentUser } from "@/lib/auth";
 
 // court (기본 채널)
 import { courtToAuctionItems } from "@/lib/court-auction/adapter";
+import { sclCodesToTriples } from "@/lib/court-auction/categories";
 import { fetchCourtSweep } from "@/lib/court-auction/sweep";
 import { mapHyphenYongdoToCourt } from "@/lib/court-auction/usage-map";
 
@@ -57,7 +59,8 @@ export const meta: EndpointMeta = {
     { name: "sigunguCode", type: "string", required: true, sample: "46770", description: "행안부 5자리. 비용 가드 — 시도만 검색 거부" },
     { name: "sidoName", type: "string", required: false, sample: "전라남도", description: "시도 한글명 — enrich 동명이리 충돌 방지용 (sep_1 매칭). 비우면 매칭 생략" },
     { name: "emdong", type: "string", required: false, sample: "", description: "읍면동 텍스트. 응답 후 클라이언트 LIKE 필터 (양쪽 채널 공통 사후)" },
-    { name: "yongdoCodes", type: "string", required: false, sample: "31,33", description: "Hyphen 용도코드 다중 (콤마, 빈 문자=전체). court 채널에선 내부 매핑 후 sweep" },
+    { name: "yongdoCodes", type: "string", required: false, sample: "31,33", description: "Hyphen 용도코드 다중 (hyphen 채널 정상 흐름 / court 역호환용)" },
+    { name: "courtSclCodes", type: "string", required: false, sample: "10101,10102", description: "Court 소분류 5자리 다중 (court 채널 정상 흐름, yongdoCodes 보다 우선)" },
     { name: "progressStatus", type: "string", required: false, sample: "신건,진행,유찰", description: "한글 진행상태 다중 (콤마, 빈 문자=전체). 응답 후 필터 (양쪽 채널 공통)" },
     { name: "landMin", type: "number", required: false, sample: "", description: "토지면적 ㎡ (court 채널에선 통합 면적 으로 매핑)" },
     { name: "landMax", type: "number", required: false, sample: "" },
@@ -88,6 +91,8 @@ interface ParsedInput {
   sidoName: string | null;
   emdong: string;
   yongdoCodes: string[];
+  /** Court 채널 — UI 가 직접 박은 court 소분류 코드 다중. channel="court" 일 때만 사용. */
+  courtSclCodes: string[];
   progressStatus: string[];
   landMin: number | null;
   landMax: number | null;
@@ -145,6 +150,7 @@ export async function GET(req: NextRequest) {
     sidoName: (sp.get("sidoName") ?? "").trim() || null,
     emdong: (sp.get("emdong") ?? "").trim(),
     yongdoCodes: splitCsv("yongdoCodes"),
+    courtSclCodes: splitCsv("courtSclCodes"),
     progressStatus: splitCsv("progressStatus"),
     landMin: num("landMin"),
     landMax: num("landMax"),
@@ -197,8 +203,15 @@ async function runCourtChannel(input: ParsedInput) {
   const areaMin = pickAreaMin(input.landMin, input.bareaMin);
   const areaMax = pickAreaMax(input.landMax, input.bareaMax);
 
-  // hyphen yongdo 코드 → court 트리플 (1:N 매핑, 다중 sweep)
-  const triples = mapHyphenYongdoToCourt(input.yongdoCodes);
+  // 카테고리 → court 트리플 변환.
+  // 우선순위:
+  //   1) courtSclCodes (UI 가 court 분류 직접 선택, channel="court" 정상 흐름)
+  //   2) yongdoCodes → mapHyphenYongdoToCourt (역호환: 호출자가 hyphen 코드를 보낸 경우)
+  // 둘 다 비면 빈 배열 = 용도 미지정 단일 sweep (전체 매물).
+  const triples =
+    input.courtSclCodes.length > 0
+      ? sclCodesToTriples(input.courtSclCodes)
+      : mapHyphenYongdoToCourt(input.yongdoCodes);
 
   const sweep = await fetchCourtSweep(
     {
