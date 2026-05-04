@@ -31,6 +31,22 @@ const ENDPOINT =
   "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo";
 const KEY = process.env.DATA_GO_KR_KEY || "";
 
+// 게이트웨이 burst 한도 회피: 응답 회신 후 무조건 500ms 대기 (모듈 전역 직렬화).
+// 워커 5개가 동시에 호출해도 외부에서 보면 2건/s 로 흘러나감.
+// 멀티 인스턴스 동시 사용자 5명까지 burst 한도(~10건/s) 안쪽 안전 (2026-05-03 의뢰자 합의).
+const POST_RESPONSE_DELAY_MS = 500;
+const RETRY_429_DELAY_MS = 800;
+let nextAvailableAt = 0;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function throttledFetch(url: string): Promise<Response> {
+  const wait = nextAvailableAt - Date.now();
+  if (wait > 0) await sleep(wait);
+  const res = await fetch(url, { cache: "no-store" });
+  nextAvailableAt = Date.now() + POST_RESPONSE_DELAY_MS;
+  return res;
+}
+
 export interface ListBuildingsOptions {
   /** 페이지 번호 (1-base, 기본 1) */
   pageNo?: number;
@@ -92,9 +108,13 @@ export async function listBuildingsByBjd(
     pageNo: String(pageNo),
   });
 
-  const res = await fetch(`${ENDPOINT}?${params.toString()}`, {
-    cache: "no-store",
-  });
+  const url = `${ENDPOINT}?${params.toString()}`;
+  let res = await throttledFetch(url);
+  if (res.status === 429) {
+    // 429 = burst 한도 차단. 800ms + jitter 대기 후 1회만 재시도.
+    await sleep(RETRY_429_DELAY_MS + Math.floor(Math.random() * 200));
+    res = await throttledFetch(url);
+  }
   if (!res.ok) throw new Error(`건축HUB HTTP ${res.status}`);
 
   const data = (await res.json()) as BrTitleListResponse;

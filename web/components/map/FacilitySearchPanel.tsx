@@ -412,7 +412,14 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
             disabled={!canSearch}
             className="flex-1 py-2 rounded-md bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            🔍 검색
+            {searching ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>검색 중…</span>
+              </span>
+            ) : (
+              "🔍 검색"
+            )}
           </button>
           <button
             type="button"
@@ -458,7 +465,14 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
         <span className="text-xs font-bold text-gray-700">결과</span>
         <span className="text-xs text-gray-500">
           {searching ? (
-            "조회중…"
+            <span className="inline-flex items-center gap-1.5 text-violet-700 font-semibold">
+              <span>🏭 시설 추출 중</span>
+              <span className="inline-flex gap-0.5">
+                <span className="w-1 h-1 rounded-full bg-violet-600 animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-1 h-1 rounded-full bg-violet-600 animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-1 h-1 rounded-full bg-violet-600 animate-bounce" />
+              </span>
+            </span>
           ) : rawItems.length > 0 ? (
             <>
               {results.length.toLocaleString()}건
@@ -541,6 +555,18 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
             ⚠️ {searchError}
           </p>
+        )}
+        {searching && (
+          <div className="flex flex-col items-center justify-center py-12 text-violet-700">
+            <div className="text-4xl animate-bounce mb-3">🏭</div>
+            <div className="text-sm font-bold mb-1">건축물대장 조회 중</div>
+            <div className="text-[11px] text-violet-500/80 mb-3">
+              잠시만 기다려주세요
+            </div>
+            <div className="w-32 h-1 bg-violet-100 rounded-full overflow-hidden">
+              <div className="h-full w-1/3 bg-violet-500 rounded-full animate-[pulse_1.2s_ease-in-out_infinite]" />
+            </div>
+          </div>
         )}
         {!searching && !searchError && results.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-8 leading-relaxed">

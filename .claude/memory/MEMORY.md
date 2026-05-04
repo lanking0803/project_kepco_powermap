@@ -20,9 +20,10 @@
 - 🔨 [경매 D4 완료 — 진입 흐름 통합](project_auction_d4_done.md) ⭐ — 검색 카드/마커/카드/모달 4경로 모두 ParcelPanel [경매] 탭으로 수렴 (2026-05-03)
 - 🪤 [sessionStorage 복원 패턴](feedback_session_restore_pattern.md) ⚠️ — 모드 패널 마운트 시 복원된 results 를 부모로 흘려야 마커 회귀 안 함
 - 💰 [Hyphen 비용 구조 + 운영전환](project_hyphen_billing.md) ⭐ — 멤버십 11만/월 + 호출당 종량(단가 미공시). 의뢰자: 테스트 후 결제. HYPHEN_OPERATION_MODE=Y 토글
+- 🗂 [경매 직접 호출 — 백업 채널](project_court_auction_direct.md) — 검증 완료, 미채택. hyphen 가격 인상/서비스 중단 시 카드 (2026-05-04)
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
 - 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)
-- [3차 개발 — 태양광설치여부+이격거리](project_phase3_proposal.md) ⭐ — 전국태양광허가 API + 법제처 조례 API + 도로현황 SHP 연계 가능 검증 완료. 400~550만/10~12주. 의뢰자 확답 대기 (2026-04-17)
+- [3차 개발 — 태양광설치여부+이격거리+필지수집기](project_phase3_proposal.md) ⭐ — 요청 8개 누적. 단독 550만+필지수집기 250~350만/12~15주. 의뢰자 확답 대기 (2026-05-04 갱신)
 - ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
 - ⚠️ [태양광 허가 API 검증 결과](reference_solar_permit_api.md) — 검색 필터 미지원 (LCTN_LOTNO_ADDR/LATITUDE 등 전부 NODATA). 페이지네이션만 가능. Phase 3 시 12만건 DB 적재 후 by-pnu 신설 필요
 - [건축물대장 API 검증](reference_bldg_register_api.md) — endpoint/파라미터/응답필드 실측. 비닐하우스는 대부분 미등록 한계. 키는 SECRETS.local.md
