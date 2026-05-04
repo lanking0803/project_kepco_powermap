@@ -138,6 +138,7 @@ export async function courtToAuctionItems(
         groupSize: g.rows.length,
         landArea: g.landArea,
         buildingArea: g.buildingArea,
+        breakdown: g.breakdown,
       },
     );
   });
@@ -153,6 +154,8 @@ interface CourtGroup {
   landArea: number | null;
   /** 그룹 내 건물면적 합산 (buldList 가 의미있는 row 의 면적) */
   buildingArea: number | null;
+  /** mokGbncd 분류별 row 수 — 카드 배지 "토지 N·건물 N·집합 N" 표시용. */
+  breakdown: { land: number; building: number; aggregate: number };
 }
 
 /**
@@ -191,8 +194,27 @@ function groupCourtRawItems(items: CourtRawListItem[]): CourtGroup[] {
     const representative = pickRepresentative(rows);
     const landArea = sumLandArea(rows);
     const buildingArea = sumBuildingArea(rows);
-    return { representative, rows, landArea, buildingArea };
+    const breakdown = countByMokGbncd(rows);
+    return { representative, rows, landArea, buildingArea, breakdown };
   });
+}
+
+/** mokGbncd 별 row 수 집계 — 01=토지 / 02=건물 / 03=집합건물. */
+function countByMokGbncd(rows: CourtRawListItem[]): {
+  land: number;
+  building: number;
+  aggregate: number;
+} {
+  let land = 0;
+  let building = 0;
+  let aggregate = 0;
+  for (const r of rows) {
+    const k = (r.mokGbncd ?? "").toString();
+    if (k === "01") land++;
+    else if (k === "02") building++;
+    else if (k === "03") aggregate++;
+  }
+  return { land, building, aggregate };
 }
 
 function makeGroupKey(it: CourtRawListItem): string {
@@ -286,6 +308,7 @@ export function courtToAuctionItem(
     groupSize: number;
     landArea: number | null;
     buildingArea: number | null;
+    breakdown: { land: number; building: number; aggregate: number };
   },
 ): AuctionListItem {
   const 감정가 = Number(raw.gamevalAmt) || 0;
@@ -331,7 +354,7 @@ export function courtToAuctionItem(
   // 단일 row 그룹은 1 (배지 미표시), groupInfo 미전달 시 null (기존 호환).
   const 물건번호갯수 =
     groupInfo == null ? null : Math.max(1, groupInfo.groupSize);
-  // 물건번호 — 그룹의 대표 row 의 mokmulSer (또는 maemulSer fallback). 카드 배지 [N/M] 분자.
+  // 물건번호 — 대표 row 의 mokmulSer (또는 maemulSer fallback). hyphen 호환.
   const 물건번호 = Number(raw.mokmulSer) || Number(raw.maemulSer) || 1;
 
   return {
@@ -373,6 +396,10 @@ export function courtToAuctionItem(
     discountRatio,
     daysLeft,
     isUrgent,
+    // court 채널 — 합쳐진 카드면 분류별 카운트 노출 (UI 카드 배지용)
+    ...(groupInfo && groupInfo.groupSize > 1
+      ? { groupBreakdown: groupInfo.breakdown }
+      : {}),
   };
 }
 

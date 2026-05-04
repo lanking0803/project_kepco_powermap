@@ -249,6 +249,21 @@ export interface AuctionListItem {
   daysLeft: number;
   /** D-3 이내 임박 매물 여부 */
   isUrgent: boolean;
+  /**
+   * Court 채널 전용 — 같은 (사건+매물+지번) 으로 합쳐진 row 의 mokGbncd 분류별 카운트.
+   *  - undefined = hyphen 채널 (또는 court 단일 row)
+   *  - 값 있으면 카드 배지에 "토지 N·건물 N·집합 N" 표시 (0인 분류는 생략)
+   *
+   * mokGbncd 분류 (실측 2026-05-04):
+   *   - 01 = 토지 (jimokList 채워짐: 전/대/공장용지/임야 등)
+   *   - 02 = 건물 (단독건물, pjbBuldList 채워짐)
+   *   - 03 = 집합건물 (아파트/오피스텔/빌라 — buldList 에 동/호 표기)
+   */
+  groupBreakdown?: {
+    land: number;
+    building: number;
+    aggregate: number;
+  };
 }
 
 // ─── 경매사건상세보기 (au0147001254) ──────────────────────

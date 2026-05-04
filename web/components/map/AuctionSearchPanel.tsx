@@ -878,8 +878,21 @@ function ResultCard({
    *   호수 정보 없는 매물(토지 등)은 null 반환.
    */
   const unitText = extractUnitFromAddress(item.대표소재지);
-  /** 한 사건에 여러 물건일 때만 [N/M] 배지 — 단일 물건이면 노이즈라 숨김 */
+  /** 한 사건에 여러 물건일 때만 배지 — 단일 물건이면 노이즈라 숨김 */
   const showUnitBadge = (item.물건번호갯수 ?? 1) > 1;
+  /**
+   * Court 채널 합쳐진 카드는 mokGbncd 분류별 카운트로 표시 — "토지 N·건물 N·집합 N".
+   * hyphen 채널 또는 court 단일 row 면 undefined → 기존 분수 표시 fallback.
+   */
+  const groupBadgeText = (() => {
+    if (!item.groupBreakdown) return null;
+    const { land, building, aggregate } = item.groupBreakdown;
+    const parts: string[] = [];
+    if (land > 0) parts.push(`토지 ${land}`);
+    if (building > 0) parts.push(`건물 ${building}`);
+    if (aggregate > 0) parts.push(`집합 ${aggregate}`);
+    return parts.length > 0 ? parts.join("·") : null;
+  })();
 
   // 면적: 토지/건물 중 큰 쪽 우선. 둘 다 없으면 생략.
   const areaText = (() => {
@@ -959,11 +972,16 @@ function ResultCard({
             <span className="text-[12px] text-gray-900 font-bold leading-tight">
               {item.사건명칭}
             </span>
-            {showUnitBadge && (
-              <span className="text-[9px] font-semibold px-1 py-px rounded bg-gray-100 text-gray-600 border border-gray-200 leading-none">
-                물건 {item.물건번호}/{item.물건번호갯수}
-              </span>
-            )}
+            {showUnitBadge &&
+              (groupBadgeText ? (
+                <span className="text-[9px] font-semibold px-1 py-px rounded bg-gray-100 text-gray-600 border border-gray-200 leading-none">
+                  {groupBadgeText}
+                </span>
+              ) : (
+                <span className="text-[9px] font-semibold px-1 py-px rounded bg-gray-100 text-gray-600 border border-gray-200 leading-none">
+                  물건 {item.물건번호}/{item.물건번호갯수}
+                </span>
+              ))}
           </div>
 
           {/* 호수 정보 — 같은 빌딩 다른 호수 매물 시각 구분 (도로명 빌딩 매물만) */}
