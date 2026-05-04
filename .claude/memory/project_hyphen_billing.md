@@ -1,10 +1,31 @@
 ---
-name: Hyphen 경매다 비용 구조 + 운영 모드 전환 절차
-description: Hyphen 부동산 경매다 API 의 결제 모델 + 우리 코드의 운영/테스트 모드 토글 + 의뢰자 결정 대기 항목
+name: Hyphen 경매다 — 백업 채널 (2026-05-04 미채택)
+description: Hyphen 부동산 경매다 API 결제 모델 + 운영/테스트 토글. 2026-05-04 법원경매 직접 호출 채택으로 백업 채널 전환. 가격 인상/차단 시 swap 카드.
 type: project
 ---
 
-# Hyphen 경매다 API — 비용 구조와 운영 모드 전환
+# Hyphen 경매다 API — 백업 채널 (운영 미채택)
+
+## 🚦 현재 상태 (2026-05-04 갱신)
+
+**❌ 운영 미채택 — 법원경매 직접 호출 채택됨**
+
+운영 채널: [project_court_auction_direct.md](project_court_auction_direct.md) (2026-05-04 검증 완료 + Vercel icn1 통과).
+
+이 메모리는 **백업 카드 + 결제 구조 참고용** 으로 보존.
+
+## 📦 코드 자산 보존 상태
+
+```
+web/lib/hyphen/        — 그대로 보존 (삭제 X)
+web/app/api/auction/{search,detail,by-pnu}  — 라우트 그대로 (실제 호출은 안 됨)
+HYPHEN_HKEY / HYPHEN_USER_ID 환경변수      — 미설정 또는 placeholder
+```
+
+향후 swap 시:
+1. `AUCTION_CHANNEL=hyphen` 환경변수 토글
+2. 의뢰자에게 hyphen 멤버십 결제 안내 (아래 6단계)
+3. 환경변수 키 등록 + 만료일 동기화
 
 ## 결제 모델 (실측 + 공식 페이지 검증 2026-05-02)
 

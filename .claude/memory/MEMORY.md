@@ -19,8 +19,8 @@
 - 🏛 [공매·경매 통합 의도](project_auction_intent.md) ⭐ — "저가 매입 기회 발굴". 경매 Phase 1+2 개발 완료(2026-05-02). 테스트모드 시연 단계
 - 🔨 [경매 D4 완료 — 진입 흐름 통합](project_auction_d4_done.md) ⭐ — 검색 카드/마커/카드/모달 4경로 모두 ParcelPanel [경매] 탭으로 수렴 (2026-05-03)
 - 🪤 [sessionStorage 복원 패턴](feedback_session_restore_pattern.md) ⚠️ — 모드 패널 마운트 시 복원된 results 를 부모로 흘려야 마커 회귀 안 함
-- 💰 [Hyphen 비용 구조 + 운영전환](project_hyphen_billing.md) ⭐ — 멤버십 11만/월 + 호출당 종량(단가 미공시). 의뢰자: 테스트 후 결제. HYPHEN_OPERATION_MODE=Y 토글
-- 🗂 [경매 직접 호출 — 백업 채널](project_court_auction_direct.md) — 검증 완료, 미채택. hyphen 가격 인상/서비스 중단 시 카드 (2026-05-04)
+- 🗄 [Hyphen — 백업 채널](project_hyphen_billing.md) — 2026-05-04 법원경매 채택으로 미운영. 가격 인상/차단 시 swap 카드. 멤버십 11만/월 + 호출당 종량 (참고)
+- ✅ [경매 직접 호출 — 운영 채택](project_court_auction_direct.md) ⭐ — atomic endpoint(court-search/court-detail) + Vercel icn1 통과. 어댑터 SSOT 통일. 의뢰자 채널 자율권+월10만 합의 (2026-05-04)
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
 - 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)
 - [3차 개발 — 태양광설치여부+이격거리+필지수집기](project_phase3_proposal.md) ⭐ — 요청 8개 누적. 단독 550만+필지수집기 250~350만/12~15주. 의뢰자 확답 대기 (2026-05-04 갱신)
