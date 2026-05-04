@@ -4,21 +4,26 @@ description: 법원경매정보재공 사이트 직접 호출 채널. atomic end
 type: project
 ---
 
-## 🚦 현재 상태 (2026-05-04)
+## 🚦 현재 상태 (2026-05-04 갱신)
 
-**✅ 운영 채택 — atomic endpoint 신설 + Vercel 검증 완료**
+**✅ 목록 조회 완전 swap — court 채널 운영 적용 완료**
 
 | 단계 | 결과 |
 |---|---|
 | 호출 검증 (로컬 + Vercel icn1) | ✅ 통과 |
 | atomic endpoint 신설 | ✅ court-search / court-detail |
+| **풍부 검색 파라미터 추가** | ✅ 용도(대중소)/매각기일/감정가/최저가/할인율/면적/유찰/특이사항 — 모두 서버 필터 |
 | 어댑터 구현 (raw → AuctionListItem) | ✅ |
 | 관리자 페이지 메타 등록 | ✅ |
 | Vercel 배포 검증 | ✅ icn1 IP 한국 인식 통과 |
+| **/api/auction/search 채널 swap** | ✅ env `AUCTION_CHANNEL` 토글 (기본=court) |
+| 6개 파라미터 검증 (50/50 매칭) | ✅ 용도/매각기일/감정가/유찰/할인율(서버정의)/특이사항 |
 
-다음 단계:
-1. 기존 hyphen 라우트 swap 또는 환경변수 토글
-2. UI 측 사용자 흐름 검증
+**의뢰자 합의**: "법원경매가 차단되기 전까지는 법원경매를 기본값으로 밀고간다" (2026-05-04)
+
+남은 미완 작업:
+- 사건 상세 조회 (`/api/auction/detail`) 는 아직 hyphen 만 — court 어댑터 추가 필요
+- `/api/auction/by-pnu` 도 hyphen 만
 
 ## 🤝 합의 배경 (의뢰자 결정)
 
@@ -44,30 +49,48 @@ type: project
 
 이전 세션의 "비공개 운영" 시나리오는 폐기. 정직 원칙 그대로 유지.
 
-## 🏗 구현 자산 (커밋 204bd93, 2026-05-04)
+## 🏗 구현 자산 (2026-05-04 누적)
 
-### 신규 파일
-
+### 라이브러리 (web/lib/court-auction/)
 ```
-web/lib/court-auction/
-  ├── types.ts        — Court raw 타입 (목록 + 상세 12개 섹션)
-  ├── fetch.ts        — 호출부 (응답 후 500ms 직렬화 + WAF 재시도)
-  └── adapter.ts      — Court raw → AuctionListItem 어댑터
-
-web/app/api/auction/
-  ├── court-search/route.ts   — 목록 atomic
-  └── court-detail/route.ts   — 상세 atomic
-
-web/app/admin/api-manager/_lib/services/court-auction.ts  — 관리자 메타
+types.ts          — Court raw 타입 + CourtSearchParams (풍부 16필드)
+fetch.ts          — 호출부 (응답 후 500ms 직렬화 + WAF 재시도)
+adapter.ts        — Court raw → AuctionListItem 어댑터
+usage-map.ts      — hyphen yongdo ↔ court 대중소 코드 매핑 (38종)
+special-cond.ts   — 특이사항 10개 코드 상수
+sweep.ts          — 페이지 + 용도 코드별 sweep + docid dedup (cap 20p)
 ```
 
-### 변경 (최소화)
+### Atomic endpoints (web/app/api/auction/)
+```
+court-search/route.ts   — 단일 페이지 호출 + 풍부 검색 파라미터
+court-detail/route.ts   — 상세 (12 섹션 raw passthrough)
+search/route.ts         — 채널 swap (기본=court / env=hyphen)
+```
 
-- `_lib/types.ts`: ExternalServiceMeta.category 에 "court-auction" 추가
-- `_components/CategoryNav.tsx`: 라벨 + 순서 등록
-- `_lib/manifest.generated.ts`: 자동 재생성
+### 관리자 페이지
+- `_lib/services/court-auction.ts` 메타 + usageExample 풍부화
+- `_lib/manifest.generated.ts` 자동 재생성
 
 기존 hyphen 자산은 **건드리지 않음**. 백업 채널로 보존.
+
+## 🔀 채널 swap 동작 (search route)
+
+```typescript
+const channel = process.env.AUCTION_CHANNEL === "hyphen" ? "hyphen" : "court";
+//                                                                     ↑ 기본값
+```
+
+| UI 입력 → court 변환 | 비고 |
+|---|---|
+| gamMin (만원) → aeeEvlAmtMin (원) | 만원×10000 |
+| bidStart (YYYY-MM-DD) → bidBgngYmd (YYYYMMDD) | 하이픈 제거 |
+| landMin/bareaMin → objctArDtsMin (통합 1개) | 작은 값 |
+| yongdoCodes (hyphen 2자리 다중) → court 트리플 N개 | mapHyphenYongdoToCourt + sweep |
+| usbdMin/Max → flbdNcntMin/Max | 서버 필터 |
+| discountMin/Max → lwsDspslPrcRateMin/Max | 서버 필터 (의미는 사이트 정의) |
+
+사후 필터(클라이언트): 진행상태(휴리스틱), 읍면동 LIKE
 
 ## 🔌 endpoint 사양
 
