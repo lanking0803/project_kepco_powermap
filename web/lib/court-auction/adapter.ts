@@ -156,12 +156,16 @@ interface CourtGroup {
 }
 
 /**
- * 같은 (사건+지번) row 묶기.
+ * 같은 매물 row 묶기 — 사이트 정식 코드 우선.
  *
- * 그룹 키: boCd + saNo + daepyoLotno + addrGbncd
- *   - boCd, saNo: 사건 단위
- *   - daepyoLotno: 지번 단위
- *   - addrGbncd: 일반/도로/산 구분 (예: A=일반, R=도로, S=산) — 다르면 다른 매물로 취급
+ * 그룹 키: boCd + saNo + maemulSer + daepyoLotno
+ *   - boCd: 법원 코드 ("B000513")
+ *   - saNo: 사건 raw 14자리 ("20230130057289")
+ *   - maemulSer ⭐: 매물 일련번호 — 사이트가 설계한 매물 단위 식별자 (같은 매물의 토지/건물은 같은 값)
+ *   - daepyoLotno: 지번 (한글/숫자) — 같은 매물 내 다른 필지 분리용 보조 키
+ *
+ * addrGbncd / printSt 등 한글 텍스트 비교는 회피 — 같은 매물의 지번주소(A) row 와 도로명주소(R) row 가
+ * 분리되는 함정 발생 (실측 2026-05-04: 2023타경57289 / 252-1 mok=1(A 화장동) + mok=2(R 조은길)).
  *
  * 대표 row 선정 우선순위:
  *   1. jimokList 채워진 row (= 토지 정보 있는 row)
@@ -194,12 +198,15 @@ function groupCourtRawItems(items: CourtRawListItem[]): CourtGroup[] {
 function makeGroupKey(it: CourtRawListItem): string {
   // 빈 docid 케이스 방지 — docid 가 빈값이면 그룹핑 안 함 (단독 처리)
   if (!it.docid) return `__solo__${Math.random()}`;
-  return [
-    it.boCd ?? "",
-    it.saNo ?? "",
-    (it.daepyoLotno ?? "").trim(),
-    it.addrGbncd ?? "",
-  ].join("|");
+  const bo = it.boCd ?? "";
+  const sa = it.saNo ?? "";
+  const mae = (it.maemulSer ?? "").toString().trim();
+  const lot = (it.daepyoLotno ?? "").trim();
+  // 핵심 코드 (법원/사건/매물) 중 하나라도 비면 단독 처리 — 잘못된 묶임 방지
+  if (!bo || !sa || !mae) return `__solo__${it.docid}`;
+  // 지번 빈값도 단독 처리 (같은 매물 안에서도 지번 없는 row 는 별개로 취급)
+  if (!lot) return `__solo__${it.docid}`;
+  return [bo, sa, mae, lot].join("|");
 }
 
 function pickRepresentative(rows: CourtRawListItem[]): CourtRawListItem {
