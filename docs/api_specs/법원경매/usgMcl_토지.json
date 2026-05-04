@@ -1,0 +1,15 @@
+{
+    "status": 200,
+    "message": "중분류 목록 조회가 완료되었습니다.",
+    "timestamp": 1777897993349,
+    "errors": null,
+    "data": {
+        "usgMclLst": [
+            {
+                "name": "지목",
+                "code": "10100"
+            }
+        ]
+    },
+    "token": null
+}
