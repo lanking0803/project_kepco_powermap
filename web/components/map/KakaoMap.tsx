@@ -188,114 +188,6 @@ interface Props {
   onSolarMarkerClick?: (marker: SolarMarker) => void;
 }
 
-/**
- * 새 마커 SVG — 3시설 병렬 + 정량 비율 표시.
- *
- * 각 줄은 가로 막대로, 빨강 길이가 "부족 비율(%)"을 의미한다.
- * 사용자는 한 마커만 봐도 시설별로 얼마나 부족한지 직관적으로 인지.
- *
- *   ┌─────────┐
- *   │██████▓▓│  ← 변전소  75% 부족
- *   │▓▓▓▓▓▓▓▓│  ← 주변압기 모두 여유
- *   │███▓▓▓▓▓│  ← 배전선로 38% 부족
- *   └────┬────┘
- *        ▼
- */
-/** 고해상도(Retina) 디스플레이에서 선명하게 렌더링하기 위한 스케일 */
-const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 3) : 1;
-
-function makeMarkerSvg(
-  ratios: MarkerRatios,
-  count: number,
-  selected: boolean = false
-): string {
-  const cardW = 28;
-  const cardH = 30;
-  const arrowH = 8;
-  const totalH = cardH + arrowH;
-
-  // 선택 상태: 주황 테두리 + 드롭섀도, 일반: 얇은 회색 테두리
-  const outlineColor = selected ? "#f97316" : "rgba(0,0,0,0.35)";
-  const outlineWidth = selected ? 2.5 : 1;
-
-  const showBadge = count > 1;
-  const badgeText = count > 9999 ? "9999+" : String(count);
-  const badgeWidth = badgeText.length <= 2 ? 18 : badgeText.length === 3 ? 22 : badgeText.length === 4 ? 28 : 34;
-  const badgeH = 14;
-  const badgeGap = 2; // 카드와 배지 사이 간격
-  // 배지는 카드 우측 옆에 분리해 둬서 줄 위에 안 겹치게
-  const w = showBadge ? cardW + badgeGap + badgeWidth : cardW;
-
-  // 배지 위치 — 카드 옆, 세로 중앙
-  const badgeX = cardW + badgeGap;
-  const badgeY = (cardH - badgeH) / 2;
-
-  const badge = showBadge
-    ? `<rect x="${badgeX}" y="${badgeY}" width="${badgeWidth}" height="${badgeH}" rx="7" ry="7"
-         fill="#1f2937" stroke="white" stroke-width="1.5"/>
-       <text x="${badgeX + badgeWidth / 2}" y="${badgeY + 10}" text-anchor="middle"
-         font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="white">${badgeText}</text>`
-    : "";
-
-  // 줄 3개의 y/x 좌표
-  const stripeH = 6;
-  const gap = 2;
-  const startY = 4;
-  const stripeX = 3;
-  const stripeW = cardW - 6;
-
-  /** 한 줄 그리기: 파란 배경(여유) + 빨간 오버레이(부족 비율 길이) */
-  const stripe = (y: number, noPct: number): string => {
-    const clampedNo = Math.max(0, Math.min(100, noPct));
-    const redW = (stripeW * clampedNo) / 100;
-    return `
-      <rect x="${stripeX}" y="${y}" width="${stripeW}" height="${stripeH}" rx="1" fill="${STATUS_BLUE}"/>
-      ${
-        redW > 0
-          ? `<rect x="${stripeX}" y="${y}" width="${redW.toFixed(2)}" height="${stripeH}" rx="1" fill="${STATUS_RED}"/>`
-          : ""
-      }
-    `;
-  };
-
-  const y1 = startY;
-  const y2 = startY + stripeH + gap;
-  const y3 = startY + (stripeH + gap) * 2;
-
-  const arrowPath = `M${cardW / 2 - 5} ${cardH} L${cardW / 2} ${totalH - 1} L${cardW / 2 + 5} ${cardH} Z`;
-
-  // 선택 시 드롭섀도 필터
-  const shadowFilter = selected
-    ? `<defs><filter id="ds" x="-30%" y="-30%" width="160%" height="160%">
-         <feDropShadow dx="0" dy="1" stdDeviation="2.5" flood-color="#f97316" flood-opacity="0.5"/>
-       </filter></defs>`
-    : "";
-  const filterAttr = selected ? ' filter="url(#ds)"' : "";
-
-  // DPR 배율로 래스터화 크기를 키워 고해상도 디스플레이에서 선명하게 표시
-  const renderW = Math.round((w + 4) * DPR);
-  const renderH = Math.round((totalH + 2) * DPR);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${renderW}" height="${renderH}" viewBox="-2 -2 ${w + 4} ${totalH + 2}">
-    ${shadowFilter}
-    <g${filterAttr}>
-    <!-- 화살표 -->
-    <path d="${arrowPath}" fill="white" stroke="${outlineColor}" stroke-width="${outlineWidth}" stroke-linejoin="round"/>
-    <!-- 카드 본체 -->
-    <rect x="0.5" y="0.5" width="${cardW - 1}" height="${cardH - 1}" rx="3" ry="3"
-      fill="white" stroke="${outlineColor}" stroke-width="${outlineWidth}"/>
-    <!-- 3개 시설 줄 (각각 비율 막대) -->
-    ${stripe(y1, ratios.substNoPct)}
-    ${stripe(y2, ratios.mtrNoPct)}
-    ${stripe(y3, ratios.dlNoPct)}
-    <!-- 화살표 이음새 마감 -->
-    <line x1="${cardW / 2 - 5}" y1="${cardH - 0.5}" x2="${cardW / 2 + 5}" y2="${cardH - 0.5}"
-      stroke="white" stroke-width="1.2"/>
-    ${badge}
-    </g>
-  </svg>`;
-  return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
-}
-
 /** 평수(㎡→평) 압축 라벨 — 자연취락지구 마커 텍스트용.
  *  영업이 한 눈에 우선순위 판단할 수 있게 1~3자 안에 떨어지도록 단위 자동.
  *  예: 5,000㎡ → "1.5K", 100,000㎡ → "30K", 5,000,000㎡ → "1.5M" */
@@ -421,21 +313,6 @@ function makeGroupMarkerHtml(label: string, count: number, tier: GroupTier, key:
     <div class="name">${safeLabel}</div>
     <div class="count">${count.toLocaleString()}</div>
   </div>`;
-}
-
-/** 마커 사이즈 헬퍼 — 카드 폭/총 높이 + 우측 배지 영역 고려 */
-function markerSize(count: number): { w: number; h: number } {
-  const cardW = 28;
-  const cardH = 30;
-  const arrowH = 8;
-  const badgeGap = 2;
-  const showBadge = count > 1;
-  const badgeText = count > 9999 ? "9999+" : String(count);
-  const badgeWidth = badgeText.length <= 2 ? 18 : badgeText.length === 3 ? 22 : badgeText.length === 4 ? 28 : 34;
-  return {
-    w: showBadge ? cardW + badgeGap + badgeWidth : cardW,
-    h: cardH + arrowH,
-  };
 }
 
 /**
