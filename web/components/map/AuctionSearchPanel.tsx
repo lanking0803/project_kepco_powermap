@@ -32,7 +32,12 @@ import {
   type AuctionPersistedState,
   type AuctionSearchUiParams,
 } from "@/lib/modes/modes/auction";
-import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
+import {
+  fetchSigungus,
+  fetchEupmyeondongs,
+  type SigunguEntry,
+  type EupmyeondongEntry,
+} from "@/lib/api/regions";
 import { formatWon } from "@/lib/format/won";
 import { jibunFromPnu } from "@/lib/geo/pnu";
 import type { AuctionListItem } from "@/lib/hyphen/types";
@@ -107,6 +112,32 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
     };
   }, []);
 
+  /** 읍·면·동 마스터 — 시군구 변경 시 lazy fetch.
+   * FacilitySearchPanel 패턴 미러. 경매에선 읍면동이 선택사항(전체 옵션 노출). */
+  const [eupms, setEupms] = useState<EupmyeondongEntry[]>([]);
+  const [eupmsLoading, setEupmsLoading] = useState(false);
+  useEffect(() => {
+    if (!params.sigunguCode) {
+      setEupms([]);
+      return;
+    }
+    let alive = true;
+    setEupmsLoading(true);
+    fetchEupmyeondongs(params.sigunguCode)
+      .then((items) => {
+        if (alive) setEupms(items);
+      })
+      .catch((e) => {
+        console.error("[AuctionSearchPanel] 읍·면·동 로드 실패", e);
+      })
+      .finally(() => {
+        if (alive) setEupmsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [params.sigunguCode]);
+
   /** 시도 unique 목록 */
   const sidos = useMemo(() => {
     const set = new Set<string>();
@@ -129,9 +160,21 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
     if (sigungus.length === 0) return;
     const stillValid = sigungus.some((s) => s.label === params.sigungu);
     if (!stillValid) {
-      setParams((p) => ({ ...p, sigungu: "", sigunguCode: "" }));
+      setParams((p) => ({ ...p, sigungu: "", sigunguCode: "", emdong: "" }));
     }
   }, [sigungus, params.sigungu]);
+
+  /** 시군구 변경 또는 읍면동 데이터 로드 후 — 무효 emdong 자동 초기화.
+   * 다른 시군구의 읍면동 라벨이 sessionStorage 에 남아있을 때 안 비워주면
+   * 잘못된 검색 파라미터로 호출됨. eupms 비어있는 동안은 보류 (lazy fetch 진행 중). */
+  useEffect(() => {
+    if (!params.emdong) return;
+    if (eupms.length === 0) return;
+    const stillValid = eupms.some((e) => e.label === params.emdong);
+    if (!stillValid) {
+      setParams((p) => ({ ...p, emdong: "" }));
+    }
+  }, [eupms, params.emdong]);
 
   // ─── 영속화 ──────────────────────────────────────────────
   useEffect(() => {
@@ -302,6 +345,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
                     sido: newSido,
                     sigungu: isSejong ? newSido : "",
                     sigunguCode: sejongRow?.code ?? "",
+                    emdong: "",
                   }));
                 }}
                 className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
@@ -332,6 +376,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
                     ...p,
                     sigungu: label,
                     sigunguCode: found?.code ?? "",
+                    emdong: "",
                   }));
                 }}
                 className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
@@ -352,15 +397,27 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
             </Field>
 
             <Field label="읍면동">
-              <input
-                type="text"
-                placeholder="예: 대곶면 (선택)"
+              <select
                 value={params.emdong}
+                disabled={!params.sigunguCode || eupmsLoading}
                 onChange={(e) =>
                   setParams((p) => ({ ...p, emdong: e.target.value }))
                 }
-                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none"
-              />
+                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">
+                  {!params.sigunguCode
+                    ? "(시군구 먼저 선택)"
+                    : eupmsLoading
+                    ? "불러오는 중…"
+                    : "전체 (선택 안 함)"}
+                </option>
+                {eupms.map((x) => (
+                  <option key={x.code} value={x.label}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
         </Section>
