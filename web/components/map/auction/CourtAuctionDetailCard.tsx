@@ -406,6 +406,9 @@ function DetailExtra({
         lowest={clickedItem.최저가}
       />
 
+      {/* 매각 비고 / 권리분석 단서 — 분묘기지권/유치권/일괄매각/특수조건 */}
+      <RemarksSection list={detail.dlt_dspslGdsDspslObjctLst ?? []} />
+
       {/* 사건 기본 정보 — 담당계 전화 + 접수/명령일 */}
       <BasicInfoSection bas={detail.dma_csBasInf} />
 
@@ -419,8 +422,18 @@ function DetailExtra({
       {/* 매각 조건 — 사건 단위 1번 표시 (보증금률/공고기간) */}
       <SaleConditionSection list={detail.dlt_dspslGdsDspslObjctLst ?? []} />
 
-      {/* 회차 기일 이력 */}
-      <DxdyHistorySection list={detail.dlt_rletCsGdsDtsDxdyInf ?? []} />
+      {/* 회차별 가격 변화 + 진행상태 통합 (펼친 후 풍부 버전) */}
+      <RoundsSection
+        rounds={clickedItem.회차별최저가}
+        goods={detail.dlt_dspslGdsDspslObjctLst ?? []}
+        dxdyList={detail.dlt_rletCsGdsDtsDxdyInf ?? []}
+      />
+
+      {/* 회차 기일 이력 — 진행분 + 다음 매각기일 예정 합성 */}
+      <DxdyHistorySection
+        list={detail.dlt_rletCsGdsDtsDxdyInf ?? []}
+        goods={detail.dlt_dspslGdsDspslObjctLst ?? []}
+      />
 
       {/* 2컬럼 — 당사자 + 배당요구종기 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2.5">
@@ -502,6 +515,142 @@ function ClaimVsLowestInsight({
       </div>
     </Section>
   );
+}
+
+// ─── 매각 비고 / 권리분석 단서 ──────────────────────────
+//
+// dspslGdsRmk — 법원이 매물에 대해 명시한 권리/조건 비고.
+// 분묘기지권, 유치권, 법정지상권, 일괄매각, 농지취득자격, 인수조건 등
+// 매수자 입장에서 가장 중요한 정보가 들어있는 자유 텍스트 필드.
+//
+// 처리:
+//  - dlt_dspslGdsDspslObjctLst[0].dspslGdsRmk 1개만 사용 (사건 단위로 동일)
+//  - 마침표/괄호로 자연 분리해서 bullet 리스트로 표시
+//  - 위험 키워드 색상 강조
+
+const RISK_KEYWORDS = [
+  "분묘기지권",
+  "분묘",
+  "유치권",
+  "법정지상권",
+  "지상권",
+  "농지취득",
+  "선순위",
+  "별도등기",
+  "특별매각조건",
+  "예고등기",
+  "재매각",
+  "우선매수",
+  "대항력",
+  "임차인",
+  "인수",
+  "별도 확인",
+  "별도확인",
+];
+
+const HIGHLIGHT_BADGES = ["일괄매각", "개별매각", "분할매각"];
+
+function RemarksSection({
+  list,
+}: {
+  list: CourtRawDetailItem["dlt_dspslGdsDspslObjctLst"];
+}) {
+  if (!list || list.length === 0) return null;
+  // dspslGdsRmk 는 raw 응답 추가 필드 — 타입 정의엔 [key:string]:unknown 으로 흡수돼 있어
+  // string 으로 안전 변환 후 사용.
+  const rmkRaw = list[0]?.dspslGdsRmk;
+  const rmk = typeof rmkRaw === "string" ? rmkRaw.trim() : "";
+  if (!rmk) return null;
+
+  // 상단 강조 배지 (일괄매각 등)
+  const badges = HIGHLIGHT_BADGES.filter((kw) => rmk.includes(kw));
+
+  // 줄 분리 — 마침표/줄바꿈 단위
+  const bullets = splitRemarkBullets(rmk);
+
+  return (
+    <Section title="⚠️ 매각 비고 / 권리분석 단서">
+      <div className="space-y-1.5">
+        {/* 강조 배지들 */}
+        {badges.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1">
+            {badges.map((b) => (
+              <span
+                key={b}
+                className="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200"
+              >
+                {b}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* bullet 리스트 */}
+        <ul className="space-y-1">
+          {bullets.map((b, i) => (
+            <li
+              key={i}
+              className="text-[12px] text-gray-800 leading-relaxed flex gap-1.5"
+            >
+              <span className="text-amber-600 flex-shrink-0">•</span>
+              <span className="flex-1">{highlightRiskKeywords(b)}</span>
+            </li>
+          ))}
+        </ul>
+
+        <p className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+          * 법원 공고 원문 — 매수자가 인수해야 할 권리/조건 단서. 색상 강조는
+          참고용
+        </p>
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * 비고 문자열을 자연 분리 — 마침표(.) 기준.
+ * 분리 후 빈 항목 제거, 양 끝 공백 트림.
+ * 마지막에 마침표 안 붙어있어도 OK.
+ */
+function splitRemarkBullets(rmk: string): string[] {
+  return rmk
+    .split(/\.\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * 위험 키워드를 색상 강조한 JSX 반환.
+ * 키워드 등장 순서대로 분할 → 매칭된 키워드만 빨간색/주황색 강조.
+ */
+function highlightRiskKeywords(text: string): React.ReactNode {
+  if (!text) return text;
+  // 가장 긴 키워드부터 매칭하기 위해 정렬
+  const sortedKeywords = [...RISK_KEYWORDS].sort(
+    (a, b) => b.length - a.length,
+  );
+  const pattern = new RegExp(
+    `(${sortedKeywords.map(escapeRegex).join("|")})`,
+    "g",
+  );
+  const parts = text.split(pattern);
+  return parts.map((part, i) => {
+    if (sortedKeywords.includes(part)) {
+      return (
+        <span
+          key={i}
+          className="font-semibold text-rose-700 bg-rose-50 px-0.5 rounded"
+        >
+          {part}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ─── 사건 기본 정보 ───────────────────────────────────────
@@ -823,21 +972,143 @@ function SaleConditionSection({
   );
 }
 
+// ─── 회차별 가격 변화 + 진행상태 통합 ────────────────────
+//
+// 데이터 소스:
+//   - 회차별 가격: clickedItem.회차별최저가 (어댑터가 목록 응답의 notifyMinmaePriceN 으로 가공)
+//   - 현재까지 진행회차 누계: detail.dlt_dspslGdsDspslObjctLst[0].dspslDxdyDnum
+//   - 가장 최근 진행 결과: detail.dlt_rletCsGdsDtsDxdyInf 의 row 들 (보통 1건 → 마지막 진행분)
+//   - 다음 매각기일: detail.dlt_dspslGdsDspslObjctLst[0].dspslDxdyYmd
+//
+// 라벨 매칭 규칙:
+//   - 회차 ≤ dnum 이고 진행 결과 매칭되면 → 그 결과 (유찰/매각)
+//   - 회차 == dnum + 1 → "🔜 진행 예정" + 다음 매각기일
+//   - 그 외 진행분 매칭 없는 과거 회차 → "✓ 종료" (정확한 결과는 응답에 없음)
+//   - 그 외 미래 회차 → "예정"
+
+function RoundsSection({
+  rounds,
+  goods,
+  dxdyList,
+}: {
+  rounds: AuctionListItem["회차별최저가"];
+  goods: CourtRawDetailItem["dlt_dspslGdsDspslObjctLst"];
+  dxdyList: CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"];
+}) {
+  if (!rounds || rounds.length === 0) return null;
+
+  const g = goods?.[0];
+  const dnum = typeof g?.dspslDxdyDnum === "number" ? g.dspslDxdyDnum : 0;
+  const upcomingYmd = g?.dspslDxdyYmd ?? "";
+  const upcomingHm = g?.fstDspslHm ?? "";
+
+  // 진행분 마지막 row → 가장 최근 회차의 결과
+  const lastProgressed = (dxdyList ?? [])
+    .filter((r) => r.auctnDxdyKndCd === "01")
+    .sort((a, b) => (a.dxdyYmd || "").localeCompare(b.dxdyYmd || ""))
+    .at(-1);
+
+  return (
+    <Section title="📉 회차별 가격 변화">
+      <div className="space-y-1">
+        {rounds.map((r) => {
+          const isPast = r.회차 < dnum;
+          const isLastProgressed = r.회차 === dnum;
+          const isNext = r.회차 === dnum + 1;
+          const isFuture = r.회차 > dnum + 1;
+
+          let statusLabel: React.ReactNode = null;
+          let dateText = "";
+          let cls = "bg-white border-amber-100";
+          if (isLastProgressed && lastProgressed) {
+            // 가장 최근 진행 회차 — 정확한 결과 + 날짜
+            statusLabel = (
+              <DxdyResultBadge code={lastProgressed.auctnDxdyRsltCd} />
+            );
+            dateText = formatYmdDash(lastProgressed.dxdyYmd) ?? "";
+          } else if (isPast) {
+            // 과거 회차이지만 진행 결과 row 가 없음 — 종료로 표시
+            statusLabel = (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                ✓ 종료
+              </span>
+            );
+          } else if (isNext) {
+            statusLabel = (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                🔜 진행 예정
+              </span>
+            );
+            const ymd = formatYmdDash(upcomingYmd) ?? "";
+            const hm = formatHm(upcomingHm) ?? "";
+            dateText = ymd && hm ? `${ymd} ${hm}` : ymd;
+            cls = "bg-amber-50 border-amber-200";
+          } else if (isFuture) {
+            statusLabel = (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">
+                예정
+              </span>
+            );
+          }
+
+          return (
+            <div
+              key={r.회차}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded border ${cls}`}
+            >
+              <span className="text-[11px] font-bold w-6 tabular-nums text-amber-700">
+                {r.회차}회
+              </span>
+              <span className="text-[12px] tabular-nums text-gray-900 font-semibold flex-shrink-0">
+                {formatWon(r.가격)}
+              </span>
+              {r.감정대비비율 != null && (
+                <span className="text-[10px] text-amber-700 tabular-nums">
+                  ({r.감정대비비율}%)
+                </span>
+              )}
+              <span className="flex-1" />
+              {dateText && (
+                <span className="text-[11px] text-gray-500 tabular-nums">
+                  {dateText}
+                </span>
+              )}
+              {statusLabel}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+        * 진행 회차 결과는 법원 응답 기준. 과거 유찰 정확 일자는 일부 누락될 수
+        있음
+      </p>
+    </Section>
+  );
+}
+
 // ─── 회차 기일 이력 ──────────────────────────────────────
 
 function DxdyHistorySection({
   list,
+  goods,
 }: {
   list: CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"];
+  goods: CourtRawDetailItem["dlt_dspslGdsDspslObjctLst"];
 }) {
-  if (!list || list.length === 0) return null;
+  // 진행분 row + 다음 매각기일 예정 row 합성 (날짜 오름차순)
+  const merged = mergeDxdyHistoryWithUpcoming(list ?? [], goods ?? []);
+  if (merged.length === 0) return null;
   return (
-    <Section title={`📅 회차 기일 (${list.length}건)`}>
+    <Section title={`📅 회차 기일 (${merged.length}건)`}>
       <div className="space-y-1">
-        {list.map((d, i) => (
+        {merged.map((d, i) => (
           <div
             key={`${d.dxdyYmd}-${i}`}
-            className="flex items-center gap-2 px-2 py-1.5 bg-white rounded border border-amber-100"
+            className={`flex items-center gap-2 px-2 py-1.5 rounded border ${
+              d.auctnDxdyRsltCd === "-PENDING"
+                ? "bg-amber-50 border-amber-200"
+                : "bg-white border-amber-100"
+            }`}
           >
             <span className="text-[11px] font-bold w-5 tabular-nums text-amber-700">
               {i + 1}
@@ -857,6 +1128,54 @@ function DxdyHistorySection({
       </div>
     </Section>
   );
+}
+
+/**
+ * 진행분 기일 이력 + 다음 매각기일 예정 합성.
+ *  - 진행분: dlt_rletCsGdsDtsDxdyInf (보통 1~N건, 가장 최근 진행 결과들)
+ *  - 다음 매각기일: dlt_dspslGdsDspslObjctLst[0].dspslDxdyYmd / fstDspslHm
+ *  - 진행분에 이미 같은 날짜 있으면 합성 안 함 (중복 방지)
+ *  - 결과 코드 "-PENDING" 으로 마킹 → DxdyResultBadge 가 "🔜 예정" 배지 표시
+ */
+function mergeDxdyHistoryWithUpcoming(
+  list: CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"],
+  goods: CourtRawDetailItem["dlt_dspslGdsDspslObjctLst"],
+): CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"] {
+  const out = [...list];
+  const g = goods?.[0];
+  if (!g) return sortByDxdyYmd(out);
+
+  const upcomingYmd = g.dspslDxdyYmd;
+  if (!upcomingYmd || upcomingYmd.length !== 8) return sortByDxdyYmd(out);
+
+  // 이미 진행분에 동일 날짜 있으면 추가 안 함
+  if (out.some((r) => r.dxdyYmd === upcomingYmd)) return sortByDxdyYmd(out);
+
+  // 장소: 진행분의 장소를 재사용 (보통 같은 법정에서 진행)
+  const placeName = out.find((r) => r.dxdyPlcNm)?.dxdyPlcNm ?? "";
+
+  out.push({
+    cortOfcCd: g.cortOfcCd,
+    csNo: g.csNo,
+    dspslGdsSeq: g.dspslGdsSeq,
+    auctnDxdyKndCd: "01",
+    dxdyYmd: upcomingYmd,
+    dxdyHm: g.fstDspslHm ?? "",
+    dxdyPlcNm: placeName,
+    auctnDxdyRsltCd: "-PENDING",
+  });
+
+  return sortByDxdyYmd(out);
+}
+
+function sortByDxdyYmd(
+  rows: CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"],
+): CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"] {
+  return [...rows].sort((a, b) => {
+    const ay = a.dxdyYmd || "";
+    const by = b.dxdyYmd || "";
+    return ay.localeCompare(by);
+  });
 }
 
 /** 토지/건물/집합 구분 배지 — auctnLstDvsCd: 01=토지, 02=건물, 03=집합건물. */
@@ -886,9 +1205,13 @@ function ObjectKindBadge({ code }: { code: string }) {
 
 function DxdyResultBadge({ code }: { code: string }) {
   // 001=진행 / 002=유찰 / 003=매각 (실측 패턴 기준)
+  // -PENDING = UI 합성 코드: 다음 매각기일 예정 행
   let label = code || "—";
   let cls = "bg-gray-100 text-gray-600";
-  if (code === "002") {
+  if (code === "-PENDING") {
+    label = "🔜 예정";
+    cls = "bg-blue-50 text-blue-700 border border-blue-200";
+  } else if (code === "002") {
     label = "유찰";
     cls = "bg-orange-50 text-orange-700";
   } else if (code === "003") {
