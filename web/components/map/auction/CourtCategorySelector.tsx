@@ -25,16 +25,22 @@ import {
 
 interface Props {
   /** 현재 선택된 court 소분류 코드 다중. 빈 배열 = 전체. */
-  sclCodes: string[];
+  sclCodes: string[] | undefined;
   /** 변경 콜백. */
   onChange: (next: string[]) => void;
 }
 
-export default function CourtCategorySelector({ sclCodes, onChange }: Props) {
+export default function CourtCategorySelector({
+  sclCodes: sclCodesRaw,
+  onChange,
+}: Props) {
   const [expandedGroup, setExpandedGroup] = useState<CourtCategoryGroup | null>(
     null,
   );
 
+  // sessionStorage 에 저장된 이전 버전 params 엔 courtSclCodes 필드가 없을 수 있음.
+  // undefined 방어 — 복원 시 빈 배열 취급.
+  const sclCodes = sclCodesRaw ?? [];
   const isAll = sclCodes.length === 0;
 
   const toggleGroup = (group: CourtCategoryGroup) => {

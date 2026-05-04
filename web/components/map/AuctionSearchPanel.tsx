@@ -75,9 +75,12 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
       ? loadModeState<AuctionPersistedState>(MODE_ID)
       : null;
 
-  const [params, setParams] = useState<AuctionSearchUiParams>(
-    persisted?.params ?? AUCTION_EMPTY_PARAMS,
-  );
+  const [params, setParams] = useState<AuctionSearchUiParams>(() => {
+    // sessionStorage 의 이전 버전 params 에 신규 필드(courtSclCodes 등) 누락 가능 →
+    // EMPTY_PARAMS 위에 persisted 를 덮어 써서 누락 필드는 기본값 보장.
+    if (!persisted?.params) return AUCTION_EMPTY_PARAMS;
+    return { ...AUCTION_EMPTY_PARAMS, ...persisted.params };
+  });
   const [results, setResults] = useState<AuctionListItem[]>(
     persisted?.results ?? [],
   );
