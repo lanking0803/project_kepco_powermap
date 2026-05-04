@@ -403,7 +403,7 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
         </Section>
 
         <p className="text-[11px] text-gray-500 leading-relaxed">
-          🏭 건축물대장 기반 영업 타겟 발굴. 도시는 동, 농촌은 리 단위로 조회. "전체" 선택 시 면의 모든 리를 한 번에.
+          🏭 건축물대장 기반 영업 타겟 발굴. 도시는 동, 농촌은 리 단위로 조회. &ldquo;전체&rdquo; 선택 시 면의 모든 리를 한 번에.
         </p>
 
         <div className="flex gap-2">
