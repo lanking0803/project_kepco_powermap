@@ -15,7 +15,7 @@
 - [SUNLAP 결제 일정](project_payment_schedule.md) 💰 — 선금 200만 수령(2026-04-21). 잔금 1,210만은 완료 후. 서버비 월 5만 매월 21일
 - [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 협상 맥락 + 진행 상태. 가격표 docs/견적_1차2차.md
 - 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
-- 🚀 [2차 착수 인덱스](project_phase2_kickoff.md) ⭐ — 700만 5개 항목 작업 분할 + 1순위=공매 통합(350만)
+- ✅ [2차 출시 완료](project_phase2_kickoff.md) ⭐ — 700만 6종 모두 라이브(공매/취락/경매/시설/공시지가/실거래). 잔금 610만 청구 준비
 - 🏛 [공매·경매 통합 의도](project_auction_intent.md) ⭐ — "저가 매입 기회 발굴". 경매 Phase 1+2 개발 완료(2026-05-02). 테스트모드 시연 단계
 - 🔨 [경매 D4 완료 — 진입 흐름 통합](project_auction_d4_done.md) ⭐ — 검색 카드/마커/카드/모달 4경로 모두 ParcelPanel [경매] 탭으로 수렴 (2026-05-03)
 - 🪤 [sessionStorage 복원 패턴](feedback_session_restore_pattern.md) ⚠️ — 모드 패널 마운트 시 복원된 results 를 부모로 흘려야 마커 회귀 안 함

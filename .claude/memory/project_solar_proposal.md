@@ -100,8 +100,10 @@ type: project
 - ➕ 카카오 로드뷰 (50만) — 2026-04-20
 - ➕ 수집기 3→5 증설 + 도메인 sunlap.kr 연결 (무상 서비스)
 
-### 🔜 다음 착수 — 2차 영업 대상 자동 발굴 시스템 (700만)
-- 작업 분할 → [project_phase2_kickoff.md](project_phase2_kickoff.md)
+### ✅ 2차 영업 대상 자동 발굴 시스템 (700만) — 출시 완료 (2026-05-05 점검)
+- 6종 모두 라이브: 시설(facility) / 공매(onbid) / 경매(auction) / 취락지구(uq) / 공시지가 / 실거래
+- 상세 → [project_phase2_kickoff.md](project_phase2_kickoff.md)
+- 잔금 610만 청구 준비 단계
 
 ### ⏳ 1차 잔여 / 대기
 - ➕ 조례 옵션 (+30만) — 의뢰자 노출 기준 회신 대기 (시단위/시군구/태양광 키워드/조례+규칙)
