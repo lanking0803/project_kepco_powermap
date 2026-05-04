@@ -1,9 +1,9 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect --
+/* eslint-disable @typescript-eslint/no-explicit-any --
  * 카카오 SDK 는 비동기 로드 + 동적 글로벌(window.kakao.maps) 패턴이라 strict typing 부적합.
- * SDK 로드 완료 → setLoaded(true) 패턴은 외부 시스템 동기화로 set-state-in-effect 의도된 케이스.
  * 메인 components/map/KakaoMap.tsx 와 동일 처리 (코드베이스 일관성).
+ * (set-state-in-effect 룰은 eslint.config.mjs 에서 전역 OFF — 별도 표기 불필요)
  */
 
 /**

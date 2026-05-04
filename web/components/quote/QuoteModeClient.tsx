@@ -1,9 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect --
- * fetch 시작 시 loading=true 로 외부 비동기 상태와 동기화 — 의도된 effect.
- */
-
 /**
  * 견적 모드 풀스크린 클라이언트 — /quote/[pnu] 라우트 본체.
  *
