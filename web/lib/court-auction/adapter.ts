@@ -422,38 +422,7 @@ export function courtToAuctionItem(
     },
     // 지번 (본번-부번) — composeJibun 으로 산 표기 보강 후 그대로 박음.
     지번: composeJibun(raw) ?? (raw.daepyoLotno ?? "").trim(),
-    // 회차별 최저가 이력 — 영업 시각: 가격 하락 추이 시각화용
-    회차별최저가: extractRoundPrices(raw),
   };
-}
-
-/**
- * raw.notifyMinmaePrice1~4 + Rate1~2 → 회차별 가격 배열.
- * 0/빈값 회차는 제외. 첫 회차부터 의미 있는 회차만 반환.
- */
-function extractRoundPrices(
-  raw: CourtRawListItem,
-): Array<{ 회차: number; 가격: number; 감정대비비율: number | null }> {
-  const prices = [
-    raw.notifyMinmaePrice1,
-    raw.notifyMinmaePrice2,
-    raw.notifyMinmaePrice3,
-    raw.notifyMinmaePrice4,
-  ];
-  const rates = [raw.notifyMinmaePriceRate1, raw.notifyMinmaePriceRate2];
-  const out: Array<{ 회차: number; 가격: number; 감정대비비율: number | null }> = [];
-  prices.forEach((p, i) => {
-    const price = Number(p) || 0;
-    if (price <= 0) return;
-    const rateRaw = i < 2 ? rates[i] : "";
-    const rate = Number(rateRaw);
-    out.push({
-      회차: i + 1,
-      가격: price,
-      감정대비비율: Number.isFinite(rate) && rate > 0 ? rate : null,
-    });
-  });
-  return out;
 }
 
 // ─── 헬퍼 ─────────────────────────────────────────────────

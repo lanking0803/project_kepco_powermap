@@ -230,35 +230,6 @@ function OverviewCard({
           />
         )}
 
-        {/* 회차별 최저가 — 영업 시각: 가격 하락 추이 */}
-        {item.회차별최저가 && item.회차별최저가.length > 1 && (
-          <div className="border-t border-amber-100 pt-1.5 mt-1.5">
-            <div className="text-[11px] text-gray-500 mb-1">
-              📉 회차별 최저가
-            </div>
-            <div className="flex items-center gap-1 flex-wrap">
-              {item.회차별최저가.map((r) => (
-                <div
-                  key={r.회차}
-                  className="flex items-center gap-1 bg-white border border-amber-200 rounded px-1.5 py-0.5"
-                >
-                  <span className="text-[10px] text-gray-500 font-semibold">
-                    {r.회차}회
-                  </span>
-                  <span className="text-[12px] tabular-nums text-gray-900">
-                    {formatWon(r.가격)}
-                  </span>
-                  {r.감정대비비율 != null && (
-                    <span className="text-[10px] text-amber-600 tabular-nums">
-                      ({r.감정대비비율}%)
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* 다음 회차 추정 */}
         {showNextEstimate && (
           <div className="border-t border-amber-100 pt-1.5 mt-1.5">
@@ -421,13 +392,6 @@ function DetailExtra({
 
       {/* 매각 조건 — 사건 단위 1번 표시 (보증금률/공고기간) */}
       <SaleConditionSection list={detail.dlt_dspslGdsDspslObjctLst ?? []} />
-
-      {/* 회차별 가격 변화 + 진행상태 통합 (펼친 후 풍부 버전) */}
-      <RoundsSection
-        rounds={clickedItem.회차별최저가}
-        goods={detail.dlt_dspslGdsDspslObjctLst ?? []}
-        dxdyList={detail.dlt_rletCsGdsDtsDxdyInf ?? []}
-      />
 
       {/* 회차 기일 이력 — 진행분 + 다음 매각기일 예정 합성 */}
       <DxdyHistorySection
@@ -968,120 +932,6 @@ function SaleConditionSection({
           />
         )}
       </div>
-    </Section>
-  );
-}
-
-// ─── 회차별 가격 변화 + 진행상태 통합 ────────────────────
-//
-// 데이터 소스:
-//   - 회차별 가격: clickedItem.회차별최저가 (어댑터가 목록 응답의 notifyMinmaePriceN 으로 가공)
-//   - 현재까지 진행회차 누계: detail.dlt_dspslGdsDspslObjctLst[0].dspslDxdyDnum
-//   - 가장 최근 진행 결과: detail.dlt_rletCsGdsDtsDxdyInf 의 row 들 (보통 1건 → 마지막 진행분)
-//   - 다음 매각기일: detail.dlt_dspslGdsDspslObjctLst[0].dspslDxdyYmd
-//
-// 라벨 매칭 규칙:
-//   - 회차 ≤ dnum 이고 진행 결과 매칭되면 → 그 결과 (유찰/매각)
-//   - 회차 == dnum + 1 → "🔜 진행 예정" + 다음 매각기일
-//   - 그 외 진행분 매칭 없는 과거 회차 → "✓ 종료" (정확한 결과는 응답에 없음)
-//   - 그 외 미래 회차 → "예정"
-
-function RoundsSection({
-  rounds,
-  goods,
-  dxdyList,
-}: {
-  rounds: AuctionListItem["회차별최저가"];
-  goods: CourtRawDetailItem["dlt_dspslGdsDspslObjctLst"];
-  dxdyList: CourtRawDetailItem["dlt_rletCsGdsDtsDxdyInf"];
-}) {
-  if (!rounds || rounds.length === 0) return null;
-
-  const g = goods?.[0];
-  const dnum = typeof g?.dspslDxdyDnum === "number" ? g.dspslDxdyDnum : 0;
-  const upcomingYmd = g?.dspslDxdyYmd ?? "";
-  const upcomingHm = g?.fstDspslHm ?? "";
-
-  // 진행분 마지막 row → 가장 최근 회차의 결과
-  const lastProgressed = (dxdyList ?? [])
-    .filter((r) => r.auctnDxdyKndCd === "01")
-    .sort((a, b) => (a.dxdyYmd || "").localeCompare(b.dxdyYmd || ""))
-    .at(-1);
-
-  return (
-    <Section title="📉 회차별 가격 변화">
-      <div className="space-y-1">
-        {rounds.map((r) => {
-          const isPast = r.회차 < dnum;
-          const isLastProgressed = r.회차 === dnum;
-          const isNext = r.회차 === dnum + 1;
-          const isFuture = r.회차 > dnum + 1;
-
-          let statusLabel: React.ReactNode = null;
-          let dateText = "";
-          let cls = "bg-white border-amber-100";
-          if (isLastProgressed && lastProgressed) {
-            // 가장 최근 진행 회차 — 정확한 결과 + 날짜
-            statusLabel = (
-              <DxdyResultBadge code={lastProgressed.auctnDxdyRsltCd} />
-            );
-            dateText = formatYmdDash(lastProgressed.dxdyYmd) ?? "";
-          } else if (isPast) {
-            // 과거 회차이지만 진행 결과 row 가 없음 — 종료로 표시
-            statusLabel = (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-                ✓ 종료
-              </span>
-            );
-          } else if (isNext) {
-            statusLabel = (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                🔜 진행 예정
-              </span>
-            );
-            const ymd = formatYmdDash(upcomingYmd) ?? "";
-            const hm = formatHm(upcomingHm) ?? "";
-            dateText = ymd && hm ? `${ymd} ${hm}` : ymd;
-            cls = "bg-amber-50 border-amber-200";
-          } else if (isFuture) {
-            statusLabel = (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">
-                예정
-              </span>
-            );
-          }
-
-          return (
-            <div
-              key={r.회차}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded border ${cls}`}
-            >
-              <span className="text-[11px] font-bold w-6 tabular-nums text-amber-700">
-                {r.회차}회
-              </span>
-              <span className="text-[12px] tabular-nums text-gray-900 font-semibold flex-shrink-0">
-                {formatWon(r.가격)}
-              </span>
-              {r.감정대비비율 != null && (
-                <span className="text-[10px] text-amber-700 tabular-nums">
-                  ({r.감정대비비율}%)
-                </span>
-              )}
-              <span className="flex-1" />
-              {dateText && (
-                <span className="text-[11px] text-gray-500 tabular-nums">
-                  {dateText}
-                </span>
-              )}
-              {statusLabel}
-            </div>
-          );
-        })}
-      </div>
-      <p className="text-[10px] text-gray-400 mt-1.5 leading-tight">
-        * 진행 회차 결과는 법원 응답 기준. 과거 유찰 정확 일자는 일부 누락될 수
-        있음
-      </p>
     </Section>
   );
 }

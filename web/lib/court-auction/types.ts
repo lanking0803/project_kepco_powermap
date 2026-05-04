@@ -154,14 +154,6 @@ export interface CourtRawListItem {
   maeAmt: string;
   /** 유찰 횟수 */
   yuchalCnt: string;
-  /** 회차별 최저가 (1~4회) */
-  notifyMinmaePrice1: string;
-  notifyMinmaePrice2: string;
-  notifyMinmaePrice3: string;
-  notifyMinmaePrice4: string;
-  /** 회차별 최저가 비율 */
-  notifyMinmaePriceRate1: string;
-  notifyMinmaePriceRate2: string;
 
   // ── 매각기일 ──
   /** 매각기일 YYYYMMDD ("20260511") */

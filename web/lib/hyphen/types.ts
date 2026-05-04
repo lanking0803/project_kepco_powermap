@@ -284,18 +284,6 @@ export interface AuctionListItem {
    * UI 카드/모달이 시군구 부분 잘라낸 짧은 지번 표시 시 사용.
    */
   지번?: string;
-
-  /**
-   * Court 채널 전용 — 회차별 최저가 이력 (1~4회).
-   * raw.notifyMinmaePrice1~4 (원) + raw.notifyMinmaePriceRate1~2 (감정대비 %).
-   * 0/null 인 회차는 미존재 — UI 가 알아서 거름.
-   * 영업 시각: 회차마다 가격이 어떻게 떨어졌는지 한눈에 + 다음 회차 추정 정확도 ↑.
-   */
-  회차별최저가?: Array<{
-    회차: number;
-    가격: number;
-    감정대비비율: number | null;
-  }>;
 }
 
 // ─── 경매사건상세보기 (au0147001254) ──────────────────────
