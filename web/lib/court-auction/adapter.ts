@@ -25,6 +25,9 @@ import type { CourtRawListItem } from "./types";
 /**
  * Court raw 매물 배열 → AuctionListItem 배열.
  *
+ * 0) 같은 (사건+지번) row 그룹핑 — court 응답은 한 매물의 토지/건물을 별도 row 로 보냄
+ *    (예: 2023타경57289 / 252-1 → mok=1 토지 + mok=2 건물 = 2 row → 1 카드로 합침)
+ *    그룹 크기를 물건번호갯수 에 박아 UI 카드 배지로 표시
  * 1) bjd_master 일괄 조회 (sep_4=hjguDong, sep_5=hjguRd 매칭)
  * 2) 매물별 좌표/bjd_code 매핑 후 정규화
  *
@@ -37,11 +40,18 @@ export async function courtToAuctionItems(
 ): Promise<AuctionListItem[]> {
   if (rawItems.length === 0) return [];
 
+  // ── 0) (사건+지번) 그룹핑 ────────────────────────────
+  // court 응답은 같은 매물의 토지/건물을 mokmulSer 만 다른 별도 row 로 내려보냄.
+  // 같은 (boCd, saNo, daepyoLotno, addrGbncd) 키 = 같은 매물.
+  // 다른 사건 또는 다른 지번 = 별개 매물 → 그룹 안 됨 (그대로 1건씩 유지).
+  const grouped = groupCourtRawItems(rawItems);
+
   // ── 1) bjd_master 역조회 ────────────────────────────
   // hjguDong (예: "돌산읍") + hjguRd (예: "금봉리")
   // 리가 빈값인 매물도 있음 → sep_5 IS NULL 매칭
   const lookupKeys = new Set<string>();
-  for (const it of rawItems) {
+  for (const g of grouped) {
+    const it = g.representative;
     const sep4 = (it.hjguDong || "").trim();
     const sep5 = (it.hjguRd || "").trim();
     if (sep4) lookupKeys.add(`${sep4}|${sep5}`);
@@ -113,17 +123,141 @@ export async function courtToAuctionItems(
     }
   }
 
-  // ── 2) 매물별 정규화 ────────────────────────────────
-  return rawItems.map((raw) => {
+  // ── 2) 매물별 정규화 (그룹 단위) ───────────────────
+  return grouped.map((g) => {
+    const raw = g.representative;
     const sep4 = (raw.hjguDong || "").trim();
     const sep5 = (raw.hjguRd || "").trim();
     const key = sep4 ? `${sep4}|${sep5}` : "";
     const bjd = bjdMap.get(key);
-    return courtToAuctionItem(raw, bjd?.bjd_code ?? null, {
-      lat: bjd?.lat ?? null,
-      lng: bjd?.lng ?? null,
-    });
+    return courtToAuctionItem(
+      raw,
+      bjd?.bjd_code ?? null,
+      { lat: bjd?.lat ?? null, lng: bjd?.lng ?? null },
+      {
+        groupSize: g.rows.length,
+        landArea: g.landArea,
+        buildingArea: g.buildingArea,
+      },
+    );
   });
+}
+
+/** 그룹핑 결과 — 대표 row + 합산 정보. */
+interface CourtGroup {
+  /** 대표 row (보통 jimokList 채워진 row, 없으면 첫 row) */
+  representative: CourtRawListItem;
+  /** 그룹에 속한 모든 row (대표 포함) */
+  rows: CourtRawListItem[];
+  /** 그룹 내 토지면적 합산 (jimokList 채워진 row 의 areaList 파싱) */
+  landArea: number | null;
+  /** 그룹 내 건물면적 합산 (buldList 가 의미있는 row 의 면적) */
+  buildingArea: number | null;
+}
+
+/**
+ * 같은 (사건+지번) row 묶기.
+ *
+ * 그룹 키: boCd + saNo + daepyoLotno + addrGbncd
+ *   - boCd, saNo: 사건 단위
+ *   - daepyoLotno: 지번 단위
+ *   - addrGbncd: 일반/도로/산 구분 (예: A=일반, R=도로, S=산) — 다르면 다른 매물로 취급
+ *
+ * 대표 row 선정 우선순위:
+ *   1. jimokList 채워진 row (= 토지 정보 있는 row)
+ *   2. areaList 채워진 row
+ *   3. mokmulSer 가장 작은 row
+ */
+function groupCourtRawItems(items: CourtRawListItem[]): CourtGroup[] {
+  const groupMap = new Map<string, CourtRawListItem[]>();
+
+  // 그룹 키로 묶기 (입력 순서 보존을 위해 keysOrder 별도 관리)
+  const keysOrder: string[] = [];
+  for (const it of items) {
+    const key = makeGroupKey(it);
+    if (!groupMap.has(key)) {
+      groupMap.set(key, []);
+      keysOrder.push(key);
+    }
+    groupMap.get(key)!.push(it);
+  }
+
+  return keysOrder.map((key) => {
+    const rows = groupMap.get(key)!;
+    const representative = pickRepresentative(rows);
+    const landArea = sumLandArea(rows);
+    const buildingArea = sumBuildingArea(rows);
+    return { representative, rows, landArea, buildingArea };
+  });
+}
+
+function makeGroupKey(it: CourtRawListItem): string {
+  // 빈 docid 케이스 방지 — docid 가 빈값이면 그룹핑 안 함 (단독 처리)
+  if (!it.docid) return `__solo__${Math.random()}`;
+  return [
+    it.boCd ?? "",
+    it.saNo ?? "",
+    (it.daepyoLotno ?? "").trim(),
+    it.addrGbncd ?? "",
+  ].join("|");
+}
+
+function pickRepresentative(rows: CourtRawListItem[]): CourtRawListItem {
+  if (rows.length === 1) return rows[0];
+
+  // 1. jimokList 채워진 row 우선 (= 토지 정보 있는 row)
+  const withJimok = rows.find((r) => (r.jimokList ?? "").trim() !== "");
+  if (withJimok) return withJimok;
+
+  // 2. areaList 채워진 row 우선
+  const withArea = rows.find((r) => (r.areaList ?? "").trim() !== "");
+  if (withArea) return withArea;
+
+  // 3. mokmulSer 가장 작은 row
+  return rows.slice().sort((a, b) => {
+    const am = Number(a.mokmulSer) || 999;
+    const bm = Number(b.mokmulSer) || 999;
+    return am - bm;
+  })[0];
+}
+
+/** 그룹 내 토지면적 합산 — jimokList 채워진 row 의 areaList 만 ㎡ 환산해서 합. */
+function sumLandArea(rows: CourtRawListItem[]): number | null {
+  let sum = 0;
+  let hasAny = false;
+  for (const r of rows) {
+    if (!(r.jimokList ?? "").trim()) continue;
+    const a = parseAreaMeter(r.areaList);
+    if (a.land != null) {
+      sum += a.land;
+      hasAny = true;
+    }
+  }
+  return hasAny ? sum : null;
+}
+
+/** 그룹 내 건물면적 합산 — buldList 또는 areaList 의 건물 키워드 인 row 만. */
+function sumBuildingArea(rows: CourtRawListItem[]): number | null {
+  let sum = 0;
+  let hasAny = false;
+  for (const r of rows) {
+    // 1) buldList 직접 파싱
+    const fromBuld = parseAreaMeter(r.buldList);
+    if (fromBuld.building != null) {
+      sum += fromBuld.building;
+      hasAny = true;
+      continue;
+    }
+    // 2) areaList 가 건물 형식인 경우 (jimokList 빈 row + 구조 키워드)
+    if (!(r.jimokList ?? "").trim()) {
+      const fromArea = parseAreaMeter(r.areaList);
+      if (fromArea.building != null) {
+        sum += fromArea.building;
+        hasAny = true;
+      }
+    }
+  }
+  return hasAny ? sum : null;
 }
 
 // ─── 단일 매물 어댑터 ─────────────────────────────────
@@ -131,11 +265,21 @@ export async function courtToAuctionItems(
 /**
  * Court raw 매물 1건 + bjd 정보 → AuctionListItem.
  * bjd_master 조회는 호출자가 일괄 처리하고 결과를 주입.
+ *
+ * groupInfo (옵션):
+ *   - 같은 (사건+지번) row N개를 합친 그룹의 정보
+ *   - groupSize ≥ 2 면 카드에 "물건 N건" 배지 표시 (UI 가 물건번호갯수 > 1 보고 자동)
+ *   - 단일 row 면 미전달 또는 groupSize=1
  */
 export function courtToAuctionItem(
   raw: CourtRawListItem,
   bjdCode: string | null,
   coord: { lat: number | null; lng: number | null },
+  groupInfo?: {
+    groupSize: number;
+    landArea: number | null;
+    buildingArea: number | null;
+  },
 ): AuctionListItem {
   const 감정가 = Number(raw.gamevalAmt) || 0;
   const 최저가 = Number(raw.minmaePrice) || 0;
@@ -171,7 +315,17 @@ export function courtToAuctionItem(
   const daysLeft = computeDaysLeftFromYmd(raw.maeGiil);
   const isUrgent = daysLeft >= 0 && daysLeft <= 3;
 
-  const 면적 = parseAreaMeter(raw.areaList);
+  // 면적 — 그룹 합산값 우선, 없으면 단건 row 파싱.
+  const 면적단건 = parseAreaMeter(raw.areaList);
+  const 토지면적 = groupInfo?.landArea ?? 면적단건.land;
+  const 건물면적 = groupInfo?.buildingArea ?? 면적단건.building;
+
+  // 물건번호갯수 — 그룹 크기 (≥2 면 UI 카드 배지 자동 표시).
+  // 단일 row 그룹은 1 (배지 미표시), groupInfo 미전달 시 null (기존 호환).
+  const 물건번호갯수 =
+    groupInfo == null ? null : Math.max(1, groupInfo.groupSize);
+  // 물건번호 — 그룹의 대표 row 의 mokmulSer (또는 maemulSer fallback). 카드 배지 [N/M] 분자.
+  const 물건번호 = Number(raw.mokmulSer) || Number(raw.maemulSer) || 1;
 
   return {
     경매번호,
@@ -179,15 +333,15 @@ export function courtToAuctionItem(
     법원코드: raw.boCd ?? raw.cortOfcCd ?? "",
     사건년도,
     사건번호,
-    물건번호: Number(raw.maemulSer) || 1,
+    물건번호,
     매각기일,
     감정가,
     최저가,
     물건용도코드: Number(raw.maemulUtilCd) || 0,
     진행상태코드: Number(raw.jinstatCd) || 0,
     진행상태,
-    건물면적: 면적.building,
-    토지면적: 면적.land,
+    건물면적,
+    토지면적,
     유찰수,
     도로명주소여부: raw.addrGbncd === "R" ? 1 : 0,
     대표소재지: cleanAddr(raw.printSt),
@@ -197,7 +351,7 @@ export function courtToAuctionItem(
     토지가격비율: 1, // Court 응답엔 토지/건물 분리 비율 없음. 기본값.
     경매다용도: null,
     법원용도: raw.dspslUsgNm ?? null,
-    물건번호갯수: null,
+    물건번호갯수,
     낙찰가: null,
     용도: raw.dspslUsgNm ?? null,
     매각기일일자,
