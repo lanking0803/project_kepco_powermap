@@ -62,9 +62,9 @@ export async function fetchAuctionByPnuCourt(
     return errorResult(sweep1.apiStatus, sweep1.errMsg, targetJibun);
   }
 
-  // 1차 매칭 시도
+  // 1차 매칭 시도 — targetPnu 주입 (그룹 안에서 클릭 지번 row 를 대표로 선정)
   if (sweep1.items.length > 0) {
-    const items1 = await courtToAuctionItems(sweep1.items);
+    const items1 = await courtToAuctionItems(sweep1.items, { targetPnu: pnu });
     const matched1 = items1.filter((it) => it.pnuStandard === pnu);
     if (matched1.length > 0) {
       // ✅ 1차 매칭 성공 — 2차 호출 X, 즉시 종료
@@ -106,7 +106,7 @@ export async function fetchAuctionByPnuCourt(
 
   // 2차 매물에 1차 응답 합쳐서 docid dedup (같은 매물 중복 방지)
   const merged = mergeByDocid(sweep1.items, sweep2.items);
-  const items2 = await courtToAuctionItems(merged);
+  const items2 = await courtToAuctionItems(merged, { targetPnu: pnu });
   const matched2 = items2.filter((it) => it.pnuStandard === pnu);
 
   if (matched2.length > 0) {

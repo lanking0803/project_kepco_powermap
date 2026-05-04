@@ -25,24 +25,26 @@ import type { CourtRawListItem } from "./types";
 /**
  * Court raw 매물 배열 → AuctionListItem 배열.
  *
- * 0) 같은 (사건+지번) row 그룹핑 — court 응답은 한 매물의 토지/건물을 별도 row 로 보냄
- *    (예: 2023타경57289 / 252-1 → mok=1 토지 + mok=2 건물 = 2 row → 1 카드로 합침)
- *    그룹 크기를 물건번호갯수 에 박아 UI 카드 배지로 표시
- * 1) bjd_master 일괄 조회 (sep_4=hjguDong, sep_5=hjguRd 매칭)
+ * 0) 사건 단위 그룹핑 — 같은 (boCd, saNo) row 들을 1개 카드로 합침.
+ *    court 응답은 한 사건의 매각자산 N개를 별도 row 로 보냄 (토지·건물·집합).
+ *    예: 2024타경1199 → 503-8/산1-1/산1-6/...8 row → 1 카드, 사건 전체 합산 면적
+ *    targetPnu 가 주어지면, 그 PNU 매칭되는 row 를 대표로 선정 (헤더에 사용자 클릭 지번 표시).
+ * 1) bjd_master 일괄 조회 — 대표 row 의 BJD 코드로 좌표 매핑
  * 2) 매물별 좌표/bjd_code 매핑 후 정규화
  *
  * @param rawItems Court 응답 매물
- * @param contextSidoName 시도 한글명 (예: "전라남도") — 동명이리 충돌 방지. null 이면 매칭 생략
+ * @param opts.targetPnu by-pnu 흐름에서 사용자 클릭 PNU (대표 row 선정 우선순위 ⭐)
  */
 export async function courtToAuctionItems(
   rawItems: CourtRawListItem[],
+  opts?: { targetPnu?: string },
 ): Promise<AuctionListItem[]> {
   if (rawItems.length === 0) return [];
 
-  // ── 0) (사건+지번) 그룹핑 ────────────────────────────
-  // court 응답은 같은 매물의 토지/건물을 mokmulSer 만 다른 별도 row 로 내려보냄.
-  // 같은 (boCd, saNo, maemulSer, daepyoLotno) 키 = 같은 매물.
-  const grouped = groupCourtRawItems(rawItems);
+  // ── 0) 사건 단위 그룹핑 ────────────────────────────
+  // 같은 (boCd, saNo) row = 한 사건. 사건 안의 매각자산 N개는 row 가 분리되어 옴.
+  // targetPnu 가 있으면 그룹 안에서 그 PNU 매칭 row 를 대표로 선정.
+  const grouped = groupCourtRawItems(rawItems, opts?.targetPnu);
 
   // ── 1) bjd_master 좌표 lookup — court 응답의 BJD 코드 직접 매칭 ──
   // raw 응답에 박혀있는 정확한 행정코드 사용 (한글 매칭 X — 동명/표기 흔들림 회피).
@@ -141,23 +143,29 @@ interface CourtGroup {
 }
 
 /**
- * 같은 매물 row 묶기 — 사이트 정식 코드 우선.
+ * 사건 단위 그룹핑 — 같은 (boCd, saNo) row 들을 1개 카드로 합침.
  *
- * 그룹 키: boCd + saNo + maemulSer + daepyoLotno
+ * 그룹 키: boCd + saNo
  *   - boCd: 법원 코드 ("B000513")
  *   - saNo: 사건 raw 14자리 ("20230130057289")
- *   - maemulSer ⭐: 매물 일련번호 — 사이트가 설계한 매물 단위 식별자 (같은 매물의 토지/건물은 같은 값)
- *   - daepyoLotno: 지번 (한글/숫자) — 같은 매물 내 다른 필지 분리용 보조 키
  *
- * addrGbncd / printSt 등 한글 텍스트 비교는 회피 — 같은 매물의 지번주소(A) row 와 도로명주소(R) row 가
- * 분리되는 함정 발생 (실측 2026-05-04: 2023타경57289 / 252-1 mok=1(A 화장동) + mok=2(R 조은길)).
+ * 한 사건이 매각하는 자산이 N개라도 (토지·건물·집합 모두 포함, 다른 지번 포함)
+ * 카드는 1개로 통합. 가격/매각기일/유찰/담당계 모두 사건 단위 단일값이므로
+ * 자산별로 카드를 쪼개면 정보 중복만 발생.
+ * 자산별 상세는 카드 내부 매각자산 섹션 (이 지번 / 사건 전체 토글) 으로 정리.
+ *
+ * 한글 텍스트 비교는 회피 — addrGbncd 한글주소(A) / 도로명(R) row 분리 함정 회피.
  *
  * 대표 row 선정 우선순위:
- *   1. jimokList 채워진 row (= 토지 정보 있는 row)
- *   2. areaList 채워진 row
- *   3. mokmulSer 가장 작은 row
+ *   1. targetPnu (있으면) 매칭되는 row ⭐ — 사용자가 클릭한 지번이 카드 헤더로
+ *   2. jimokList 채워진 row (= 토지 정보 있는 row)
+ *   3. areaList 채워진 row
+ *   4. mokmulSer 가장 작은 row
  */
-function groupCourtRawItems(items: CourtRawListItem[]): CourtGroup[] {
+function groupCourtRawItems(
+  items: CourtRawListItem[],
+  targetPnu?: string,
+): CourtGroup[] {
   const groupMap = new Map<string, CourtRawListItem[]>();
 
   // 그룹 키로 묶기 (입력 순서 보존을 위해 keysOrder 별도 관리)
@@ -173,7 +181,7 @@ function groupCourtRawItems(items: CourtRawListItem[]): CourtGroup[] {
 
   return keysOrder.map((key) => {
     const rows = groupMap.get(key)!;
-    const representative = pickRepresentative(rows);
+    const representative = pickRepresentative(rows, targetPnu);
     const landArea = sumLandArea(rows);
     const buildingArea = sumBuildingArea(rows);
     const breakdown = countByMokGbncd(rows);
@@ -204,32 +212,53 @@ function makeGroupKey(it: CourtRawListItem): string {
   if (!it.docid) return `__solo__${Math.random()}`;
   const bo = it.boCd ?? "";
   const sa = it.saNo ?? "";
-  const mae = (it.maemulSer ?? "").toString().trim();
-  const lot = (it.daepyoLotno ?? "").trim();
-  // 핵심 코드 (법원/사건/매물) 중 하나라도 비면 단독 처리 — 잘못된 묶임 방지
-  if (!bo || !sa || !mae) return `__solo__${it.docid}`;
-  // 지번 빈값도 단독 처리 (같은 매물 안에서도 지번 없는 row 는 별개로 취급)
-  if (!lot) return `__solo__${it.docid}`;
-  return [bo, sa, mae, lot].join("|");
+  // 사건 단위 그룹핑: 핵심 코드(법원/사건) 중 하나라도 비면 단독 처리.
+  if (!bo || !sa) return `__solo__${it.docid}`;
+  return [bo, sa].join("|");
 }
 
-function pickRepresentative(rows: CourtRawListItem[]): CourtRawListItem {
+/**
+ * 그룹 안에서 카드 헤더로 보여줄 row 선정.
+ *
+ * by-pnu 흐름: targetPnu 가 매칭되는 row 가 있으면 그 row 우선 — 사용자가 클릭한
+ * 지번이 카드 헤더에 표시되어 컨텍스트 일치.
+ * 시군구 sweep / 마커 흐름: targetPnu 미전달 → 기존 휴리스틱 유지.
+ */
+function pickRepresentative(
+  rows: CourtRawListItem[],
+  targetPnu?: string,
+): CourtRawListItem {
   if (rows.length === 1) return rows[0];
 
-  // 1. jimokList 채워진 row 우선 (= 토지 정보 있는 row)
+  // 1. targetPnu 매칭 row — 사용자 클릭 지번 컨텍스트 보존
+  if (targetPnu && /^\d{19}$/.test(targetPnu)) {
+    const matched = rows.find((r) => buildPnuFromRaw(r) === targetPnu);
+    if (matched) return matched;
+  }
+
+  // 2. jimokList 채워진 row (= 토지 정보 있는 row)
   const withJimok = rows.find((r) => (r.jimokList ?? "").trim() !== "");
   if (withJimok) return withJimok;
 
-  // 2. areaList 채워진 row 우선
+  // 3. areaList 채워진 row 우선
   const withArea = rows.find((r) => (r.areaList ?? "").trim() !== "");
   if (withArea) return withArea;
 
-  // 3. mokmulSer 가장 작은 row
+  // 4. mokmulSer 가장 작은 row
   return rows.slice().sort((a, b) => {
     const am = Number(a.mokmulSer) || 999;
     const bm = Number(b.mokmulSer) || 999;
     return am - bm;
   })[0];
+}
+
+/** raw row 1건 → PNU 19자리 (BJD 코드 + 지번 합성). 실패 시 null. */
+function buildPnuFromRaw(raw: CourtRawListItem): string | null {
+  const code = resolveBjdCode(raw);
+  if (!code) return null;
+  const jibun = composeJibun(raw);
+  if (!jibun) return null;
+  return buildPnuFromBjdAndJibun(code, jibun);
 }
 
 /** 그룹 내 토지면적 합산 — jimokList 채워진 row 의 areaList 만 ㎡ 환산해서 합. */
