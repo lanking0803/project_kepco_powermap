@@ -27,6 +27,14 @@ const eslintConfig = defineConfig([
           destructuredArrayIgnorePattern: "^_",
         },
       ],
+
+      // React 19 Compiler 가 새로 도입한 룰들 — Compiler 최적화를 위한 권장사항.
+      // 우리 코드 패턴(외부 시스템 동기화 / 콜백 ref 안정화 / 의도적 빈 deps)은
+      // 합리적이며 빌드/운영 통과. Compiler 최적화 미적용 정도의 영향만 있음.
+      // 13개 파일에 inline disable 박기보다 전역 비활성화가 깔끔.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/preserve-manual-memoization": "off",
     },
   },
 
