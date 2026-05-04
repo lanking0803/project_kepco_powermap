@@ -103,9 +103,9 @@ export async function GET() {
   try {
     const users = await listAllUsers();
     return NextResponse.json({ ok: true, users });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { ok: false, error: String(err?.message || err) },
+      { ok: false, error: err instanceof Error ? err.message : String(err) },
       { status: 500 }
     );
   }

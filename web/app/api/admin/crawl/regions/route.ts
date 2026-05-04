@@ -113,9 +113,10 @@ export async function GET(request: NextRequest) {
       .filter(Boolean);
 
     return NextResponse.json({ ok: true, list });
-  } catch (err: any) {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { ok: false, error: `KEPCO API 호출 실패: ${err?.message || err}` },
+      { ok: false, error: `KEPCO API 호출 실패: ${msg}` },
       { status: 502 }
     );
   }

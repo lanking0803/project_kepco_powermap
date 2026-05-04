@@ -30,8 +30,8 @@ export default function UserManager({ currentUserId }: Props) {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "조회 실패");
       setUsers(data.users);
-    } catch (err: any) {
-      setError(String(err?.message || err));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -58,8 +58,9 @@ export default function UserManager({ currentUserId }: Props) {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       fetchUsers();
-    } catch (err: any) {
-      alert(`변경 실패: ${err?.message || err}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`변경 실패: ${msg}`);
     }
   };
 
@@ -78,8 +79,9 @@ export default function UserManager({ currentUserId }: Props) {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       fetchUsers();
-    } catch (err: any) {
-      alert(`삭제 실패: ${err?.message || err}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`삭제 실패: ${msg}`);
     }
   };
 
@@ -296,8 +298,8 @@ function CreateUserModal({
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       onCreated();
-    } catch (err: any) {
-      setError(String(err?.message || err));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(false);
     }
@@ -456,8 +458,8 @@ function ResetPasswordModal({
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       setDone(true);
-    } catch (err: any) {
-      setError(String(err?.message || err));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(false);
     }
