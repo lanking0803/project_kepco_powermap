@@ -21,6 +21,23 @@ type: project
 
 **의뢰자 합의**: "법원경매가 차단되기 전까지는 법원경매를 기본값으로 밀고간다" (2026-05-04)
 
+## 🧩 row 그룹핑 (2026-05-04 추가)
+
+**문제**: court 응답이 한 매물의 토지/건물을 별도 row 로 보냄
+- 예: 2023타경57289 / 252-1 → mok=1 토지(공장용지 4566㎡) + mok=2 건물(빈값) = 2 row
+- → 같은 사건+지번이 카드 2개로 노출 (노이즈)
+
+**해결** (`web/lib/court-auction/adapter.ts` 의 `groupCourtRawItems`):
+- 키: `(boCd, saNo, daepyoLotno, addrGbncd)` — 사건+지번+주소구분
+- 다른 사건 / 다른 지번 / 일괄매각은 그룹 안 됨 (각각 별개 매물)
+- 대표 row: jimokList 채워진 row 우선 → areaList → mokmulSer 작은 쪽
+- 토지면적/건물면적: 그룹 내 합산
+- 물건번호갯수: 그룹 크기 (≥2 면 기존 UI 카드 배지 자동 표시)
+
+**검증 결과 (전남 여수, 1개월 매각기일)**: raw 343건 → 카드 242건 (101건 감소, 29%)
+
+**UI 변경 0** — 기존 [AuctionSearchPanel.tsx:882](../../web/components/map/AuctionSearchPanel.tsx) 의 `showUnitBadge = 물건번호갯수 > 1` 로직 그대로 재활용.
+
 남은 미완 작업:
 - 사건 상세 조회 (`/api/auction/detail`) 는 아직 hyphen 만 — court 어댑터 추가 필요
 - `/api/auction/by-pnu` 도 hyphen 만
