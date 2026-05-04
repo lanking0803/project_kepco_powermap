@@ -24,6 +24,7 @@
 
 import { useEffect, useState } from "react";
 
+import { formatWon } from "@/lib/format/won";
 import { fetchAuctionDetailLazy } from "@/lib/hyphen/detail";
 import type {
   AuctionImage,
@@ -920,17 +921,6 @@ function classifyStatusColor(s: string): string {
 
 function hasArea(v: number | null): boolean {
   return typeof v === "number" && v > 0;
-}
-
-function formatWon(won: number): string {
-  if (won >= 100_000_000) {
-    const eok = won / 100_000_000;
-    return eok >= 10
-      ? `${Math.round(eok).toLocaleString()}억`
-      : `${eok.toFixed(1)}억`;
-  }
-  if (won >= 10_000) return `${Math.round(won / 10_000).toLocaleString()}만`;
-  return `${won.toLocaleString()}원`;
 }
 
 function formatDday(days: number): string {

@@ -243,7 +243,7 @@ async function runCourtChannel(input: ParsedInput) {
   }
 
   // 어댑터 — court raw → AuctionListItem
-  const items = await courtToAuctionItems(sweep.items, input.sidoName);
+  const items = await courtToAuctionItems(sweep.items);
 
   // ── 사후 필터 (서버가 못 걸러주는 항목만) ──
   const filtered = items.filter((it) => {

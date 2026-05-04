@@ -197,12 +197,22 @@ export interface CourtRawListItem {
   srchHjguSiguCd: string;
   /** 검색용 동 코드 8자리 (= bjd_master 앞 8자리) */
   srchHjguDongCd: string;
-  /** 검색용 도로 코드 10자리 */
+  /** 검색용 도로 코드 10자리 (= bjd_master 10자리. 리 없는 매물은 빈값/8자리) */
   srchHjguRdCd: string;
   /** 본번-부번 검색용 */
   srchHjguLotno: string;
   /** 주소 구분 ("A"=일반/"R"=도로/"S"=산?) */
   addrGbncd: string;
+
+  // ── 분리 코드 (행안부 표준 분리 — srchHjguRdCd 빈값 fallback 용) ──
+  /** 시도 코드 2자리 (예: "11" 서울) */
+  daepyoSidoCd: string;
+  /** 시군구 코드 3자리 (예: "680" 강남구) */
+  daepyoSiguCd: string;
+  /** 읍면동 코드 3자리 (예: "105" 도곡동) */
+  daepyoDongCd: string;
+  /** 리 코드 2자리 (예: "00" 리 없음, "01" 등) */
+  daepyoRdCd: string;
 
   // ── 좌표 ──
   /** WGS84 위경도 — ⚠️ 정수만, 사용 불가 (예: "127", "34") */
@@ -371,6 +381,29 @@ export interface CourtRawDetailItem {
     /** 문서 ID — 상세 문서 다운로드 키 (사용 안 함) */
     dspslGdsSpcfcEcdocId: string;
     dspslDxdyPbancEcdocId: string;
+    /** 공고 시작일 YYYYMMDD */
+    pstgBgngYmd: string | null;
+    /** 공고 종료일 YYYYMMDD */
+    pstgEndYmd: string | null;
+    /** 매각기일 회차 누계 (= 유찰수) */
+    dspslDxdyDnum: number;
+    /** 입찰보증금 비율 % (보통 10) */
+    prchDposRate: number;
+    /**
+     * 매각물건 내 객체(토지/건물) 순번 — 같은 dspslGdsSeq 안에서 1, 2, 3...
+     * dspslGdsSeq 는 매각물건 그룹(일괄매각 시 같은 값) 이고,
+     * 진짜 물건별 순번은 이 dspslObjctSeq 입니다.
+     */
+    dspslObjctSeq: number;
+    /**
+     * 토지/건물 구분 코드:
+     *   - "01" = 토지
+     *   - "02" = 건물
+     *   - "03" = 집합건물 (구분소유)
+     */
+    auctnLstDvsCd: string;
+    /** 건물명 (있으면 "주1동" 등, 토지면 null) */
+    bldNm: string | null;
     [key: string]: unknown;
   }>;
 

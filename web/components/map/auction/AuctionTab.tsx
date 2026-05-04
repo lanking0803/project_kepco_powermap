@@ -31,6 +31,7 @@ import type { AuctionListItem, HyphenApiStatus } from "@/lib/hyphen/types";
 import ApiStatusBanner from "./ApiStatusBanner";
 import AuctionItemCard from "./AuctionItemCard";
 import AuctionDetailCard from "./AuctionDetailCard";
+import CourtAuctionDetailCard from "./CourtAuctionDetailCard";
 
 export default function AuctionTab({
   pnu,
@@ -163,11 +164,25 @@ export default function AuctionTab({
   return (
     <div className="space-y-4">
       {items.map((item) => (
-        <AuctionDetailCard
+        <DetailCardSwitch
           key={`${item.경매번호}-${item.물건번호}`}
           item={item}
         />
       ))}
     </div>
   );
+}
+
+/**
+ * 채널별 모달 분기 — item.courtCaseKey 박혀있으면 법원경매 전용,
+ * 그 외(hyphen) 는 기존 풍부 모달 (사진/PDF/임차인 등 hyphen 강점 활용).
+ *
+ * env AUCTION_CHANNEL 에 의존하지 않고 데이터 자체로 판단 — 미래에 채널 혼합돼도
+ * 자연스럽게 동작.
+ */
+function DetailCardSwitch({ item }: { item: AuctionListItem }) {
+  if (item.courtCaseKey?.cortOfcCd && item.courtCaseKey?.csNo) {
+    return <CourtAuctionDetailCard item={item} />;
+  }
+  return <AuctionDetailCard item={item} />;
 }

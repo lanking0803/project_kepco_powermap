@@ -33,6 +33,7 @@ import {
   type AuctionSearchUiParams,
 } from "@/lib/modes/modes/auction";
 import { fetchSigungus, type SigunguEntry } from "@/lib/api/regions";
+import { formatWon } from "@/lib/format/won";
 import { jibunFromPnu } from "@/lib/geo/pnu";
 import type { AuctionListItem } from "@/lib/hyphen/types";
 
@@ -68,6 +69,12 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
   const [results, setResults] = useState<AuctionListItem[]>(
     persisted?.results ?? [],
   );
+  /**
+   * 결과 표시 모드 — 지번별(기본) / 사건별.
+   * 후처리만이라 API 호출 0번 추가. 사건별 모드는 같은 (boCd, saNo) row 들을
+   * 한 카드로 합쳐서 일괄매각 묶음 가시화.
+   */
+  const [viewMode, setViewMode] = useState<"jibun" | "case">("jibun");
 
   // 마운트 시 — 복원된 결과를 부모(MapClient)로 올려서 지도 마커도 즉시 복원
   const onResultsRef = useRef(onResults);
@@ -282,14 +289,21 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
               <select
                 value={params.sido}
                 disabled={regionsLoading}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const newSido = e.target.value;
+                  // 세종특별자치시는 산하 시군구 없음 — 시도 자체를 시군구로 자동 세팅.
+                  // bjd_master 시도 row 의 bjd_code 첫 5자리가 그대로 sigunguCode 로 동작.
+                  const isSejong = newSido === "세종특별자치시";
+                  const sejongRow = isSejong
+                    ? allSigungus.find((s) => s.sido === newSido)
+                    : null;
                   setParams((p) => ({
                     ...p,
-                    sido: e.target.value,
-                    sigungu: "",
-                    sigunguCode: "",
-                  }))
-                }
+                    sido: newSido,
+                    sigungu: isSejong ? newSido : "",
+                    sigunguCode: sejongRow?.code ?? "",
+                  }));
+                }}
                 className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
               >
                 <option value="">
@@ -306,7 +320,11 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
             <Field label="시군구">
               <select
                 value={params.sigungu}
-                disabled={!params.sido || regionsLoading}
+                disabled={
+                  !params.sido ||
+                  regionsLoading ||
+                  params.sido === "세종특별자치시"
+                }
                 onChange={(e) => {
                   const label = e.target.value;
                   const found = sigungus.find((s) => s.label === label);
@@ -319,7 +337,11 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
                 className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
               >
                 <option value="">
-                  {params.sido ? "선택" : "(시도 먼저 선택)"}
+                  {params.sido === "세종특별자치시"
+                    ? "세종특별자치시 (시군구 없음)"
+                    : params.sido
+                      ? "선택"
+                      : "(시도 먼저 선택)"}
                 </option>
                 {sigungus.map((s) => (
                   <option key={s.code} value={s.label}>
@@ -630,8 +652,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
 
       {/* 결과 영역 — 매물 카드 리스트 */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between border-b border-gray-200 bg-gray-50">
-          <span>결과</span>
+        <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between gap-2 border-b border-gray-200 bg-gray-50">
           <span className="tabular-nums">
             매물 {results.length.toLocaleString()}건
             {totalCountAll != null && totalCountAll !== results.length && (
@@ -640,6 +661,34 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
               </span>
             )}
           </span>
+          {results.length > 0 && (
+            <span className="inline-flex rounded-md overflow-hidden border border-amber-200 text-[10px]">
+              <button
+                type="button"
+                onClick={() => setViewMode("jibun")}
+                className={`px-2 py-0.5 transition-colors ${
+                  viewMode === "jibun"
+                    ? "bg-amber-600 text-white"
+                    : "bg-white text-amber-700 hover:bg-amber-50"
+                }`}
+                title="지번별로 모두 표시"
+              >
+                지번별
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("case")}
+                className={`px-2 py-0.5 transition-colors ${
+                  viewMode === "case"
+                    ? "bg-amber-600 text-white"
+                    : "bg-white text-amber-700 hover:bg-amber-50"
+                }`}
+                title="같은 사건 묶어 표시 (일괄매각 한눈에)"
+              >
+                사건별
+              </button>
+            </span>
+          )}
         </div>
 
         {/* apiStatus 비정상 배너 */}
@@ -675,6 +724,14 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
                 <>검색 결과 0건</>
               )}
             </div>
+          ) : viewMode === "case" ? (
+            groupByCase(results).map((g) => (
+              <CaseGroupCard
+                key={g.key}
+                group={g}
+                onClick={() => onItemClick?.(g.representative)}
+              />
+            ))
           ) : (
             results.map((it) => (
               <ResultCard
@@ -861,8 +918,6 @@ function ResultCard({
   item: AuctionListItem;
   onClick: () => void;
 }) {
-  const gamMan = Math.round(item.감정가 / 10000);
-  const lowMan = Math.round(item.최저가 / 10000);
   const discountPct = Math.round(item.discountRatio * 100);
   const jibun = item.pnuStandard ? jibunFromPnu(item.pnuStandard) ?? null : null;
 
@@ -991,11 +1046,16 @@ function ResultCard({
             </div>
           )}
 
-          {/* 3줄: 감정가 (큰 글씨) + 할인율 % */}
-          <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-[10px] text-gray-500">감정가</span>
+          {/* 3줄: 감정가 → 최저가 + 할인율 */}
+          <div className="flex items-baseline gap-1.5 mb-1 flex-wrap">
+            <span className="text-[10px] text-gray-500">감정</span>
+            <span className="text-[12px] text-gray-600 tabular-nums leading-none">
+              {formatWon(item.감정가)}
+            </span>
+            <span className="text-gray-300 text-[11px]">→</span>
+            <span className="text-[10px] text-gray-500">최저</span>
             <span className="text-[14px] font-bold text-gray-900 tabular-nums leading-none">
-              {gamMan.toLocaleString()}만원
+              {formatWon(item.최저가)}
             </span>
             {discountPct > 0 && (
               <span className="text-[12px] font-bold text-rose-600 tabular-nums leading-none">
@@ -1004,21 +1064,12 @@ function ResultCard({
             )}
           </div>
 
-          {/* 4줄: 최저가 + 면적 */}
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-600 mb-0.5">
-            {discountPct > 0 && (
-              <>
-                <span className="text-gray-400">최저</span>
-                <span className="tabular-nums">
-                  {lowMan.toLocaleString()}만원
-                </span>
-              </>
-            )}
-            {discountPct > 0 && areaText && (
-              <span className="text-gray-300">·</span>
-            )}
-            {areaText && <span>{areaText}</span>}
-          </div>
+          {/* 4줄: 면적 */}
+          {areaText && (
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-600 mb-0.5">
+              <span>{areaText}</span>
+            </div>
+          )}
 
           {/* 5줄: 매각기일 + D-day */}
           <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
@@ -1028,10 +1079,6 @@ function ResultCard({
             </span>
             <span className={`tabular-nums ${dayBadge.cls}`}>
               {dayBadge.label}
-            </span>
-            <span className="text-gray-300">·</span>
-            <span className="text-gray-400 truncate flex-1">
-              {item.대표소재지}
             </span>
           </div>
         </button>
@@ -1097,5 +1144,165 @@ function ApiStatusBanner({ status }: { status: string }) {
       <span className="flex-shrink-0">{c.icon}</span>
       <span>{c.msg}</span>
     </div>
+  );
+}
+
+// ───────────────────────────────────────────────
+// 사건별 그룹핑 — 같은 (법원코드, 사건년도, 사건번호) row 들을 한 카드로 묶음
+// 후처리만 (API 호출 0). 일괄매각 가시화용.
+// ───────────────────────────────────────────────
+
+interface CaseGroup {
+  key: string;
+  /** 같은 사건의 모든 매물 (지번 다름 포함) */
+  items: AuctionListItem[];
+  /** 카드 클릭 시 사용할 대표 매물 — 면적 큰 토지 우선 */
+  representative: AuctionListItem;
+  /** 합산 토지 면적 (㎡) */
+  landTotal: number;
+  /** 합산 건물 면적 (㎡) */
+  buildingTotal: number;
+  /** 분류별 카운트 — 카드의 그룹배지와 같은 형식 */
+  breakdown: { land: number; building: number; aggregate: number };
+}
+
+function groupByCase(items: AuctionListItem[]): CaseGroup[] {
+  const map = new Map<string, AuctionListItem[]>();
+  const keys: string[] = [];
+  for (const it of items) {
+    const key = `${it.법원코드}|${it.사건년도}|${it.사건번호}`;
+    if (!map.has(key)) {
+      map.set(key, []);
+      keys.push(key);
+    }
+    map.get(key)!.push(it);
+  }
+  return keys.map((key) => {
+    const list = map.get(key)!;
+    // 대표 매물 — 토지면적 큰 쪽 우선, 없으면 첫 매물
+    const representative = [...list].sort((a, b) => {
+      const al = a.토지면적 ?? 0;
+      const bl = b.토지면적 ?? 0;
+      return bl - al;
+    })[0];
+    let landTotal = 0;
+    let buildingTotal = 0;
+    let land = 0;
+    let building = 0;
+    let aggregate = 0;
+    for (const it of list) {
+      if (it.토지면적 != null) landTotal += it.토지면적;
+      if (it.건물면적 != null) buildingTotal += it.건물면적;
+      // groupBreakdown 박힌 매물(court 합쳐진 카드)은 그것 우선, 아니면 면적/용도로 추정
+      if (it.groupBreakdown) {
+        land += it.groupBreakdown.land;
+        building += it.groupBreakdown.building;
+        aggregate += it.groupBreakdown.aggregate;
+      } else if (it.토지면적 != null && it.토지면적 > 0) {
+        land += 1;
+      } else if (it.건물면적 != null && it.건물면적 > 0) {
+        building += 1;
+      }
+    }
+    return {
+      key,
+      items: list,
+      representative,
+      landTotal,
+      buildingTotal,
+      breakdown: { land, building, aggregate },
+    };
+  });
+}
+
+function CaseGroupCard({
+  group,
+  onClick,
+}: {
+  group: CaseGroup;
+  onClick: () => void;
+}) {
+  const rep = group.representative;
+  const repJibun = rep.pnuStandard ? jibunFromPnu(rep.pnuStandard) : null;
+  const otherCount = group.items.length - 1;
+
+  const discountPct = Math.round(rep.discountRatio * 100);
+
+  // 분류별 카운트 라벨 ("토지 4·건물 2") — 0인 분류 생략
+  const breakdownLabel = (() => {
+    const { land, building, aggregate } = group.breakdown;
+    const parts: string[] = [];
+    if (land > 0) parts.push(`토지 ${land}`);
+    if (building > 0) parts.push(`건물 ${building}`);
+    if (aggregate > 0) parts.push(`집합 ${aggregate}`);
+    return parts.length > 0 ? parts.join("·") : null;
+  })();
+
+  // 진행상태 배지 (대표 매물 기준)
+  const statusBadgeCls = (() => {
+    switch (rep.진행상태) {
+      case "신건":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "진행":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "유찰":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      default:
+        return "bg-gray-100 text-gray-500 border-gray-200";
+    }
+  })();
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full px-3 py-2.5 text-left border-b border-gray-200 bg-white hover:bg-amber-50 transition-colors active:opacity-70"
+    >
+      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+        <span
+          className={`text-[10px] font-semibold px-1.5 py-px rounded border ${statusBadgeCls}`}
+        >
+          {rep.진행상태}
+        </span>
+        {breakdownLabel && (
+          <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-px rounded">
+            {breakdownLabel}
+          </span>
+        )}
+        <span className="text-[10px] text-gray-500">{rep.법원간략명}</span>
+      </div>
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className="text-sm font-bold text-gray-900 tabular-nums">
+          {rep.사건명칭}
+        </span>
+        <span className="text-[11px] text-gray-500 truncate">
+          {repJibun ?? ""}
+          {otherCount > 0 ? ` 외 ${otherCount}필지` : ""}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 text-[12px]">
+        <span className="text-gray-400">감정</span>
+        <span className="tabular-nums text-gray-600">
+          {formatWon(rep.감정가)}
+        </span>
+        <span className="text-gray-300">→</span>
+        <span className="text-gray-400">최저</span>
+        <span className="tabular-nums font-bold text-gray-900">
+          {formatWon(rep.최저가)}
+        </span>
+        {discountPct > 0 && (
+          <span className="ml-auto text-[11px] font-bold text-red-600 tabular-nums">
+            -{discountPct}%
+          </span>
+        )}
+      </div>
+      {(group.landTotal > 0 || group.buildingTotal > 0) && (
+        <div className="mt-1 text-[10px] text-gray-500 tabular-nums">
+          {group.landTotal > 0 && `토지합 ${Math.round(group.landTotal).toLocaleString()}㎡`}
+          {group.landTotal > 0 && group.buildingTotal > 0 && " · "}
+          {group.buildingTotal > 0 && `건물합 ${Math.round(group.buildingTotal).toLocaleString()}㎡`}
+        </div>
+      )}
+    </button>
   );
 }

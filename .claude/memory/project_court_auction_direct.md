@@ -4,20 +4,22 @@ description: 법원경매정보재공 사이트 직접 호출 채널. atomic end
 type: project
 ---
 
-## 🚦 현재 상태 (2026-05-04 갱신)
+## 🚦 현재 상태 (2026-05-04 갱신 — by-pnu + 모달 + 풍부화 완료)
 
-**✅ 목록 조회 완전 swap — court 채널 운영 적용 완료**
+**✅ 목록/by-pnu/상세모달 완전 swap — 운영 적용 완료**
 
 | 단계 | 결과 |
 |---|---|
-| 호출 검증 (로컬 + Vercel icn1) | ✅ 통과 |
-| atomic endpoint 신설 | ✅ court-search / court-detail |
-| **풍부 검색 파라미터 추가** | ✅ 용도(대중소)/매각기일/감정가/최저가/할인율/면적/유찰/특이사항 — 모두 서버 필터 |
-| 어댑터 구현 (raw → AuctionListItem) | ✅ |
-| 관리자 페이지 메타 등록 | ✅ |
-| Vercel 배포 검증 | ✅ icn1 IP 한국 인식 통과 |
-| **/api/auction/search 채널 swap** | ✅ env `AUCTION_CHANNEL` 토글 (기본=court) |
-| 6개 파라미터 검증 (50/50 매칭) | ✅ 용도/매각기일/감정가/유찰/할인율(서버정의)/특이사항 |
+| atomic endpoint | ✅ court-search / court-detail |
+| /api/auction/search 채널 swap | ✅ env `AUCTION_CHANNEL` (기본=court) |
+| **/api/auction/by-pnu 채널 swap** | ✅ 2단계 lazy fallback (emdCd → 시군구) |
+| **법원경매 전용 모달 컴포넌트** | ✅ CourtAuctionDetailCard.tsx |
+| **AuctionTab 채널 분기** | ✅ courtCaseKey 유무로 자동 분기 |
+| **세종시 시군구 자동 처리** | ✅ 36110 자동 세팅 |
+| 가격 표기 통일 | ✅ formatWon 공통 헬퍼 (1억+ 소수점1) |
+| 회차별 최저가 이력 | ✅ 모달 OverviewCard |
+| 권리분석 단서 (청구 vs 최저) | ✅ 잉여/부족 인사이트 |
+| 법원경매 사이트 바로가기 | ✅ 사건번호 복사 + 입력 가이드 |
 
 **의뢰자 합의**: "법원경매가 차단되기 전까지는 법원경매를 기본값으로 밀고간다" (2026-05-04)
 
@@ -59,9 +61,70 @@ type: project
 
 **표본 142건 통계**: 합쳐진 그룹 13개 중 11개(85%) "토지 1·건물 1", 최대 "토지 1·건물 3"
 
-남은 미완 작업:
-- 사건 상세 조회 (`/api/auction/detail`) 는 아직 hyphen 만 — court 어댑터 추가 필요
-- `/api/auction/by-pnu` 도 hyphen 만
+남은 미완 작업: **모두 완료** (2026-05-04)
+
+## 🎯 by-pnu 호출 정책 (2026-05-04 신규)
+
+**2단계 lazy fallback** — `web/lib/court-auction/by-pnu.ts`:
+```
+1차: emdCd 좁힘 sweep (매각기일 6개월 윈도)
+   → 매칭 ≥1건? → 즉시 종료 (2차 호출 X)
+2차: emdCd 빼고 시군구 sweep — 1차 매칭 0건일 때만
+   → court 사이트 emdCd 인덱스 누락 회피 (강남구 740-7 등 실측)
+```
+
+**왜 매각기일 6개월 윈도가 필수냐**:
+- court 사이트는 `bidBgngYmd/bidEndYmd` 빈값으로 호출하면 **종결 매물 위주로** 응답
+- 신건/진행 매물이 첫 50건에 묻혀 빠짐 (실측: 강남구 emdCd 빈값 호출 totalCnt=29 → 740-7 누락)
+- 6개월 윈도 추가 → totalCnt=42 + 740-7 정상 포함
+
+**왜 1차 emdCd 좁힘 + 2차 fallback 인가**:
+- 1차만으로 95% 케이스 처리 (1페이지 끝, 빠름)
+- court 사이트 `rprsAdongEmdCd` 필터에 일부 매물이 누락되는 결함 발견 (강남구 740-7)
+- 같은 매물의 raw 가 emdCd 빈값 호출엔 정상 옴 → 2차로 보강
+- 무조건 2차까지 가면 모든 사용자 호출 비용 ×2 → 비효율
+
+## 🏛 법원경매 전용 모달 (2026-05-04 신규)
+
+**파일**: `web/components/map/auction/CourtAuctionDetailCard.tsx`
+**진입**: `AuctionTab` 의 `DetailCardSwitch` — `item.courtCaseKey?.cortOfcCd && csNo` 있으면 court 전용 모달
+
+**섹션 구조**:
+1. 헤더 — 진행상태 / 용도 / D-day / 사건명칭 / 평당단가 chip / 유찰 chip
+2. 💰 OverviewCard — 감정가 → 최저가 → 할인율 → 회차별 가격 이력 → 다음 회차 추정
+3. 짧은 Section 들 (2컬럼) — 법원/담당계 / 면적/단가 / 진행 / 매물 구성
+4. **상세 펼치기 (lazy court detail 호출)**:
+   - 🧮 권리분석 단서 — 청구금액 vs 최저가 (잉여/부족 인사이트)
+   - 🏛 사건 기본 — 담당계 전화 + 접수/개시일 + 법원경매 사이트 바로가기
+   - 📦 매각 자산 — 토글 [이 지번 / 사건 전체] + 분류별 라벨 + 지번주소
+   - 💼 매각 조건 — 보증금률 + 공고기간 (사건 단위 1번)
+   - 📅 회차 기일 이력 — 진행/유찰/매각 배지
+   - 👤 당사자 (N명) + 📑 배당요구종기
+   - 🔗 관련 사건 / 🔀 중복병합 (있을 때)
+
+## 🏷 가격 표기 통일 정책 (2026-05-04)
+
+`web/lib/format/won.ts` 공통 헬퍼:
+- 1억 이상: 소수점 1자리 (15.55억 → "15.6억", 정수면 "1억")
+- 1만 이상: 만 단위 (53,174만)
+- 그 외: 원
+
+**모든 화면 동일 표기** — 목록 카드, 사건별 카드, court 모달, hyphen 모달 모두.
+이전엔 `Math.round(eok)` 으로 10억+ 가 거칠게 반올림되어 15.55억 → 16억 표시 문제 있었음.
+
+## 🛠 어댑터 BJD 매칭 정책 (2026-05-04)
+
+**한글 매칭(`hjguDong/hjguRd`) 사용 금지** — 동명이리 충돌 위험.
+
+**정답**: court raw 의 `srchHjguRdCd`(10자리) 또는 `srchHjguDongCd`(8자리) + "00" 으로 **BJD 코드 직접 매칭**:
+```typescript
+function resolveBjdCode(raw): string | null {
+  if (/^\d{10}$/.test(raw.srchHjguRdCd)) return raw.srchHjguRdCd;
+  if (/^\d{8}$/.test(raw.srchHjguDongCd)) return raw.srchHjguDongCd + "00";
+  // fallback — daepyoSidoCd + daepyoSiguCd + daepyoDongCd + daepyoRdCd 합성
+}
+```
+→ 화장동 (광주 남구 vs 여수시) 같은 동명 충돌 0.
 
 ## 🤝 합의 배경 (의뢰자 결정)
 

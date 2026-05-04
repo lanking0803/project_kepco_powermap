@@ -36,89 +36,45 @@ import type { CourtRawListItem } from "./types";
  */
 export async function courtToAuctionItems(
   rawItems: CourtRawListItem[],
-  contextSidoName: string | null = null,
 ): Promise<AuctionListItem[]> {
   if (rawItems.length === 0) return [];
 
   // ── 0) (사건+지번) 그룹핑 ────────────────────────────
   // court 응답은 같은 매물의 토지/건물을 mokmulSer 만 다른 별도 row 로 내려보냄.
-  // 같은 (boCd, saNo, daepyoLotno, addrGbncd) 키 = 같은 매물.
-  // 다른 사건 또는 다른 지번 = 별개 매물 → 그룹 안 됨 (그대로 1건씩 유지).
+  // 같은 (boCd, saNo, maemulSer, daepyoLotno) 키 = 같은 매물.
   const grouped = groupCourtRawItems(rawItems);
 
-  // ── 1) bjd_master 역조회 ────────────────────────────
-  // hjguDong (예: "돌산읍") + hjguRd (예: "금봉리")
-  // 리가 빈값인 매물도 있음 → sep_5 IS NULL 매칭
-  const lookupKeys = new Set<string>();
+  // ── 1) bjd_master 좌표 lookup — court 응답의 BJD 코드 직접 매칭 ──
+  // raw 응답에 박혀있는 정확한 행정코드 사용 (한글 매칭 X — 동명/표기 흔들림 회피).
+  //   - srchHjguRdCd: 10자리 BJD (리까지) — 있으면 그대로 사용
+  //   - srchHjguDongCd: 8자리 BJD (동까지) — 리 없는 매물 (시 직할동 등)
+  //                                          → "+00" 붙여 10자리 합성
+  // bjd_master.bjd_code 는 10자리이므로 in() 한번에 lookup 가능.
+  const bjdCodes = new Set<string>();
   for (const g of grouped) {
-    const it = g.representative;
-    const sep4 = (it.hjguDong || "").trim();
-    const sep5 = (it.hjguRd || "").trim();
-    if (sep4) lookupKeys.add(`${sep4}|${sep5}`);
+    const code = resolveBjdCode(g.representative);
+    if (code) bjdCodes.add(code);
   }
 
-  const bjdMap = new Map<
+  const coordMap = new Map<
     string,
-    { bjd_code: string; lat: number | null; lng: number | null }
+    { lat: number | null; lng: number | null }
   >();
 
-  if (lookupKeys.size > 0) {
+  if (bjdCodes.size > 0) {
     const supabase = createAdminClient();
-
-    const sep5Pairs = Array.from(lookupKeys)
-      .filter((k) => k.split("|")[1] !== "")
-      .map((k) => k.split("|"));
-    const sep4OnlyKeys = Array.from(lookupKeys)
-      .filter((k) => k.split("|")[1] === "")
-      .map((k) => k.split("|")[0]);
-
-    if (sep5Pairs.length > 0) {
-      const sep4s = Array.from(new Set(sep5Pairs.map((p) => p[0])));
-      const sep5s = Array.from(new Set(sep5Pairs.map((p) => p[1])));
-      let query = supabase
-        .from("bjd_master")
-        .select("bjd_code, sep_1, sep_4, sep_5, lat, lng")
-        .in("sep_4", sep4s)
-        .in("sep_5", sep5s);
-      if (contextSidoName) query = query.eq("sep_1", contextSidoName);
-      const { data, error } = await query;
-      if (error) {
-        console.error("[court-auction/adapter] bjd_master sep_4/sep_5 조회 실패", error);
-      } else {
-        for (const row of data ?? []) {
-          const k = `${row.sep_4}|${row.sep_5}`;
-          if (!bjdMap.has(k)) {
-            bjdMap.set(k, {
-              bjd_code: row.bjd_code,
-              lat: row.lat ?? null,
-              lng: row.lng ?? null,
-            });
-          }
-        }
-      }
-    }
-
-    if (sep4OnlyKeys.length > 0) {
-      let query = supabase
-        .from("bjd_master")
-        .select("bjd_code, sep_1, sep_4, sep_5, lat, lng")
-        .in("sep_4", sep4OnlyKeys)
-        .is("sep_5", null);
-      if (contextSidoName) query = query.eq("sep_1", contextSidoName);
-      const { data, error } = await query;
-      if (error) {
-        console.error("[court-auction/adapter] bjd_master sep_4 only 조회 실패", error);
-      } else {
-        for (const row of data ?? []) {
-          const k = `${row.sep_4}|`;
-          if (!bjdMap.has(k)) {
-            bjdMap.set(k, {
-              bjd_code: row.bjd_code,
-              lat: row.lat ?? null,
-              lng: row.lng ?? null,
-            });
-          }
-        }
+    const { data, error } = await supabase
+      .from("bjd_master")
+      .select("bjd_code, lat, lng")
+      .in("bjd_code", Array.from(bjdCodes));
+    if (error) {
+      console.error("[court-auction/adapter] bjd_master 조회 실패", error);
+    } else {
+      for (const row of data ?? []) {
+        coordMap.set(row.bjd_code, {
+          lat: row.lat ?? null,
+          lng: row.lng ?? null,
+        });
       }
     }
   }
@@ -126,14 +82,12 @@ export async function courtToAuctionItems(
   // ── 2) 매물별 정규화 (그룹 단위) ───────────────────
   return grouped.map((g) => {
     const raw = g.representative;
-    const sep4 = (raw.hjguDong || "").trim();
-    const sep5 = (raw.hjguRd || "").trim();
-    const key = sep4 ? `${sep4}|${sep5}` : "";
-    const bjd = bjdMap.get(key);
+    const bjdCode = resolveBjdCode(raw);
+    const coord = bjdCode ? coordMap.get(bjdCode) : undefined;
     return courtToAuctionItem(
       raw,
-      bjd?.bjd_code ?? null,
-      { lat: bjd?.lat ?? null, lng: bjd?.lng ?? null },
+      bjdCode,
+      { lat: coord?.lat ?? null, lng: coord?.lng ?? null },
       {
         groupSize: g.rows.length,
         landArea: g.landArea,
@@ -142,6 +96,34 @@ export async function courtToAuctionItems(
       },
     );
   });
+}
+
+/**
+ * Court raw row → 행안부 표준 BJD 10자리.
+ *
+ * 우선순위:
+ *   1. srchHjguRdCd (10자리) — court 가 박아주는 정확한 BJD (리 포함)
+ *   2. srchHjguDongCd (8자리) + "00" — 리 없는 매물 (시 직할동/면 단위 등)
+ *   3. daepyoSidoCd + daepyoSiguCd + daepyoDongCd + daepyoRdCd 합성 — 위 둘이 빈값일 때 fallback
+ *
+ * 한글주소(hjguDong/hjguRd) 는 사용 안 함 — 동명이리/표기흔들림 회피 (의뢰자 결정 2026-05-04).
+ */
+function resolveBjdCode(raw: CourtRawListItem): string | null {
+  const srchRd = (raw.srchHjguRdCd ?? "").trim();
+  if (/^\d{10}$/.test(srchRd)) return srchRd;
+
+  const srchDong = (raw.srchHjguDongCd ?? "").trim();
+  if (/^\d{8}$/.test(srchDong)) return `${srchDong}00`;
+
+  // fallback — 분리 코드 합성
+  const sd = (raw.daepyoSidoCd ?? "").trim();
+  const sg = (raw.daepyoSiguCd ?? "").trim();
+  const dg = (raw.daepyoDongCd ?? "").trim();
+  const rd = (raw.daepyoRdCd ?? "00").trim();
+  if (/^\d{2}$/.test(sd) && /^\d{3}$/.test(sg) && /^\d{3}$/.test(dg)) {
+    return `${sd}${sg}${dg}${rd.padEnd(2, "0").slice(0, 2)}`;
+  }
+  return null;
 }
 
 /** 그룹핑 결과 — 대표 row + 합산 정보. */
@@ -374,10 +356,13 @@ export function courtToAuctionItem(
     토지면적,
     유찰수,
     도로명주소여부: raw.addrGbncd === "R" ? 1 : 0,
-    대표소재지: cleanAddr(raw.printSt),
+    // 의뢰자 결정 (2026-05-04): 항상 지번주소로 통일.
+    // raw.printSt 는 R row 면 도로명("조은길 16")으로 옴 — 사용 X.
+    // hjguSido/Sigu/Dong/Rd + daepyoLotno 조립으로 항상 지번 형식 보장.
+    대표소재지: composeJibunAddrFromList(raw),
     담당계: raw.jpDeptNm ?? "",
     법원간략명: shortenCourtName(raw.jiwonNm),
-    리스트지번주소: cleanAddr(raw.printSt),
+    리스트지번주소: composeJibunAddrFromList(raw),
     토지가격비율: 1, // Court 응답엔 토지/건물 분리 비율 없음. 기본값.
     경매다용도: null,
     법원용도: raw.dspslUsgNm ?? null,
@@ -400,7 +385,46 @@ export function courtToAuctionItem(
     ...(groupInfo && groupInfo.groupSize > 1
       ? { groupBreakdown: groupInfo.breakdown }
       : {}),
+    // court 사건키 — 모달에서 /api/auction/court-detail 호출용.
+    // boCd 와 cortOfcCd 둘 다 응답에 박힘. boCd 우선 (docid 의 법원 5자리 부분과 일치).
+    courtCaseKey: {
+      cortOfcCd: raw.boCd ?? raw.cortOfcCd ?? "",
+      csNo: raw.saNo ?? "",
+    },
+    // 지번 (본번-부번) — composeJibun 으로 산 표기 보강 후 그대로 박음.
+    지번: composeJibun(raw) ?? (raw.daepyoLotno ?? "").trim(),
+    // 회차별 최저가 이력 — 영업 시각: 가격 하락 추이 시각화용
+    회차별최저가: extractRoundPrices(raw),
   };
+}
+
+/**
+ * raw.notifyMinmaePrice1~4 + Rate1~2 → 회차별 가격 배열.
+ * 0/빈값 회차는 제외. 첫 회차부터 의미 있는 회차만 반환.
+ */
+function extractRoundPrices(
+  raw: CourtRawListItem,
+): Array<{ 회차: number; 가격: number; 감정대비비율: number | null }> {
+  const prices = [
+    raw.notifyMinmaePrice1,
+    raw.notifyMinmaePrice2,
+    raw.notifyMinmaePrice3,
+    raw.notifyMinmaePrice4,
+  ];
+  const rates = [raw.notifyMinmaePriceRate1, raw.notifyMinmaePriceRate2];
+  const out: Array<{ 회차: number; 가격: number; 감정대비비율: number | null }> = [];
+  prices.forEach((p, i) => {
+    const price = Number(p) || 0;
+    if (price <= 0) return;
+    const rateRaw = i < 2 ? rates[i] : "";
+    const rate = Number(rateRaw);
+    out.push({
+      회차: i + 1,
+      가격: price,
+      감정대비비율: Number.isFinite(rate) && rate > 0 ? rate : null,
+    });
+  });
+  return out;
 }
 
 // ─── 헬퍼 ─────────────────────────────────────────────────
@@ -464,10 +488,51 @@ function composeJibun(raw: CourtRawListItem): string | null {
   return isSan && !lotno.startsWith("산") ? `산${lotno}` : lotno;
 }
 
-/** 한글주소 정리 (탭/줄바꿈 제거). */
-function cleanAddr(s: string | null | undefined): string {
-  if (!s) return "";
-  return s.replace(/[\r\n\t]+/g, " ").trim();
+/**
+ * Court 목록 raw row → "전라남도 여수시 화장동 252-1" 형태의 풀 지번주소.
+ *
+ * 의뢰자 결정 (2026-05-04): 본 서비스는 항상 지번주소 사용.
+ * 도로명 row(R) 도 raw 에 시도/시군구/읍면동 + 지번 필드가 박혀있어 조립 가능.
+ *
+ * raw 의 hjguSido/hjguSigu/hjguDong/hjguRd 사용 (목록 응답).
+ * 산 매물이면 daepyoLotno 가 이미 "산566" 형식이거나, printSt 의 산 표기로 보강.
+ */
+export function composeJibunAddrFromList(raw: CourtRawListItem): string {
+  const sido = (raw.hjguSido || "").trim();
+  const sigu = (raw.hjguSigu || "").trim();
+  const dong = (raw.hjguDong || "").trim();
+  const ri = (raw.hjguRd || "").trim();
+  const lotno = composeJibun(raw) ?? (raw.daepyoLotno || "").trim();
+  return [sido, sigu, dong, ri, lotno].filter(Boolean).join(" ");
+}
+
+/**
+ * Court 상세 raw 의 dlt_dspslGdsDspslObjctLst row → "전라남도 여수시 화장동 252-1" 형태.
+ *
+ * 상세 응답은 한글주소 필드명이 adongSdNm/adongSggNm/adongEmdNm/adongRiNm 으로 다름.
+ * 도로명(R) row 도 이 필드들이 박혀있어 같은 방식으로 조립.
+ *
+ * 건물명(bldNm) 있으면 끝에 보조 표시 — 영업 시각에서 "어느 동인지" 단서.
+ */
+export function composeJibunAddrFromDetailGoods(g: {
+  adongSdNm?: string | null;
+  adongSggNm?: string | null;
+  adongEmdNm?: string | null;
+  adongRiNm?: string | null;
+  rprsLtnoAddr?: string | null;
+  bldNm?: string | null;
+}): string {
+  const parts = [
+    g.adongSdNm,
+    g.adongSggNm,
+    g.adongEmdNm,
+    g.adongRiNm,
+    g.rprsLtnoAddr,
+  ]
+    .map((s) => (s ? s.trim() : ""))
+    .filter(Boolean);
+  const base = parts.join(" ");
+  return g.bldNm ? `${base} ${g.bldNm}` : base;
 }
 
 /** "순천지원" → "순천", "서울동부지방법원" → "서울동부", "광주지방법원" → "광주" */

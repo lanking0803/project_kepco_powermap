@@ -232,7 +232,7 @@ export default function ParcelInfoPanel({
   const wrapperClass = inQuoteMode
     ? "bg-white flex flex-col"
     : expanded
-      ? "fixed inset-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[80vw] md:h-[85vh] md:max-w-[1400px] bg-white md:rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 flex flex-col transition-all duration-200"
+      ? "fixed inset-0 md:inset-auto md:left-[calc(320px+(100vw-320px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[min(80vw-320px,1400px)] md:h-[85vh] bg-white md:rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 flex flex-col transition-all duration-200"
       : "absolute left-4 right-4 bottom-4 md:left-auto md:right-4 md:bottom-4 md:w-[520px] max-w-[calc(100%-32px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-10 flex flex-col h-[62dvh] md:h-[min(560px,calc(100dvh-120px))] kepco-slide-up transition-all duration-200";
 
   // 패널이 한 번이라도 jibun/geometry 받기 전엔 탭 내용 숨김.

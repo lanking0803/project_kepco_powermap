@@ -42,11 +42,9 @@ function enrichOne(
 
   // PNU 조립 — bjd_code 가 확정된 경우만
   let pnuStandard: string | null = null;
-  if (bjdCode) {
-    const jibun = extractFirstJibun(raw.리스트지번주소 || raw.대표소재지);
-    if (jibun) {
-      pnuStandard = buildPnuFromBjdAndJibun(bjdCode, jibun);
-    }
+  const jibunText = extractFirstJibun(raw.리스트지번주소 || raw.대표소재지);
+  if (bjdCode && jibunText) {
+    pnuStandard = buildPnuFromBjdAndJibun(bjdCode, jibunText);
   }
 
   return {
@@ -88,6 +86,7 @@ function enrichOne(
     discountRatio,
     daysLeft,
     isUrgent,
+    지번: jibunText ?? "",
   };
 }
 

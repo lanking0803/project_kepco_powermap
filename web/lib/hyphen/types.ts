@@ -264,6 +264,38 @@ export interface AuctionListItem {
     building: number;
     aggregate: number;
   };
+
+  /**
+   * Court 채널 전용 — 사건 단위 detail 호출용 식별자.
+   *  - hyphen 의 productId 와 다른 사건키 (cortOfcCd + csNo)
+   *  - hyphen 채널이면 undefined
+   *  - 값 있으면 court 전용 모달이 /api/auction/court-detail 호출 가능
+   */
+  courtCaseKey?: {
+    /** 법원 코드 (예: "B000513" 순천지원) */
+    cortOfcCd: string;
+    /** 사건번호 raw 14자리 (예: "20210130004007") */
+    csNo: string;
+  };
+
+  /**
+   * 지번 (본번-부번 텍스트, 예: "795", "산148-1", "1231-3").
+   * court 채널은 raw.daepyoLotno 그대로, hyphen 은 jibunFromPnu(pnuStandard).
+   * UI 카드/모달이 시군구 부분 잘라낸 짧은 지번 표시 시 사용.
+   */
+  지번?: string;
+
+  /**
+   * Court 채널 전용 — 회차별 최저가 이력 (1~4회).
+   * raw.notifyMinmaePrice1~4 (원) + raw.notifyMinmaePriceRate1~2 (감정대비 %).
+   * 0/null 인 회차는 미존재 — UI 가 알아서 거름.
+   * 영업 시각: 회차마다 가격이 어떻게 떨어졌는지 한눈에 + 다음 회차 추정 정확도 ↑.
+   */
+  회차별최저가?: Array<{
+    회차: number;
+    가격: number;
+    감정대비비율: number | null;
+  }>;
 }
 
 // ─── 경매사건상세보기 (au0147001254) ──────────────────────

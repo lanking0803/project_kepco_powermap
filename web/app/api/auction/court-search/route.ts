@@ -337,7 +337,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 어댑터 — Court raw → AuctionListItem
-    const items = await courtToAuctionItems(result.items, sidoName);
+    const items = await courtToAuctionItems(result.items);
 
     return NextResponse.json(
       {
