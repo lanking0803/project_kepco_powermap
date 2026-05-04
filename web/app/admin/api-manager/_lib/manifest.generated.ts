@@ -450,6 +450,125 @@ export const MANIFEST: GeneratedManifest = {
       ]
     },
     {
+      "path": "/api/auction/court-detail",
+      "id": "auction-court-detail",
+      "filePath": "app/api/auction/court-detail/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "법원경매정보재공 사건 상세 (/pgj/pgj15A/selectAuctnCsSrchRslt.on). 인증 불필요.",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "cortOfcCd",
+                "type": "string",
+                "required": true,
+                "sample": "B000513",
+                "description": "법원 코드 (목록 응답의 boCd 또는 cortOfcCd). 예: B000513=순천지원"
+              },
+              {
+                "name": "csNo",
+                "type": "string",
+                "required": true,
+                "sample": "20210130004007",
+                "description": "사건번호 raw 14자리 (목록 응답의 saNo). 사용자 형식 '2021타경4007' 이 아님"
+              }
+            ],
+            "outputSchema": "{ ok: true, apiStatus, data: { dma_csBasInf, dlt_dspslGdsDspslObjctLst[], dlt_rletCsDspslObjctLst[], dlt_rletCsGdsDtsDxdyInf[], dlt_rletCsIntrpsLst[], dlt_dstrtDemnLstprdDts[], dlt_csApalRaplDts[], dlt_rletReltCsLst[], dlt_dpcnMrgTrnscsCsRlet[], dlt_rletCsSugtExclBldLst[] }, fetchedAt }",
+            "externalDeps": [
+              "court-auction-direct"
+            ],
+            "notes": "사건 상세 12개 섹션 raw 그대로 응답. 사건기본/물건/목록/기일/당사자/배당요구/항고/관련사건/중복병합/제시외건물. 응답 약 17KB. 화면 매핑: dma_csBasInf=사건기본내역, dlt_dspslGdsDspslObjctLst=물건내역, dlt_rletCsDspslObjctLst=목록내역, dlt_rletCsGdsDtsDxdyInf=기일내역, dlt_rletCsIntrpsLst=당사자내역. 현황조사서/감정평가서 PDF 바로가기는 별도 endpoint (현재 미구현 — 의뢰자 결정: 영업 시작 단계엔 불필요)."
+          },
+          "metaLine": 23,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/auction/court-search",
+      "id": "auction-court-search",
+      "filePath": "app/api/auction/court-search/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "법원경매정보재공 직접 호출 (/pgj/pgjsearch/searchControllerMain.on) + bjd_master JOIN. 인증/세션 불필요. 응답 후 500ms 직렬화 + WAF 재시도.",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "sigunguCode",
+                "type": "string",
+                "required": true,
+                "sample": "46130",
+                "description": "행안부 5자리 BJD prefix. 자동 분리: [0:2]=adongSdCd, [2:5]=adongSggCd"
+              },
+              {
+                "name": "sidoName",
+                "type": "string",
+                "required": false,
+                "sample": "전라남도",
+                "description": "시도 한글명 — bjd_master sep_1 매칭으로 동명이리 충돌 방지"
+              },
+              {
+                "name": "pageNo",
+                "type": "number",
+                "required": false,
+                "sample": "1",
+                "description": "페이지 번호 (1-base, 기본 1)"
+              },
+              {
+                "name": "pageSize",
+                "type": "number",
+                "required": false,
+                "sample": "50",
+                "description": "페이지 크기. 10/50 만 허용 (60+ 거부). 기본 50."
+              },
+              {
+                "name": "orderBy",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "정렬 — 빈값 또는 'order by dspslDxdyYmd asc' (매각기일 오름차순)"
+              },
+              {
+                "name": "bfPageNo",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "이전 페이지 번호 (2p+ 호출 시 1p 응답값 echo)"
+              },
+              {
+                "name": "totalCnt",
+                "type": "string",
+                "required": false,
+                "sample": "",
+                "description": "1p 응답의 totalCnt (2p+ 호출 시 echo)"
+              },
+              {
+                "name": "groupTotalCount",
+                "type": "number",
+                "required": false,
+                "sample": "",
+                "description": "1p 응답의 groupTotalCount (2p+ 호출 시 echo)"
+              }
+            ],
+            "outputSchema": "{ ok: true, apiStatus, items: AuctionListItem[], totalCnt, groupTotalCount, pageNo, pageSize, hasMore, fetchedAt }",
+            "externalDeps": [
+              "court-auction-direct",
+              "supabase"
+            ],
+            "notes": "법원경매 사이트 직접 호출 채널 (hyphen 대비 응답 70배 가벼움 — 140KB/50건). 인증/세션/쿠키 0. WAF 회피용 모듈 전역 직렬화 500ms + 차단 키워드 감지 시 800ms+jitter 1회 재시도. 출력은 hyphen 과 같은 AuctionListItem 타입 — 채널 swap 시 route 만 교체. 페이지네이션 echo: 2페이지 이상 호출 시 bfPageNo/totalCnt/groupTotalCount 를 1p 응답에서 가져와 전달 필요."
+          },
+          "metaLine": 28,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
       "path": "/api/auction/detail",
       "id": "auction-detail",
       "filePath": "app/api/auction/detail/route.ts",
@@ -857,6 +976,66 @@ export const MANIFEST: GeneratedManifest = {
             "notes": "마커 클릭 시 카드만 그릴 때 (~80B, raw rows 대비 99% 절감). DB flat → 시설별 중첩 객체 변환. 모달 펼칠 때 /api/capa/by-bjd 별도 호출."
           },
           "metaLine": 25,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/facility/search",
+      "id": "facility-search",
+      "filePath": "app/api/facility/search/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "건축HUB getBrTitleInfo (다중 BJD 자동 페이지 순회) + supabase bjd_master JOIN",
+            "cache": "public, s-maxage=86400, stale-while-revalidate=604800",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "bjd_codes",
+                "type": "string",
+                "required": true,
+                "sample": "1168010500,1168010600",
+                "description": "법정동 10자리 (시군구5+동5) 콤마 구분. 단건 또는 농촌 면 아래 리 N개 일괄."
+              },
+              {
+                "name": "categories",
+                "type": "string",
+                "required": false,
+                "sample": "greenhouse,barn,factory,warehouse",
+                "description": "FacilityCategory 다중 선택 (콤마 구분). 빈값=전체. 부속건축물은 자동 제외."
+              },
+              {
+                "name": "min_pyeong",
+                "type": "number",
+                "required": false,
+                "sample": "0",
+                "description": "최소 평수 (이상). 0=필터 없음. archArea 미상 row 는 0보다 크면 제외."
+              },
+              {
+                "name": "max_pages",
+                "type": "number",
+                "required": false,
+                "sample": "20",
+                "description": "BJD 1개당 최대 페이지 (1p=100건, hard cap). 기본 20=2,000건."
+              },
+              {
+                "name": "concurrency",
+                "type": "number",
+                "required": false,
+                "sample": "5",
+                "description": "다중 BJD 동시 호출 한도. 기본 5."
+              }
+            ],
+            "outputSchema": "{ ok: true, items: FacilityListItem[], totalCount: number, capped: boolean, fetchedAt: string }",
+            "externalDeps": [
+              "bldg-register",
+              "supabase"
+            ],
+            "notes": "시설(필지) 모드 atomic. 공매·경매 search 와 같은 패턴: 외부 단건 호출 + bjd_master JOIN 으로 좌표 보강 → 마을 마커. categories 빈값이면 부속건축물 제외 후 모든 카테고리 통과(other 포함). archArea 평 환산 = archArea ÷ 3.305785."
+          },
+          "metaLine": 34,
           "metaExportName": "meta"
         }
       ]
@@ -1534,7 +1713,39 @@ export const MANIFEST: GeneratedManifest = {
       "metaLine": 3,
       "consumedBy": [
         "buildings-by-pnu",
-        "buildings-list-by-bjd"
+        "buildings-list-by-bjd",
+        "facility-search"
+      ]
+    },
+    {
+      "id": "court-auction-direct",
+      "name": "법원경매정보재공 — 직접 호출 (운영 채널)",
+      "category": "court-auction",
+      "consoleUrl": "https://www.courtauction.go.kr/",
+      "envKeys": [],
+      "expiry": null,
+      "dailyLimit": "공식 한도 미공개. 운영 시 응답 후 500ms 직렬화 + 차단 감지 시 800ms+jitter 1회 재시도. 5초 간격 호출 시 차단 0 (실측 2026-05-04).",
+      "issueGuide": "1. 별도 발급 절차 없음 — 공개 사이트 ajax endpoint 직접 호출\n2. 인증/세션/쿠키 모두 불필요 (실측 검증 완료)\n3. 환경변수도 없음\n4. 운영 즉시 가능\n\n⚠️ 채택 사유 (의뢰자 합의 2026-05-04):\n   - 의뢰자 합의: \"hyphen / 법원경매 / 그 외 채널 자율 선택 — 서비스 정상 동작 책임\"\n   - 경매 유지보수비 월 10만 합의 (서버비 5만과 별개)\n   - hyphen 대비 응답 70배 가벼움 (140KB / 50건), 인증 부담 0",
+      "usageExample": "# 목록 (시군구 단위, 페이지네이션)\nPOST https://www.courtauction.go.kr/pgj/pgjsearch/searchControllerMain.on\nHeaders:\n  Content-Type: application/json;charset=UTF-8\n  Origin: https://www.courtauction.go.kr\n  Referer: https://www.courtauction.go.kr/pgj/index.on?w2xPath=/pgj/ui/pgj100/PGJ151F00.xml\n  SC-Pgmid: PGJ151F02\n  submissionid: mf_wfm_mainFrame_sbm_selectGdsDtlSrch\nBody:\n  {\n    \"dma_pageInfo\": {\n      \"pageNo\": 1,\n      \"pageSize\": 50,                        # 10/50 만 허용 (60+ 거부)\n      \"bfPageNo\": \"\", \"startRowNo\": \"\",\n      \"totalCnt\": \"\", \"totalYn\": \"Y\",\n      \"groupTotalCount\": \"\"\n    },\n    \"dma_srchGdsDtlSrchInfo\": {\n      \"mvprpRletDvsCd\": \"00031R\",            # 부동산 카테고리 고정\n      \"cortAuctnSrchCondCd\": \"0004601\",\n      \"rprsAdongSdCd\": \"46\",                 # bjd_code [0:2]\n      \"rprsAdongSggCd\": \"130\",               # bjd_code [2:5]\n      \"rprsAdongEmdCd\": \"\",                  # 옵션\n      \"pgmId\": \"PGJ151M01\",\n      \"cortStDvs\": \"2\",\n      ...                                    # 그 외 미사용 빈값 필드\n    }\n  }\n\n# 사건 상세 (1건)\nPOST https://www.courtauction.go.kr/pgj/pgj15A/selectAuctnCsSrchRslt.on\nBody: { \"dma_srchCsDtlInf\": { \"cortOfcCd\": \"B000513\", \"csNo\": \"20210130004007\" } }\n\n# 응답 12개 섹션:\n#   dma_csBasInf (사건기본) / dlt_dspslGdsDspslObjctLst (물건) /\n#   dlt_rletCsDspslObjctLst (목록) / dlt_rletCsGdsDtsDxdyInf (기일) /\n#   dlt_rletCsIntrpsLst (당사자) / dlt_dstrtDemnLstprdDts (배당요구) /\n#   dlt_csApalRaplDts (항고) / dlt_rletReltCsLst (관련사건) /\n#   dlt_dpcnMrgTrnscsCsRlet (중복병합) / dlt_rletCsSugtExclBldLst (제시외건물)",
+      "notes": "**검증 결과 (2026-05-04 실측, scripts/test_court_auction/)**:\n\n- ✅ 인증/쿠키/세션 모두 불필요\n- ✅ bjd_code 5자리 prefix 그대로 분리 ([0:2]/[2:5]) — 5개 표본 전부 매칭\n- ✅ 페이지네이션 일관성 (1p/2p/3p totalCnt 동일, docid 중복 0)\n- ✅ 페이지 사이즈 50 max (60+ HTTP 400 거부)\n- ✅ 5초 간격 호출 시 차단 0\n- ✅ 응답에 117개 필드 (감정가/최저가/유찰/매각기일/주소/면적/사진메타 등)\n- ✅ 위경도 — wgs84Xcordi/Ycordi 는 정수만 (사용 X), xCordi/yCordi (TM) 는 정밀\n\n**주의 사항**:\n\n- ⚠️ wgs84Xcordi/Ycordi 가 모든 매물에서 정수 (예: \"127\", \"34\") — **사용 불가**\n- ⚠️ TM 좌표 (xCordi/yCordi) 는 EPSG:5174 또는 5181 추정 — proj4js 변환 필요. 현재 어댑터는 bjd_master 동/리 좌표 사용 (정밀도는 마을 단위로 충분 — 의뢰자 의도)\n- ⚠️ PNU 직접 필드 없음 — srchHjguDongCd(8) + 한글주소 + daepyoLotno 합성\n- ⚠️ 진행상태 한글 직접 필드 없음 — yuchalCnt + maeGiil 휴리스틱 추정\n\n**Vercel 배포 시 IP 정책**:\n\n- vercel.json regions=[\"icn1\"] 한국 리전 고정 → 법원경매 측 한국 IP 로 인식\n- KEPCO 수집기 1년 무사고 선례 → 법원경매도 같은 안정성 기대\n- 다만 데이터센터 IP 차단 정책이 있다면 차단 가능 — 배포 전 preview 검증 필수",
+      "sampleRequest": {
+        "method": "POST",
+        "url": "https://www.courtauction.go.kr/pgj/pgjsearch/searchControllerMain.on",
+        "description": "목록 검색 — 전남 여수시 (46/130), pageSize 50, 1페이지. 인증 불필요. 응답 ~140KB / 50건.",
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json;charset=UTF-8",
+          "Origin": "https://www.courtauction.go.kr",
+          "Referer": "https://www.courtauction.go.kr/pgj/index.on?w2xPath=/pgj/ui/pgj100/PGJ151F00.xml",
+          "SC-Pgmid": "PGJ151F02",
+          "submissionid": "mf_wfm_mainFrame_sbm_selectGdsDtlSrch"
+        }
+      },
+      "filePath": "app/admin/api-manager/_lib/services/court-auction.ts",
+      "metaLine": 3,
+      "consumedBy": [
+        "auction-court-detail",
+        "auction-court-search"
       ]
     },
     {
@@ -1895,10 +2106,12 @@ export const MANIFEST: GeneratedManifest = {
         "admin-crawl",
         "admin-users",
         "auction-by-pnu",
+        "auction-court-search",
         "auction-search",
         "capa-by-bjd",
         "capa-refresh-by-pnu",
         "capa-summary-by-bjd",
+        "facility-search",
         "health",
         "map-summary",
         "onbid-by-pnu",

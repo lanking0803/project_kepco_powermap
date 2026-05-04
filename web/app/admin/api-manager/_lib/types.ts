@@ -85,7 +85,8 @@ export interface ExternalServiceMeta {
     | "github"
     | "vercel"
     | "kepco"
-    | "hyphen";
+    | "hyphen"
+    | "court-auction";
   consoleUrl: string;
   /** process.env 의 키 이름들 (서버 컴포넌트가 읽어 표시) */
   envKeys?: string[];
