@@ -16,7 +16,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
-import { hasCapacity } from "@/lib/types";
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import { formatRelativeKst, formatAbsoluteKst } from "@/lib/dateFormat";
 import {
@@ -27,7 +26,7 @@ import { fetchVworldParcelByPnu } from "@/lib/api/vworld";
 import {
   fetchKepcoByPnu,
   refreshKepcoByPnu,
-  type CapaFallback,
+  clearKepcoByPnuCache,
 } from "@/lib/kepco/by-pnu";
 import { jibunFromPnu, buildPnuFromBjdAndJibun } from "@/lib/geo/pnu";
 import LocationDetailGrouped from "./LocationDetailGrouped";
@@ -60,7 +59,6 @@ import {
   type PurposeGrade,
 } from "@/lib/building-hub/classify";
 import AddrLine from "./AddrLine";
-import { FacilityCard } from "./FacilityCard";
 import SolarSection from "./SolarSection";
 import type { SolarMarker } from "@/lib/api/solar-permits";
 import OnbidTab from "./onbid/OnbidTab";
@@ -978,6 +976,26 @@ function RefreshArrowIcon({
  *
  * 진입 모드 무관(전기/공매/견적) — PNU 만 있으면 어디서든 동일하게 작동.
  */
+/**
+ * 전기 탭 — 2섹터 고정 노출 (2026-05-05 의뢰자 요청 재구성).
+ *
+ *   ┌─ 해당 지번 ─────────[↻] ─┐
+ *   │ 클릭한 지번의 row 표시    │
+ *   │ 또는 미수집 → [수집] 버튼  │
+ *   ├─ 주변 지번 ─────────[↻] ─┤
+ *   │ 같은 마을 가까운 N건       │
+ *   │ 또는 미수집 → [목록 불러오기] (TODO) │
+ *   │           [전체 수집 →] (TODO) │
+ *   └────────────────────────────┘
+ *
+ * 데이터:
+ *   - GET /api/capa/by-pnu 1번 호출. 응답 = 같은 마을 top 10 (자기 포함).
+ *   - 클라이언트가 buildPnuFromBjdAndJibun(row) === pnu 비교로 자기/주변 분기.
+ *
+ * 새로고침:
+ *   - 해당 지번: KEPCO live 호출 (refreshKepcoByPnu) → 캐시 invalidate → 재조회
+ *   - 주변 지번: 캐시 invalidate → 재조회 (KEPCO 호출 X)
+ */
 function ElectricTab({
   pnu,
   clickedJibun,
@@ -985,20 +1003,16 @@ function ElectricTab({
 }: {
   pnu: string;
   clickedJibun: string;
-  /** fallback 결과 행의 📍 클릭 → 그 지번 PNU 로 패널 자체를 갈아끼움 */
+  /** 주변 지번 행의 📍 클릭 → 그 지번 PNU 로 패널 자체를 갈아끼움 */
   onPnuChange?: (pnu: string) => void;
 }) {
-  const [capa, setCapa] = useState<KepcoDataRow[]>([]);
-  const [fallback, setFallback] = useState<CapaFallback>({ used: false });
-  // villageEmpty = 같은 마을(bjd_code) 전체에 한전 데이터 0건 — fallback 도 못 만드는 케이스.
-  // exact 매칭 0건 + fallback 도 0건일 때만 true.
-  const [villageEmpty, setVillageEmpty] = useState(false);
+  const [rows, setRows] = useState<KepcoDataRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshingExact, setRefreshingExact] = useState(false);
+  const [refreshingNearby, setRefreshingNearby] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  // 같은 PNU 재방문 시 모듈 캐시 hit 으로 즉시 표시. 첫 진입에만 스피너.
   useEffect(() => {
     if (!/^\d{19}$/.test(pnu)) return;
     let alive = true;
@@ -1006,11 +1020,7 @@ function ElectricTab({
     setError(null);
     fetchKepcoByPnu(pnu)
       .then((res) => {
-        if (alive) {
-          setCapa(res.rows);
-          setFallback(res.fallback);
-          setVillageEmpty(res.villageEmpty);
-        }
+        if (alive) setRows(res.rows);
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e));
@@ -1023,142 +1033,74 @@ function ElectricTab({
     };
   }, [pnu]);
 
-  // 새로고침 = KEPCO live 호출 + DB upsert (POST /api/capa/refresh-by-pnu).
-  // 단순 캐시 비우고 DB 재조회가 아니라, 외부 KEPCO 시스템에서 최신 데이터를 끌어옴.
-  // 응답이 모듈 캐시에 반영되어 이후 다른 곳의 fetchKepcoByPnu 도 즉시 새 데이터 hit.
-  const handleRefresh = useCallback(async () => {
+  // 자기 / 주변 분기 — buildPnuFromBjdAndJibun 으로 PNU 조립 후 입력 PNU 와 비교.
+  // "100-1" / "100-01" 같은 표기 차이도 동일 PNU 로 정규화돼 안전.
+  const { exactRows, nearbyRows } = useMemo(() => {
+    const exact: KepcoDataRow[] = [];
+    const nearby: KepcoDataRow[] = [];
+    for (const r of rows) {
+      const rowPnu = r.bjd_code
+        ? buildPnuFromBjdAndJibun(r.bjd_code, r.addr_jibun)
+        : null;
+      if (rowPnu && rowPnu === pnu) {
+        exact.push(r);
+      } else {
+        nearby.push(r);
+      }
+    }
+    return { exactRows: exact, nearbyRows: nearby };
+  }, [rows, pnu]);
+
+  // 해당 지번 새로고침 = KEPCO live 호출 + DB upsert + 캐시 invalidate.
+  const handleRefreshExact = useCallback(async () => {
     if (!/^\d{19}$/.test(pnu)) return;
-    setRefreshing(true);
+    setRefreshingExact(true);
     setRefreshError(null);
     try {
       const r = await refreshKepcoByPnu(pnu);
-      setCapa(r.rows);
-      // refresh = KEPCO live 호출이라 exact 매칭 결과만 — fallback/villageEmpty 해제
-      setFallback({ used: false });
-      setVillageEmpty(false);
+      // refresh 가 캐시 invalidate 했으니, 같은 마을 top N 다시 받아옴.
+      const fresh = await fetchKepcoByPnu(pnu);
+      setRows(fresh.rows);
       if (r.source === "not_found") {
         setRefreshError("KEPCO 에 데이터 없음");
       }
     } catch (e) {
       setRefreshError(e instanceof Error ? e.message : String(e));
     } finally {
-      setRefreshing(false);
+      setRefreshingExact(false);
     }
   }, [pnu]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 gap-2">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <div className="text-xs text-gray-500">전기 정보 조회 중...</div>
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="text-center py-8 text-xs text-red-600">
-        조회 실패: {error}
-      </div>
-    );
-  }
-
-  if (capa.length === 0) {
-    // villageEmpty = 같은 마을 전체에 한전 데이터 0건 → fallback 도 못 만드는 케이스.
-    // 사용자가 "왜 주변 지번 정보도 안 뜨지?" 헷갈리지 않도록 별도 멘트.
-    if (villageEmpty) {
-      return (
-        <div className="py-6 px-4 space-y-3">
-          <div className="bg-gray-50 border border-gray-200 rounded-md px-3 py-3 text-xs text-gray-700 leading-relaxed space-y-1.5">
-            <div className="font-semibold text-gray-900">
-              이 마을 전체에 한전 용량 정보가 없습니다
-            </div>
-            <div>
-              한전이 이 마을(리)에 대한 데이터를 보유하고 있지 않아
-              <br />
-              주변 지번의 참고 정보도 표시할 수 없습니다.
-            </div>
-            <div className="text-[11px] text-gray-500 pt-1">
-              산악·해안 변두리 지역에서 종종 발생합니다. 정확한 용량은
-              아래 한전 시스템에서 직접 확인해 주세요.
-            </div>
-          </div>
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
-                         bg-blue-50 text-blue-700 rounded border border-blue-200
-                         hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <RefreshArrowIcon spinning={refreshing} className="w-3 h-3" />
-              {refreshing ? "KEPCO 조회 중..." : "KEPCO 에서 지금 확인"}
-            </button>
-            {refreshError && (
-              <div className="text-[11px] text-red-500 mt-2">{refreshError}</div>
-            )}
-          </div>
-        </div>
-      );
+  // 주변 지번 새로고침 = 캐시 invalidate + DB 재조회 (KEPCO 호출 X — 안전).
+  const handleRefreshNearby = useCallback(async () => {
+    if (!/^\d{19}$/.test(pnu)) return;
+    setRefreshingNearby(true);
+    setError(null);
+    clearKepcoByPnuCache(pnu);
+    try {
+      const res = await fetchKepcoByPnu(pnu);
+      setRows(res.rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshingNearby(false);
     }
+  }, [pnu]);
 
-    // exact 0건 + RPC 도 호출 못 했거나 예외 (jibun 추출 실패 등) — 기존 멘트 유지
-    return (
-      <div className="py-6 text-center space-y-3">
-        <div className="text-sm text-gray-500">
-          이 지번({clickedJibun})에 매칭된 KEPCO 용량 정보가 없습니다.
-        </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
-                     bg-blue-50 text-blue-700 rounded border border-blue-200
-                     hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <RefreshArrowIcon spinning={refreshing} className="w-3 h-3" />
-          {refreshing ? "KEPCO 조회 중..." : "KEPCO 에서 지금 확인"}
-        </button>
-        {refreshError && (
-          <div className="text-[11px] text-red-500">{refreshError}</div>
-        )}
-      </div>
-    );
-  }
+  // TODO: 마을 전체 지번 목록 불러오기 (KEPCO retrieveAddrGbn) — 별도 phase
+  const handleListJibun = useCallback(() => {
+    alert("준비 중 — 마을 전체 지번 목록 불러오기");
+  }, []);
 
-  // ── fallback 응답 = 같은 마을의 가까운 지번 top N (의뢰자 결정 2026-05-01)
-  // 마을검색 모달의 LocationDetailGrouped 컴포넌트 그대로 재사용 —
-  // 변전소/주변압기/배전선로 그룹화 + 번지 + 시설별 잔여 용량 칼럼 한 줄 표시 + 펼침.
-  // 정렬/검색/필터/펼침 등 모든 동작이 이미 완성됨.
-  if (fallback.used) {
-    return (
-      <div className="space-y-2">
-        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-900 leading-relaxed">
-          이 지번(<b>{fallback.target_jibun}</b>)은 매칭 정보가 없어
-          같은 마을의 가까운 지번 <b>{capa.length}건</b>을 표시합니다.
-        </div>
-        {/* 길어질 경우 자동 스크롤 — 화면 절반 정도까지만 노출 */}
-        <div className="-mx-4 max-h-[55vh] overflow-y-auto">
-          <LocationDetailGrouped
-            rows={capa}
-            compact
-            onJibunPin={(row) => {
-              if (!onPnuChange || !row.addr_jibun || !row.bjd_code) return;
-              const newPnu = buildPnuFromBjdAndJibun(row.bjd_code, row.addr_jibun);
-              if (newPnu) onPnuChange(newPnu);
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
+  // TODO: 마을 전체 일괄 수집 — 오래 걸리므로 별도 phase
+  const handleCollectAll = useCallback(() => {
+    alert("준비 중 — 마을 전체 일괄 수집");
+  }, []);
 
-  // capa row 별로 updated_at 이 갈라질 수 있음 (분할 저장 경계).
-  // "이 데이터셋에서 가장 최근 확인 시각" 의미로 max 를 사용.
-  // ISO 사전식 비교 대신 Date 변환 비교 (offset 차이에도 안전).
+  // updated_at max — 해당 지번 row 중 가장 최근 확인 시각
   let lastUpdatedIso: string | null = null;
   let lastUpdatedMs = -Infinity;
-  for (const row of capa) {
+  for (const row of exactRows) {
     if (!row.updated_at) continue;
     const ms = new Date(row.updated_at).getTime();
     if (Number.isNaN(ms)) continue;
@@ -1170,62 +1112,172 @@ function ElectricTab({
   const relative = formatRelativeKst(lastUpdatedIso);
   const absolute = formatAbsoluteKst(lastUpdatedIso);
 
+  if (error) {
+    return (
+      <div className="text-center py-8 text-xs text-red-600">
+        조회 실패: {error}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3">
-      {capa.map((row, i) => (
-        <div key={row.id ?? i} className="space-y-1.5">
-          {capa.length > 1 && (
-            <div className="text-[11px] text-gray-500 font-medium">
-              세트 {i + 1} / {capa.length}
+    <div className="space-y-4">
+      {/* ── 섹터 1: 해당 지번 ────────────────────── */}
+      <section className="border border-gray-200 rounded-lg bg-white">
+        <SectionHeader
+          title="해당 지번"
+          subtitle={clickedJibun}
+          onRefresh={handleRefreshExact}
+          refreshing={refreshingExact}
+          refreshTitle="KEPCO 에서 최신 데이터 가져오기"
+        />
+        <div className="px-3 pb-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 gap-2">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="text-xs text-gray-500">조회 중...</div>
             </div>
+          ) : exactRows.length === 0 ? (
+            <div className="py-4 text-center space-y-2">
+              <div className="text-xs text-gray-500">
+                아직 수집되지 않은 지번입니다.
+              </div>
+              <button
+                type="button"
+                onClick={handleRefreshExact}
+                disabled={refreshingExact}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
+                           bg-blue-50 text-blue-700 rounded border border-blue-200
+                           hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <RefreshArrowIcon spinning={refreshingExact} className="w-3 h-3" />
+                {refreshingExact ? "수집 중..." : "이 지번 수집"}
+              </button>
+              {refreshError && (
+                <div className="text-[11px] text-red-500">{refreshError}</div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="-mx-3">
+                <LocationDetailGrouped rows={exactRows} compact />
+              </div>
+              {relative && (
+                <div
+                  className="pt-2 text-right text-[10px] text-gray-400"
+                  title={absolute || undefined}
+                >
+                  KEPCO 마지막 확인: {relative}
+                </div>
+              )}
+              {refreshError && (
+                <div className="text-[10px] text-red-500 text-right">
+                  {refreshError}
+                </div>
+              )}
+            </>
           )}
-          <FacilityCard
-            title="변전소"
-            name={row.subst_nm ?? "-"}
-            ok={hasCapacity(row.subst_capa, row.subst_pwr, row.g_subst_capa)}
-            base={row.subst_capa}
-            received={row.subst_pwr}
-            planned={row.g_subst_capa}
-          />
-          <FacilityCard
-            title="주변압기"
-            name={`#${row.mtr_no ?? "-"}`}
-            ok={hasCapacity(row.mtr_capa, row.mtr_pwr, row.g_mtr_capa)}
-            base={row.mtr_capa}
-            received={row.mtr_pwr}
-            planned={row.g_mtr_capa}
-          />
-          <FacilityCard
-            title="배전선로"
-            name={row.dl_nm ?? "-"}
-            ok={hasCapacity(row.dl_capa, row.dl_pwr, row.g_dl_capa)}
-            base={row.dl_capa}
-            received={row.dl_pwr}
-            planned={row.g_dl_capa}
-          />
         </div>
-      ))}
-      {relative && (
-        <div
-          className="pt-1.5 text-right text-[10px] text-gray-400 flex items-center justify-end gap-1.5"
-          title={absolute || undefined}
-        >
-          <span>KEPCO 마지막 확인: {relative}</span>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="KEPCO 에서 최신 데이터 가져오기"
-            aria-label="새로고침"
-          >
-            <RefreshArrowIcon spinning={refreshing} className="w-4 h-4" />
-          </button>
+      </section>
+
+      {/* ── 섹터 2: 주변 지번 ────────────────────── */}
+      <section className="border border-gray-200 rounded-lg bg-white">
+        <SectionHeader
+          title="주변 지번"
+          subtitle={nearbyRows.length > 0 ? `${nearbyRows.length}건` : undefined}
+          onRefresh={handleRefreshNearby}
+          refreshing={refreshingNearby}
+          refreshTitle="DB 에서 다시 조회"
+        />
+        <div className="px-3 pb-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 gap-2">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="text-xs text-gray-500">조회 중...</div>
+            </div>
+          ) : nearbyRows.length === 0 ? (
+            <div className="py-4 text-center space-y-2">
+              <div className="text-xs text-gray-500">
+                주변 지번에 수집된 정보가 없습니다.
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleListJibun}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
+                             bg-blue-50 text-blue-700 rounded border border-blue-200
+                             hover:bg-blue-100"
+                >
+                  지번 목록 불러오기
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="-mx-3 max-h-[55vh] overflow-y-auto">
+                <LocationDetailGrouped
+                  rows={nearbyRows}
+                  compact
+                  onJibunPin={(row) => {
+                    if (!onPnuChange || !row.addr_jibun || !row.bjd_code) return;
+                    const newPnu = buildPnuFromBjdAndJibun(
+                      row.bjd_code,
+                      row.addr_jibun,
+                    );
+                    if (newPnu) onPnuChange(newPnu);
+                  }}
+                />
+              </div>
+              <div className="pt-2 text-right">
+                <button
+                  type="button"
+                  onClick={handleCollectAll}
+                  className="text-[11px] text-gray-500 hover:text-blue-600 underline-offset-2 hover:underline"
+                  title="이 마을의 모든 지번을 KEPCO 에서 일괄 수집 (시간 소요)"
+                >
+                  전체 수집
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      )}
-      {refreshError && (
-        <div className="text-[10px] text-red-500 text-right">{refreshError}</div>
-      )}
+      </section>
+    </div>
+  );
+}
+
+/** 섹터 헤더 — 제목 + 부제(지번/건수) + 새로고침 버튼 */
+function SectionHeader({
+  title,
+  subtitle,
+  onRefresh,
+  refreshing,
+  refreshTitle,
+}: {
+  title: string;
+  subtitle?: string;
+  onRefresh: () => void;
+  refreshing: boolean;
+  refreshTitle: string;
+}) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/60 rounded-t-lg">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold text-gray-800">{title}</span>
+        {subtitle && (
+          <span className="text-[11px] text-gray-500">{subtitle}</span>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={refreshing}
+        className="text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        title={refreshTitle}
+        aria-label="새로고침"
+      >
+        <RefreshArrowIcon spinning={refreshing} className="w-4 h-4" />
+      </button>
     </div>
   );
 }

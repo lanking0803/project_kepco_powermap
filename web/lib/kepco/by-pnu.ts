@@ -5,34 +5,17 @@
  * 캐시: PNU 단위 모듈 scope — 같은 패널에서 탭 재방문 시 재호출 X.
  *
  * Endpoint ↔ 함수 매핑:
- *   GET  /api/capa/by-pnu         ↔ fetchKepcoByPnu     (DB 조회, 빠름)
- *   POST /api/capa/refresh-by-pnu ↔ refreshKepcoByPnu   (KEPCO live + DB upsert)
+ *   GET  /api/capa/by-pnu          ↔ fetchKepcoByPnu       (같은 마을 top N, 자기 포함)
+ *   POST /api/capa/refresh-by-pnu  ↔ refreshKepcoByPnu     (KEPCO live + DB upsert)
  *
- * 분기 0 — 전기/공매 어느 모드에서 진입하든 PNU 만으로 동일 흐름.
+ * UI 가 응답 rows 에서 buildPnuFromBjdAndJibun 으로 자기/주변 분기.
  */
 
 import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 
-/**
- * fallback 정보:
- *   used=false: exact 매칭 (rows 가 그 지번 정보 그대로)
- *   used=true:  exact 매칭 0건 → 같은 마을의 가까운 top 10 row 반환.
- *               UI 에서 "이 지번 정보 없음, 같은 마을 N건 표시" 안내.
- */
-export type CapaFallback =
-  | { used: false }
-  | { used: true; target_jibun: string };
-
 export interface CapaByPnuResult {
   rows: KepcoDataRow[];
   meta: AddrMeta | null;
-  fallback: CapaFallback;
-  /**
-   * true = 같은 마을(bjd_code) 전체에 한전 데이터가 0건.
-   * UI 에서 "이 마을 자체에 한전 정보가 없어 주변 지번도 표시 못 함" 멘트 분기용.
-   * exact 매칭 성공 케이스는 항상 false.
-   */
-  villageEmpty: boolean;
 }
 
 interface CapaByPnuApiResponse {
@@ -43,8 +26,6 @@ interface CapaByPnuApiResponse {
   rows?: KepcoDataRow[];
   total?: number;
   meta?: AddrMeta | null;
-  fallback?: CapaFallback;
-  village_empty?: boolean;
   error?: string;
 }
 
@@ -61,17 +42,11 @@ interface RefreshApiResponse {
 const resultCache = new Map<string, CapaByPnuResult>();
 const inflight = new Map<string, Promise<CapaByPnuResult>>();
 
-const EMPTY_RESULT: CapaByPnuResult = {
-  rows: [],
-  meta: null,
-  fallback: { used: false },
-  villageEmpty: false,
-};
+const EMPTY_RESULT: CapaByPnuResult = { rows: [], meta: null };
 
 /**
- * GET /api/capa/by-pnu — DB 단위 조회. 같은 PNU 재호출은 모듈 캐시 hit.
- * @param pnu 행안부 표준 PNU 19자리 (산구분 1=일반/2=산)
- * @returns 지번 단위로 매칭된 capa rows + 행정구역 메타. 형식 오류면 빈 결과.
+ * GET /api/capa/by-pnu — 같은 마을 가까운 지번 top N (자기 포함).
+ * 같은 PNU 재호출은 모듈 캐시 hit.
  */
 export async function fetchKepcoByPnu(
   pnu: string,
@@ -94,8 +69,6 @@ export async function fetchKepcoByPnu(
     const result: CapaByPnuResult = {
       rows: data.rows ?? [],
       meta: data.meta ?? null,
-      fallback: data.fallback ?? { used: false },
-      villageEmpty: data.village_empty ?? false,
     };
     resultCache.set(pnu, result);
     return result;
@@ -109,9 +82,9 @@ export async function fetchKepcoByPnu(
 
 /**
  * POST /api/capa/refresh-by-pnu — KEPCO live 호출 + DB upsert (강제 갱신).
- * 호출 후 모듈 캐시를 비우고 새 결과로 채움 → 이후 fetchKepcoByPnu 즉시 hit.
+ * 호출 후 모듈 캐시를 비움 → 다음 fetchKepcoByPnu 가 갱신된 같은 마을 결과 받음.
  *
- * @returns 갱신된 capa rows. KEPCO 미보유 지번이면 빈 배열 + source='not_found'.
+ * @returns 갱신된 capa rows (해당 지번만). KEPCO 미보유 지번이면 빈 배열 + source='not_found'.
  */
 export async function refreshKepcoByPnu(pnu: string): Promise<{
   rows: KepcoDataRow[];
@@ -130,17 +103,10 @@ export async function refreshKepcoByPnu(pnu: string): Promise<{
   const data = (await res.json()) as RefreshApiResponse;
   if (!data.ok) throw new Error(data.error || "PNU 용량 갱신 실패");
 
-  // 갱신 결과를 모듈 캐시에 반영 (다음 fetchKepcoByPnu 즉시 hit).
-  // refresh 응답엔 meta/fallback 이 없으므로 기존 meta 유지 또는 null.
-  // refresh 는 KEPCO live 호출이라 fallback 의미 없음 → used=false 로 초기화.
-  // villageEmpty 도 KEPCO live 결과 기준으로는 의미 없음 → false 로 초기화.
-  const prev = resultCache.get(pnu);
-  resultCache.set(pnu, {
-    rows: data.rows ?? [],
-    meta: prev?.meta ?? null,
-    fallback: { used: false },
-    villageEmpty: false,
-  });
+  // 모듈 캐시 invalidate — 다음 fetchKepcoByPnu 가 같은 마을 top N 을 새로 받아옴.
+  // (refresh 응답은 자기 지번만이라 캐시에 직접 넣으면 주변 지번이 사라짐.)
+  resultCache.delete(pnu);
+  inflight.delete(pnu);
 
   return {
     rows: data.rows ?? [],
@@ -149,8 +115,13 @@ export async function refreshKepcoByPnu(pnu: string): Promise<{
   };
 }
 
-/** 모듈 캐시만 비움 (다음 fetchKepcoByPnu 가 서버 재요청). */
-export function clearKepcoByPnuCache(): void {
-  resultCache.clear();
-  inflight.clear();
+/** 모듈 캐시 비움 (다음 fetchKepcoByPnu 가 서버 재요청). */
+export function clearKepcoByPnuCache(pnu?: string): void {
+  if (pnu) {
+    resultCache.delete(pnu);
+    inflight.delete(pnu);
+  } else {
+    resultCache.clear();
+    inflight.clear();
+  }
 }

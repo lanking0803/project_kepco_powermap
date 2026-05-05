@@ -1,30 +1,30 @@
 /**
  * GET /api/capa/by-pnu?pnu=<19자리>
  *
- * Atomic endpoint — PNU 단위 KEPCO 용량 + 행정구역 메타.
+ * PNU 단위 KEPCO 용량 조회 — 같은 마을(bjd_code) 내 가까운 지번 top N.
  *
  * 입력: PNU 19자리 (행안부 표준, 산구분 1=일반/2=산).
- * 서버 분리:
+ * 처리:
  *   - bjd_code = PNU 앞 10자리
  *   - jibun = PNU 뒤 9자리 → 텍스트 ("36-2", "산23")
- *   - kepco_capa.addr_jibun 와 exact match
+ *   - jibunToNumber(jibun) 으로 정규화 숫자값
+ *   - RPC fallback_kepco_nearest 호출 (자기 지번 포함, 거리순 top 10)
  *
- * 매칭 0건 fallback (2026-05-01 의뢰자 요청):
- *   같은 리(=같은 bjd_code) 안에서 본번 차이 최소 top 5 row 반환.
- *   RPC fallback_kepco_nearest 가 jibun_to_num 정규화 + 거리 정렬.
- *   한전이 모든 지번 데이터를 갖고 있지 않아 같은 마을 안의 다른 지번 정보로
- *   대체. UI 에는 fallback 사용 표시 + 안내 배지 (LocationDetailGrouped compact).
- *   응답 필드: fallback = { used: true, target_jibun }
- *
- * 응답:
- *   { ok, pnu, bjd_code, jibun, rows, total, meta, fallback }
+ * 응답: { ok, pnu, bjd_code, jibun, rows, total, meta }
+ *   rows = 같은 마을 가까운 지번 top N (자기 지번이 DB 에 있으면 1등으로 포함됨)
+ *   클라이언트에서 buildPnuFromBjdAndJibun(row.bjd_code, row.addr_jibun) === pnu 로
+ *   "해당 지번" / "주변 지번" 분기.
  *
  * 사용처:
- *   - ParcelInfoPanel [전기] 탭 (lib/kepco/by-pnu) — 모든 진입(전기/공매/견적) 단일 입력 PNU.
+ *   - ParcelInfoPanel [전기] 탭 (lib/kepco/by-pnu).
  *
  * 마을(BJD) 단위 조회는 별도 endpoint:
  *   - 마을 카드:  /api/capa/summary-by-bjd
  *   - 마을 모달:  /api/capa/by-bjd
+ *
+ * 변경 이력:
+ *   2026-05-05: exact 매칭 + fallback 직렬 → RPC 단일 호출로 통합. 클라이언트가
+ *               PNU 비교로 자기/주변 분기. API 호출 1회로 단축.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -34,7 +34,7 @@ import type { AddrMeta, KepcoDataRow } from "@/lib/types";
 import type { EndpointMeta } from "@/app/admin/api-manager/_lib/types";
 
 export const meta: EndpointMeta = {
-  source: "DB (Supabase: kepco_capa + bjd_master)",
+  source: "DB (Supabase RPC: fallback_kepco_nearest + bjd_master)",
   cache: "no-store",
   auth: "user",
   inputs: [
@@ -51,8 +51,10 @@ export const meta: EndpointMeta = {
     "{ ok, pnu, bjd_code, jibun, rows: KepcoDataRow[], total, meta: AddrMeta | null }",
   externalDeps: [],
   notes:
-    "exact match 만 — fallback 없음. KEPCO 미수집 지번은 빈 rows. meta = bjd_master 의 sep_1~5 (헤더 주소 표시용 보조). PNU → bjd_code/jibun 분리는 lib/geo/pnu (jibunFromPnu).",
+    "RPC fallback_kepco_nearest 로 같은 마을 가까운 지번 top 10 (자기 포함). 클라이언트가 PNU 비교로 자기/주변 분기. meta = bjd_master sep_1~5 (헤더용 보조).",
 };
+
+const NEARBY_LIMIT = 10;
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -80,29 +82,36 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const targetNum = jibunToNumber(jibun);
   const supabase = createAdminClient();
-  const [capaRes, metaRes] = await Promise.all([
-    supabase
-      .from("kepco_capa")
-      .select("*")
-      .eq("bjd_code", bjdCode)
-      .eq("addr_jibun", jibun),
-    supabase
-      .from("bjd_master")
-      .select("sep_1,sep_2,sep_3,sep_4,sep_5")
-      .eq("bjd_code", bjdCode)
-      .maybeSingle(),
-  ]);
 
-  if (capaRes.error) {
-    console.error("[capa/by-pnu] 조회 실패", capaRes.error);
-    return NextResponse.json(
-      { ok: false, error: capaRes.error.message },
-      { status: 500 },
-    );
+  // meta 는 어떤 경우든 같은 bjd_master 행 1건. RPC 와 병렬로.
+  const metaPromise = supabase
+    .from("bjd_master")
+    .select("sep_1,sep_2,sep_3,sep_4,sep_5")
+    .eq("bjd_code", bjdCode)
+    .maybeSingle();
+
+  // targetNum 이 null = 정규화 불가 (예: KEPCO 가 들고있지 않은 비표준 표기).
+  // RPC 는 거리 정렬 기준이라 호출 의미 없음 → 빈 rows 로 응답.
+  let rows: KepcoDataRow[] = [];
+  if (targetNum !== null) {
+    const { data, error } = await supabase.rpc("fallback_kepco_nearest", {
+      p_bjd_code: bjdCode,
+      p_target_num: targetNum,
+      p_limit: NEARBY_LIMIT,
+    });
+    if (error) {
+      console.error("[capa/by-pnu] RPC 실패", error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 },
+      );
+    }
+    rows = (data ?? []) as KepcoDataRow[];
   }
 
-  let rows = (capaRes.data ?? []) as KepcoDataRow[];
+  const metaRes = await metaPromise;
   const m = metaRes.data;
   const meta: AddrMeta | null = m
     ? {
@@ -114,41 +123,6 @@ export async function GET(request: NextRequest) {
       }
     : null;
 
-  // ── exact 매칭 0건 fallback (2026-05-01 의뢰자 결정) ───────────────
-  // 같은 마을(bjd_code) 내 가장 가까운 지번 top 5 표시.
-  // RPC fallback_kepco_nearest 가 jibun_to_num() 정규화 + 거리 정렬.
-  // 정상 매칭 케이스는 추가 부담 0 — exact 0건일 때만 발동.
-  //
-  // village_empty (2026-05-01): RPC 결과도 빈 배열 = 마을 전체에 한전 데이터 0건.
-  // 추가 쿼리 없이 같은 RPC 결과로 판정 → UI 에서 "마을 자체 정보 없음" 안내용.
-  let fallback: { used: false } | { used: true; target_jibun: string } = {
-    used: false,
-  };
-  let villageEmpty = false;
-  if (rows.length === 0) {
-    const targetNum = jibunToNumber(jibun);
-    if (targetNum !== null) {
-      const { data: nearestRows, error: rpcErr } = await supabase.rpc(
-        "fallback_kepco_nearest",
-        {
-          p_bjd_code: bjdCode,
-          p_target_num: targetNum,
-          p_limit: 5,
-        },
-      );
-      if (rpcErr) {
-        console.error("[capa/by-pnu] fallback RPC 실패", rpcErr);
-        // RPC 실패해도 응답 자체는 정상 (rows=[]) 으로 — UI 기존 흐름 유지
-      } else if (nearestRows && nearestRows.length > 0) {
-        rows = nearestRows as KepcoDataRow[];
-        fallback = { used: true, target_jibun: jibun };
-      } else {
-        // RPC 정상 응답 + 빈 배열 = 같은 bjd_code 안에 row 0건 = 마을 전체 한전 데이터 없음
-        villageEmpty = true;
-      }
-    }
-  }
-
   return NextResponse.json(
     {
       ok: true,
@@ -158,11 +132,8 @@ export async function GET(request: NextRequest) {
       rows,
       total: rows.length,
       meta,
-      fallback,
-      village_empty: villageEmpty,
     },
     {
-      // 같은 PNU 재호출 시 10분간 hit (KEPCO 일배치 갱신 주기 대비 충분히 안전)
       headers: { "Cache-Control": "private, max-age=600" },
     },
   );
