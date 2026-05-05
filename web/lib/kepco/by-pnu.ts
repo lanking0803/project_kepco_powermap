@@ -125,3 +125,25 @@ export function clearKepcoByPnuCache(pnu?: string): void {
     inflight.clear();
   }
 }
+
+/**
+ * GET /api/capa/jibun-list-by-pnu — KEPCO 가 마을에 보유한 지번 텍스트 배열.
+ * 메모리/UI 일회성 — 캐시 없음 (사용자가 누를 때마다 KEPCO live).
+ */
+export async function fetchKepcoJibunListByPnu(
+  pnu: string,
+  options?: { signal?: AbortSignal },
+): Promise<string[]> {
+  if (!/^\d{19}$/.test(pnu)) return [];
+  const res = await fetch(
+    `/api/capa/jibun-list-by-pnu?pnu=${encodeURIComponent(pnu)}`,
+    { signal: options?.signal },
+  );
+  const data = (await res.json()) as {
+    ok: boolean;
+    jibuns?: string[];
+    error?: string;
+  };
+  if (!data.ok) throw new Error(data.error || "지번 목록 조회 실패");
+  return data.jibuns ?? [];
+}

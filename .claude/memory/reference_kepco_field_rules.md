@@ -102,6 +102,11 @@ const gu1 = gu || SKIP_VALUE;   // -기타지역으로 채움
 
 → 픽스 후 단위 테스트 + verify_full.py 재검증으로 매칭률 회복 확인.
 
+## ⚠️ KEPCO 호출 시 공통 주의사항 (신규 endpoint 만들 때)
+
+1. **후보 순회 필수** — `buildKepcoCandidates` 가 5종 후보 반환. 1차만 시도하면 세종 등 변형 케이스 누락. `lookupCapacity` 와 동일하게 **첫 비어있지 않은 결과 채택** 패턴 적용. (사례: 2026-05-05 jibun-list-by-pnu 1차만 호출했다가 세종 0건 발생)
+2. **응답 dedupe** — KEPCO 가 같은 (변전소/주변압기/배전선로) 조합을 한 응답에 중복 반환하는 케이스 있음. UNIQUE 제약 (bjd_code+addr_jibun+subst_nm+mtr_no+dl_nm) 위반으로 upsert 실패. `upsert-capa.ts` 가 dedupe 처리.
+
 ## 🔗 관련 메모
 
 - [KEPCO 같은 마을 fallback](reference_kepco_fallback.md) — exact 0건 시 같은 bjd_code 안 본번거리 정렬 (보완책)

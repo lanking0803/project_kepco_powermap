@@ -25,11 +25,16 @@ import {
 import { fetchVworldParcelByPnu } from "@/lib/api/vworld";
 import {
   fetchKepcoByPnu,
+  fetchKepcoJibunListByPnu,
   refreshKepcoByPnu,
-  clearKepcoByPnuCache,
 } from "@/lib/kepco/by-pnu";
-import { jibunFromPnu, buildPnuFromBjdAndJibun } from "@/lib/geo/pnu";
-import LocationDetailGrouped from "./LocationDetailGrouped";
+import {
+  jibunFromPnu,
+  buildPnuFromBjdAndJibun,
+  jibunToNumber,
+} from "@/lib/geo/pnu";
+import { hasCapacity } from "@/lib/types";
+import { FacilityCard, StepBlock } from "./FacilityCard";
 import {
   fetchLandTransactionsByPnu,
   fetchNrgTransactionsByPnu,
@@ -977,24 +982,17 @@ function RefreshArrowIcon({
  * 진입 모드 무관(전기/공매/견적) — PNU 만 있으면 어디서든 동일하게 작동.
  */
 /**
- * 전기 탭 — 2섹터 고정 노출 (2026-05-05 의뢰자 요청 재구성).
+ * 전기 탭 — 2섹터 고정 노출 (2026-05-05 재구성).
  *
- *   ┌─ 해당 지번 ─────────[↻] ─┐
- *   │ 클릭한 지번의 row 표시    │
- *   │ 또는 미수집 → [수집] 버튼  │
- *   ├─ 주변 지번 ─────────[↻] ─┤
- *   │ 같은 마을 가까운 N건       │
- *   │ 또는 미수집 → [목록 불러오기] (TODO) │
- *   │           [전체 수집 →] (TODO) │
- *   └────────────────────────────┘
+ * 진입 시 두 호출 병렬:
+ *   - GET /api/capa/jibun-list-by-pnu  → KEPCO 보유 지번 텍스트 배열 (마을 단위)
+ *   - GET /api/capa/by-pnu             → DB 가 보유한 같은 마을 row top 10
  *
- * 데이터:
- *   - GET /api/capa/by-pnu 1번 호출. 응답 = 같은 마을 top 10 (자기 포함).
- *   - 클라이언트가 buildPnuFromBjdAndJibun(row) === pnu 비교로 자기/주변 분기.
+ * 주변 지번 섹터 = jibun-list 기준 (자기 제외 + jibunToNumber 거리순 top 10).
+ * by-pnu rows 와 매칭되는 지번은 용량/신선도 표시, 미매칭은 [수집] 버튼.
+ * 각 행마다 새로고침/수집 버튼 — 섹터 헤더 새로고침은 제거.
  *
- * 새로고침:
- *   - 해당 지번: KEPCO live 호출 (refreshKepcoByPnu) → 캐시 invalidate → 재조회
- *   - 주변 지번: 캐시 invalidate → 재조회 (KEPCO 호출 X)
+ * jibun-list 실패 = 전체 조회 실패로 표시 (by-pnu 결과는 무시).
  */
 function ElectricTab({
   pnu,
@@ -1003,242 +1001,229 @@ function ElectricTab({
 }: {
   pnu: string;
   clickedJibun: string;
-  /** 주변 지번 행의 📍 클릭 → 그 지번 PNU 로 패널 자체를 갈아끼움 */
+  /** 주변 지번 텍스트(📍) 클릭 시 그 지번 PNU 로 패널 갈아끼움 */
   onPnuChange?: (pnu: string) => void;
 }) {
-  const [rows, setRows] = useState<KepcoDataRow[]>([]);
+  // by-pnu 응답 (DB top 10, 자기 포함) — 용량 매칭에 사용.
+  const [capaRows, setCapaRows] = useState<KepcoDataRow[]>([]);
+  // jibun-list 응답 (KEPCO 보유 지번 텍스트 배열) — 주변 목록 기준.
+  const [jibunList, setJibunList] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshingExact, setRefreshingExact] = useState(false);
-  const [refreshingNearby, setRefreshingNearby] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [capaError, setCapaError] = useState<string | null>(null);
+  const [jibunListError, setJibunListError] = useState<string | null>(null);
+  // 행별 수집/새로고침 진행 상태 — 동시 다건 처리 가능.
+  const [busyJibuns, setBusyJibuns] = useState<Set<string>>(new Set());
+  // 수집 시도했지만 KEPCO 가 not_found 응답한 지번 — UI 에 "데이터 없음" 표시.
+  const [notFoundJibuns, setNotFoundJibuns] = useState<Set<string>>(new Set());
 
+  const targetJibun = useMemo(() => jibunFromPnu(pnu), [pnu]);
+
+  // 진입 시 두 fetch 병렬. 자기 지번이 결과에 들어와도 화면 매칭 단계에서 분기 처리.
   useEffect(() => {
     if (!/^\d{19}$/.test(pnu)) return;
     let alive = true;
     setLoading(true);
-    setError(null);
-    fetchKepcoByPnu(pnu)
+    setCapaError(null);
+    setJibunListError(null);
+    setJibunList(null);
+    setBusyJibuns(new Set());
+    setNotFoundJibuns(new Set());
+
+    const capaP = fetchKepcoByPnu(pnu)
       .then((res) => {
-        if (alive) setRows(res.rows);
+        if (alive) setCapaRows(res.rows);
       })
       .catch((e: unknown) => {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
+        if (alive) setCapaError(e instanceof Error ? e.message : String(e));
       });
+
+    const listP = fetchKepcoJibunListByPnu(pnu)
+      .then((list) => {
+        if (alive) setJibunList(list);
+      })
+      .catch((e: unknown) => {
+        if (alive) setJibunListError(e instanceof Error ? e.message : String(e));
+      });
+
+    Promise.all([capaP, listP]).finally(() => {
+      if (alive) setLoading(false);
+    });
+
     return () => {
       alive = false;
     };
   }, [pnu]);
 
-  // 자기 / 주변 분기 — buildPnuFromBjdAndJibun 으로 PNU 조립 후 입력 PNU 와 비교.
-  // "100-1" / "100-01" 같은 표기 차이도 동일 PNU 로 정규화돼 안전.
-  const { exactRows, nearbyRows } = useMemo(() => {
-    const exact: KepcoDataRow[] = [];
-    const nearby: KepcoDataRow[] = [];
-    for (const r of rows) {
+  // capa rows 를 jibun 텍스트 키로 빠르게 찾을 수 있게.
+  // 같은 지번이 여러 변전소/주변압기/배전선로 조합으로 분할 저장되는 경우가 있어
+  // 첫 row 만 잡지 말고 배열로 보관 — 매칭 후 그대로 펼침/표 행 렌더에 사용.
+  const rowsByJibun = useMemo(() => {
+    const map = new Map<string, KepcoDataRow[]>();
+    for (const r of capaRows) {
+      const key = r.addr_jibun ?? "";
+      if (!key) continue;
+      const list = map.get(key) ?? [];
+      list.push(r);
+      map.set(key, list);
+    }
+    return map;
+  }, [capaRows]);
+
+  // 해당 지번 = capa rows 중 PNU 가 일치하는 것.
+  // 텍스트 매칭은 표기 흔들림에 약해서 PNU 비교 사용 (buildPnu 가 정규화).
+  const exactRows = useMemo(() => {
+    return capaRows.filter((r) => {
       const rowPnu = r.bjd_code
         ? buildPnuFromBjdAndJibun(r.bjd_code, r.addr_jibun)
         : null;
-      if (rowPnu && rowPnu === pnu) {
-        exact.push(r);
-      } else {
-        nearby.push(r);
+      return rowPnu === pnu;
+    });
+  }, [capaRows, pnu]);
+
+  // 주변 지번 = jibun-list 기준, 자기 지번 제외, jibunToNumber 거리순 top 10.
+  // (by-pnu 의 RPC fallback_kepco_nearest 와 동일 정렬 기준)
+  const nearbyJibuns = useMemo<string[]>(() => {
+    if (!jibunList) return [];
+    const targetNum = targetJibun ? jibunToNumber(targetJibun) : null;
+    const filtered = jibunList.filter((j) => j !== targetJibun);
+    if (targetNum === null) return filtered.slice(0, 10);
+    const withNum = filtered.map((j) => ({ j, n: jibunToNumber(j) }));
+    withNum.sort((a, b) => {
+      if (a.n === null && b.n === null) return a.j.localeCompare(b.j);
+      if (a.n === null) return 1;
+      if (b.n === null) return -1;
+      const da = Math.abs(a.n - targetNum);
+      const db = Math.abs(b.n - targetNum);
+      if (da !== db) return da - db;
+      return a.j.localeCompare(b.j);
+    });
+    return withNum.slice(0, 10).map((x) => x.j);
+  }, [jibunList, targetJibun]);
+
+  // 행 1건 KEPCO live 호출 (수집 또는 새로고침).
+  // 응답 row 들을 capaRows 에 반영 — 같은 PNU 의 기존 row 는 교체.
+  const handleCollectOne = useCallback(
+    async (jibun: string) => {
+      const bjdCode = pnu.slice(0, 10);
+      const targetPnu = buildPnuFromBjdAndJibun(bjdCode, jibun);
+      if (!targetPnu) return;
+      setBusyJibuns((prev) => {
+        const next = new Set(prev);
+        next.add(jibun);
+        return next;
+      });
+      try {
+        const r = await refreshKepcoByPnu(targetPnu);
+        setCapaRows((prev) => {
+          const others = prev.filter((row) => {
+            const rowPnu = row.bjd_code
+              ? buildPnuFromBjdAndJibun(row.bjd_code, row.addr_jibun)
+              : null;
+            return rowPnu !== targetPnu;
+          });
+          return [...others, ...r.rows];
+        });
+        // KEPCO 가 데이터 없다고 응답 → UI 에 명시 / 있으면 not_found 표시 해제.
+        setNotFoundJibuns((prev) => {
+          const next = new Set(prev);
+          if (r.source === "not_found" || r.rows.length === 0) {
+            next.add(jibun);
+          } else {
+            next.delete(jibun);
+          }
+          return next;
+        });
+      } catch (e) {
+        console.error("[collect jibun]", jibun, e);
+      } finally {
+        setBusyJibuns((prev) => {
+          const next = new Set(prev);
+          next.delete(jibun);
+          return next;
+        });
       }
-    }
-    return { exactRows: exact, nearbyRows: nearby };
-  }, [rows, pnu]);
+    },
+    [pnu],
+  );
 
-  // 해당 지번 새로고침 = KEPCO live 호출 + DB upsert + 캐시 invalidate.
-  const handleRefreshExact = useCallback(async () => {
-    if (!/^\d{19}$/.test(pnu)) return;
-    setRefreshingExact(true);
-    setRefreshError(null);
-    try {
-      const r = await refreshKepcoByPnu(pnu);
-      // refresh 가 캐시 invalidate 했으니, 같은 마을 top N 다시 받아옴.
-      const fresh = await fetchKepcoByPnu(pnu);
-      setRows(fresh.rows);
-      if (r.source === "not_found") {
-        setRefreshError("KEPCO 에 데이터 없음");
-      }
-    } catch (e) {
-      setRefreshError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setRefreshingExact(false);
-    }
-  }, [pnu]);
-
-  // 주변 지번 새로고침 = 캐시 invalidate + DB 재조회 (KEPCO 호출 X — 안전).
-  const handleRefreshNearby = useCallback(async () => {
-    if (!/^\d{19}$/.test(pnu)) return;
-    setRefreshingNearby(true);
-    setError(null);
-    clearKepcoByPnuCache(pnu);
-    try {
-      const res = await fetchKepcoByPnu(pnu);
-      setRows(res.rows);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setRefreshingNearby(false);
-    }
-  }, [pnu]);
-
-  // TODO: 마을 전체 지번 목록 불러오기 (KEPCO retrieveAddrGbn) — 별도 phase
-  const handleListJibun = useCallback(() => {
-    alert("준비 중 — 마을 전체 지번 목록 불러오기");
-  }, []);
-
-  // TODO: 마을 전체 일괄 수집 — 오래 걸리므로 별도 phase
-  const handleCollectAll = useCallback(() => {
-    alert("준비 중 — 마을 전체 일괄 수집");
-  }, []);
-
-  // updated_at max — 해당 지번 row 중 가장 최근 확인 시각
-  let lastUpdatedIso: string | null = null;
-  let lastUpdatedMs = -Infinity;
-  for (const row of exactRows) {
-    if (!row.updated_at) continue;
-    const ms = new Date(row.updated_at).getTime();
-    if (Number.isNaN(ms)) continue;
-    if (ms > lastUpdatedMs) {
-      lastUpdatedMs = ms;
-      lastUpdatedIso = row.updated_at;
-    }
-  }
-  const relative = formatRelativeKst(lastUpdatedIso);
-  const absolute = formatAbsoluteKst(lastUpdatedIso);
-
-  if (error) {
-    return (
-      <div className="text-center py-8 text-xs text-red-600">
-        조회 실패: {error}
-      </div>
-    );
-  }
+  // 주변 지번 텍스트 클릭 → PNU 조립 후 부모로 전달.
+  const handleJibunPin = useCallback(
+    (jibun: string) => {
+      if (!onPnuChange) return;
+      const bjdCode = pnu.slice(0, 10);
+      const newPnu = buildPnuFromBjdAndJibun(bjdCode, jibun);
+      if (newPnu) onPnuChange(newPnu);
+    },
+    [pnu, onPnuChange],
+  );
 
   return (
     <div className="space-y-4">
       {/* ── 섹터 1: 해당 지번 ────────────────────── */}
       <section className="border border-gray-200 rounded-lg bg-white">
-        <SectionHeader
-          title="해당 지번"
-          subtitle={clickedJibun}
-          onRefresh={handleRefreshExact}
-          refreshing={refreshingExact}
-          refreshTitle="KEPCO 에서 최신 데이터 가져오기"
-        />
+        <SectionHeaderPlain title="해당 지번" subtitle={clickedJibun} />
         <div className="px-3 pb-3">
           {loading ? (
-            <div className="flex items-center justify-center py-6 gap-2">
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <div className="text-xs text-gray-500">조회 중...</div>
-            </div>
-          ) : exactRows.length === 0 ? (
-            <div className="py-4 text-center space-y-2">
-              <div className="text-xs text-gray-500">
-                아직 수집되지 않은 지번입니다.
-              </div>
-              <button
-                type="button"
-                onClick={handleRefreshExact}
-                disabled={refreshingExact}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
-                           bg-blue-50 text-blue-700 rounded border border-blue-200
-                           hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <RefreshArrowIcon spinning={refreshingExact} className="w-3 h-3" />
-                {refreshingExact ? "수집 중..." : "이 지번 수집"}
-              </button>
-              {refreshError && (
-                <div className="text-[11px] text-red-500">{refreshError}</div>
-              )}
+            <RowsLoading />
+          ) : capaError ? (
+            <div className="py-4 text-center text-xs text-red-600">
+              조회 실패: {capaError}
             </div>
           ) : (
-            <>
-              <div className="-mx-3">
-                <LocationDetailGrouped rows={exactRows} compact />
-              </div>
-              {relative && (
-                <div
-                  className="pt-2 text-right text-[10px] text-gray-400"
-                  title={absolute || undefined}
-                >
-                  KEPCO 마지막 확인: {relative}
-                </div>
-              )}
-              {refreshError && (
-                <div className="text-[10px] text-red-500 text-right">
-                  {refreshError}
-                </div>
-              )}
-            </>
+            <CapaJibunTable
+              jibun={targetJibun ?? clickedJibun}
+              rows={exactRows}
+              busy={busyJibuns.has(targetJibun ?? "")}
+              notFound={notFoundJibuns.has(targetJibun ?? "")}
+              onAction={() => handleCollectOne(targetJibun ?? clickedJibun)}
+            />
           )}
         </div>
       </section>
 
       {/* ── 섹터 2: 주변 지번 ────────────────────── */}
       <section className="border border-gray-200 rounded-lg bg-white">
-        <SectionHeader
+        <SectionHeaderPlain
           title="주변 지번"
-          subtitle={nearbyRows.length > 0 ? `${nearbyRows.length}건` : undefined}
-          onRefresh={handleRefreshNearby}
-          refreshing={refreshingNearby}
-          refreshTitle="DB 에서 다시 조회"
+          subtitle={
+            jibunListError
+              ? "조회 실패"
+              : nearbyJibuns.length > 0
+                ? `${nearbyJibuns.length}건`
+                : undefined
+          }
         />
         <div className="px-3 pb-3">
           {loading ? (
-            <div className="flex items-center justify-center py-6 gap-2">
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <div className="text-xs text-gray-500">조회 중...</div>
+            <RowsLoading />
+          ) : jibunListError ? (
+            <div className="py-4 text-center text-xs text-red-600">
+              KEPCO 지번 목록 조회 실패
+              <div className="text-[11px] text-gray-500 mt-1">
+                {jibunListError}
+              </div>
             </div>
-          ) : nearbyRows.length === 0 ? (
-            <div className="py-4 text-center space-y-2">
-              <div className="text-xs text-gray-500">
-                주변 지번에 수집된 정보가 없습니다.
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleListJibun}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs
-                             bg-blue-50 text-blue-700 rounded border border-blue-200
-                             hover:bg-blue-100"
-                >
-                  지번 목록 불러오기
-                </button>
-              </div>
+          ) : nearbyJibuns.length === 0 ? (
+            <div className="py-4 text-center text-xs text-gray-500">
+              KEPCO 에 보유된 주변 지번이 없습니다.
             </div>
           ) : (
-            <>
-              <div className="-mx-3 max-h-[55vh] overflow-y-auto">
-                <LocationDetailGrouped
-                  rows={nearbyRows}
-                  compact
-                  onJibunPin={(row) => {
-                    if (!onPnuChange || !row.addr_jibun || !row.bjd_code) return;
-                    const newPnu = buildPnuFromBjdAndJibun(
-                      row.bjd_code,
-                      row.addr_jibun,
-                    );
-                    if (newPnu) onPnuChange(newPnu);
-                  }}
-                />
-              </div>
-              <div className="pt-2 text-right">
-                <button
-                  type="button"
-                  onClick={handleCollectAll}
-                  className="text-[11px] text-gray-500 hover:text-blue-600 underline-offset-2 hover:underline"
-                  title="이 마을의 모든 지번을 KEPCO 에서 일괄 수집 (시간 소요)"
-                >
-                  전체 수집
-                </button>
-              </div>
-            </>
+            <div className="-mx-3">
+              <CompactRowHeader />
+              <ul className="divide-y divide-gray-100">
+                {nearbyJibuns.map((j) => (
+                  <NearbyJibunRow
+                    key={j}
+                    jibun={j}
+                    rows={rowsByJibun.get(j) ?? []}
+                    busy={busyJibuns.has(j)}
+                    notFound={notFoundJibuns.has(j)}
+                    onAction={() => handleCollectOne(j)}
+                    onJibunPin={onPnuChange ? handleJibunPin : undefined}
+                  />
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </section>
@@ -1246,19 +1231,12 @@ function ElectricTab({
   );
 }
 
-/** 섹터 헤더 — 제목 + 부제(지번/건수) + 새로고침 버튼 */
-function SectionHeader({
+function SectionHeaderPlain({
   title,
   subtitle,
-  onRefresh,
-  refreshing,
-  refreshTitle,
 }: {
   title: string;
   subtitle?: string;
-  onRefresh: () => void;
-  refreshing: boolean;
-  refreshTitle: string;
 }) {
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/60 rounded-t-lg">
@@ -1268,17 +1246,275 @@ function SectionHeader({
           <span className="text-[11px] text-gray-500">{subtitle}</span>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={refreshing}
-        className="text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={refreshTitle}
-        aria-label="새로고침"
-      >
-        <RefreshArrowIcon spinning={refreshing} className="w-4 h-4" />
-      </button>
     </div>
+  );
+}
+
+function RowsLoading() {
+  return (
+    <div className="flex items-center justify-center py-6 gap-2">
+      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="text-xs text-gray-500">조회 중...</div>
+    </div>
+  );
+}
+
+/** 컴팩트 표 헤더 — 번지 / 변전소 / 주변압기 / 배전선로 + 액션 칸 */
+function CompactRowHeader() {
+  return (
+    <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-500">
+      <span className="w-3"></span>
+      <span className="min-w-[60px]">번지</span>
+      <div className="flex-1 grid grid-cols-3 gap-2">
+        <span className="text-blue-600">🏭 변전소</span>
+        <span className="text-emerald-600">⚡ 주변압기</span>
+        <span className="text-amber-600">📡 배전선로</span>
+      </div>
+      <span className="w-[68px] text-right">상태</span>
+    </div>
+  );
+}
+
+/**
+ * 해당 지번 섹터용 — exact rows 0건이면 "미수집 + 수집 버튼" 행 1건만 표시,
+ * 있으면 NearbyJibunRow 와 동일한 모양으로 row 들 나열.
+ */
+function CapaJibunTable({
+  jibun,
+  rows,
+  busy,
+  notFound,
+  onAction,
+}: {
+  jibun: string;
+  rows: KepcoDataRow[];
+  busy: boolean;
+  notFound: boolean;
+  onAction: () => void;
+}) {
+  return (
+    <div className="-mx-3">
+      <CompactRowHeader />
+      <ul className="divide-y divide-gray-100">
+        <NearbyJibunRow
+          jibun={jibun}
+          rows={rows}
+          busy={busy}
+          notFound={notFound}
+          onAction={onAction}
+        />
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * 한 줄 = 한 지번. 클릭 시 펼쳐서 시설 상세 카드 노출 (수집된 경우 한정).
+ *
+ * 수집된 지번:
+ *   - 변전소/주변압기/배전선로 칸에 "여유"/"없음" 표시 (KEPCO 수식)
+ *   - 우측 액션: 신선도 + 새로고침 [↻]
+ *   - 펼침 시: FacilityCard 상세 + STEP 정보
+ *
+ * 미수집 지번:
+ *   - 가운데 칸 "미수집" 회색
+ *   - 우측 액션: [수집] 버튼
+ *   - 펼침 불가
+ */
+function NearbyJibunRow({
+  jibun,
+  rows,
+  busy,
+  notFound,
+  onAction,
+  onJibunPin,
+}: {
+  jibun: string;
+  rows: KepcoDataRow[];
+  busy: boolean;
+  notFound: boolean;
+  onAction: () => void;
+  /** 지번 텍스트 클릭 시 그 지번 PNU 로 패널 갈아끼움 (LocationDetailGrouped 와 동일 동작) */
+  onJibunPin?: (jibun: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const collected = rows.length > 0;
+  // 한 지번에 여러 row 있을 수 있음 (분할 저장) — 1번째로 표시
+  const r0 = rows[0];
+
+  // updated_at — 표시된 row 중 가장 최근 시각
+  const lastUpdated = useMemo(() => {
+    let max = -Infinity;
+    let iso: string | null = null;
+    for (const r of rows) {
+      if (!r.updated_at) continue;
+      const ms = new Date(r.updated_at).getTime();
+      if (Number.isNaN(ms)) continue;
+      if (ms > max) {
+        max = ms;
+        iso = r.updated_at;
+      }
+    }
+    return iso;
+  }, [rows]);
+  const relative = formatRelativeKst(lastUpdated);
+  const absolute = formatAbsoluteKst(lastUpdated);
+
+  return (
+    <>
+      <li>
+        <div
+          className={`px-3 py-2 flex items-center gap-3 ${
+            collected ? "hover:bg-blue-50/40 cursor-pointer" : ""
+          } ${open ? "bg-blue-50/60" : ""}`}
+          onClick={collected ? () => setOpen((v) => !v) : undefined}
+        >
+          <span
+            className={`text-gray-400 transition-transform text-[10px] ${
+              collected ? "" : "invisible"
+            } ${open ? "rotate-90 text-blue-600" : ""}`}
+          >
+            ▶
+          </span>
+          <span className="text-xs font-semibold min-w-[60px]">
+            {onJibunPin ? (
+              <span
+                role="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onJibunPin(jibun);
+                }}
+                className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                title="지도에서 이 지번 위치 보기"
+              >
+                📍 {jibun}
+              </span>
+            ) : (
+              <span className="text-gray-900">{jibun}</span>
+            )}
+          </span>
+          {collected && r0 ? (
+            <div className="flex-1 grid grid-cols-3 gap-2 text-[11px]">
+              <CapLabel ok={hasCapacity(r0.subst_capa, r0.subst_pwr, r0.g_subst_capa)} />
+              <CapLabel ok={hasCapacity(r0.mtr_capa, r0.mtr_pwr, r0.g_mtr_capa)} />
+              <CapLabel ok={hasCapacity(r0.dl_capa, r0.dl_pwr, r0.g_dl_capa)} />
+            </div>
+          ) : notFound ? (
+            <div className="flex-1 text-[11px] text-gray-500">
+              KEPCO 에 데이터 없음
+            </div>
+          ) : (
+            <div className="flex-1 text-[11px] text-gray-400">미수집</div>
+          )}
+          <div className="w-[68px] flex items-center justify-end gap-1.5">
+            {collected ? (
+              <>
+                {relative && (
+                  <span
+                    className="text-[10px] text-gray-400"
+                    title={absolute || undefined}
+                  >
+                    {relative}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAction();
+                  }}
+                  disabled={busy}
+                  className="text-gray-500 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="이 지번 KEPCO 새로고침"
+                  aria-label="새로고침"
+                >
+                  <RefreshArrowIcon spinning={busy} className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAction();
+                }}
+                disabled={busy}
+                className="text-[11px] px-2 py-0.5 bg-blue-50 text-blue-700
+                           rounded border border-blue-200 hover:bg-blue-100
+                           disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {busy ? "..." : "수집"}
+              </button>
+            )}
+          </div>
+        </div>
+      </li>
+      {open && collected && r0 && (
+        <li className="bg-blue-50/30 border-y border-blue-100 px-4 py-3">
+          {rows.map((r, i) => (
+            <div key={r.id ?? i} className={i > 0 ? "mt-3 pt-3 border-t border-blue-100" : ""}>
+              {rows.length > 1 && (
+                <div className="text-[11px] text-gray-500 font-medium pb-1.5">
+                  세트 {i + 1} / {rows.length}
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <FacilityCard
+                  title="변전소"
+                  name={r.subst_nm ?? "-"}
+                  ok={hasCapacity(r.subst_capa, r.subst_pwr, r.g_subst_capa)}
+                  base={r.subst_capa}
+                  received={r.subst_pwr}
+                  planned={r.g_subst_capa}
+                />
+                <FacilityCard
+                  title="주변압기"
+                  name={`#${r.mtr_no ?? "-"}`}
+                  ok={hasCapacity(r.mtr_capa, r.mtr_pwr, r.g_mtr_capa)}
+                  base={r.mtr_capa}
+                  received={r.mtr_pwr}
+                  planned={r.g_mtr_capa}
+                />
+                <FacilityCard
+                  title="배전선로"
+                  name={r.dl_nm ?? "-"}
+                  ok={hasCapacity(r.dl_capa, r.dl_pwr, r.g_dl_capa)}
+                  base={r.dl_capa}
+                  received={r.dl_pwr}
+                  planned={r.g_dl_capa}
+                />
+              </div>
+              {(r.step1_cnt != null ||
+                r.step2_cnt != null ||
+                r.step3_cnt != null) && (
+                <div className="bg-white border border-gray-200 rounded-md p-2.5 mt-2">
+                  <div className="text-[11px] font-bold text-gray-700 mb-1.5">
+                    📋 접속 예정 단계
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px]">
+                    <StepBlock label="접수" cnt={r.step1_cnt} pwr={r.step1_pwr} />
+                    <StepBlock
+                      label="공용망 보강"
+                      cnt={r.step2_cnt}
+                      pwr={r.step2_pwr}
+                    />
+                    <StepBlock label="접속 공사" cnt={r.step3_cnt} pwr={r.step3_pwr} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </li>
+      )}
+    </>
+  );
+}
+
+function CapLabel({ ok }: { ok: boolean }) {
+  return (
+    <span className={`font-semibold ${ok ? "text-blue-600" : "text-red-600"}`}>
+      {ok ? "여유" : "없음"}
+    </span>
   );
 }
 

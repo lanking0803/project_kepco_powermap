@@ -25,6 +25,7 @@
 - 🪞 [기존 endpoint 패턴 미러 우선](feedback_mirror_existing_endpoint.md) ⚠️ — 새 채널 by-pnu/search 짤 때 기존 공매(onbid) 패턴 끝까지 읽고 따라가기. 자체 로직 짜다가 동명이리 충돌 발생(court 사례)
 - 🪤 [외부 API 빈값 검색조건 함정](feedback_external_api_default_filter.md) ⚠️ — 검색조건 빈값 ≠ 전체 응답. court 사이트는 매각기일 빈값 시 종결매물 위주 응답해 진행매물 누락. 사이트 기본값 확인 필수
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
+- 🔍 [주소·지번 검색 재설계 숙제](project_search_redesign_pending.md) ⭐ — 리 후보 1건일 때만 지번 검색하는 미친 로직 발견(2026-05-05). MV/리/지번 흐름 통째 재설계 필요
 - 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)
 - 📨 [3차 개발 — 7항목 안내 발송](project_phase3_proposal.md) ⭐ — 1·2차 완료 보고 + 3차 7항목 카톡 발송(2026-05-05). 태양광설치여부는 입지탭 기존 기능으로 인식되어 미포함. 의뢰자 답장 대기
 - ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)

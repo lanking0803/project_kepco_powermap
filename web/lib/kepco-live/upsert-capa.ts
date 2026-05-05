@@ -82,16 +82,26 @@ export async function upsertKepcoCapa(
 ): Promise<UpsertResult> {
   if (kepcoRows.length === 0) return { upserted: 0 };
 
+  // KEPCO 가 같은 시설 조합 (변전소/주변압기/배전선로) 을 한 응답에 중복 반환하는
+  // 케이스가 있음 (예: 세종 도암리 58 — '58' 같은 사례). UNIQUE 제약 키로 dedupe
+  // 후 마지막 값을 채택 — 같은 키면 어차피 capa 숫자도 같다.
   const rows = kepcoRows.map((r) => toCapaRow(bjd_code, addr_jibun, r));
+  const dedup = new Map<string, CapaRowInput>();
+  for (const r of rows) {
+    const k = `${r.bjd_code}|${r.addr_jibun ?? ""}|${r.subst_nm ?? ""}|${r.mtr_no ?? ""}|${r.dl_nm ?? ""}`;
+    dedup.set(k, r);
+  }
+  const unique = Array.from(dedup.values());
+
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("kepco_capa")
-    .upsert(rows, {
+    .upsert(unique, {
       onConflict: "bjd_code,addr_jibun,subst_nm,mtr_no,dl_nm",
     });
 
   if (error) {
     throw new Error(`kepco_capa upsert failed: ${error.message}`);
   }
-  return { upserted: rows.length };
+  return { upserted: unique.length };
 }

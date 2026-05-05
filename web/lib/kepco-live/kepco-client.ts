@@ -14,6 +14,7 @@
 
 const BASE_URL = "https://online.kepco.co.kr";
 const SEARCH_PATH = "/ew/cpct/retrieveMeshNo";
+const ADDR_GBN_PATH = "/ew/cpct/retrieveAddrGbn";
 const SESSION_PATH = "/EWM092D00";
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
@@ -177,4 +178,75 @@ export async function callKepcoSearch(
     }
   }
   throw lastErr ?? new Error("KEPCO call failed");
+}
+
+/**
+ * KEPCO retrieveAddrGbn (gbn=4) — 마을 단위 지번 목록 조회.
+ *
+ * 주변 지번 미수집 시 사용자가 "지번 목록 불러오기" 누르면 호출.
+ * 5필드(do/si/gu/lidong/li) 로 그 마을의 KEPCO 보유 지번 배열 반환.
+ *
+ * 응답 예: [{ ADDR_JIBUN: "3-12" }, { ADDR_JIBUN: "산15-2" }, ...]
+ * 빈 배열 = 정상 응답 (KEPCO 미보유 마을).
+ */
+export async function callKepcoAddrGbn(
+  fields: KepcoFieldInput,
+  opts?: CallOpts,
+): Promise<string[]> {
+  const body = {
+    dma_addrGbn: {
+      gbn: 4,
+      addr_do: fields.do,
+      addr_si: fields.si,
+      addr_gu: fields.gu,
+      addr_lidong: fields.lidong,
+      addr_li: fields.li,
+      addr_jibun: "",
+    },
+  };
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const session = await getOrInitSession();
+      const timeoutSignal = AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      const signal = opts?.signal
+        ? AbortSignal.any([opts.signal, timeoutSignal])
+        : timeoutSignal;
+
+      const r = await fetch(`${BASE_URL}${ADDR_GBN_PATH}`, {
+        method: "POST",
+        headers: {
+          ...COMMON_HEADERS,
+          "User-Agent": session.ua,
+          ...(session.cookie ? { Cookie: session.cookie } : {}),
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+
+      if (r.status >= 500) {
+        throw new Error(`KEPCO ${r.status}`);
+      }
+      if (!r.ok) {
+        throw new Error(`KEPCO ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      }
+
+      const json = (await r.json()) as {
+        dlt_addrGbn?: { ADDR_JIBUN?: string }[];
+      };
+      const list = Array.isArray(json.dlt_addrGbn) ? json.dlt_addrGbn : [];
+      return list
+        .map((row) => (row?.ADDR_JIBUN ?? "").trim())
+        .filter((s) => s.length > 0);
+    } catch (e) {
+      lastErr = e;
+      const wait = RETRY_DELAYS_MS[attempt];
+      if (wait == null) break;
+      if (e instanceof Error && /KEPCO 4\d\d/.test(e.message)) break;
+      sessionCache = null;
+      await sleep(wait);
+    }
+  }
+  throw lastErr ?? new Error("KEPCO addrGbn call failed");
 }
