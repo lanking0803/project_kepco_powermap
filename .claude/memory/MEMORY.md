@@ -25,7 +25,7 @@
 - 🪤 [외부 API 빈값 검색조건 함정](feedback_external_api_default_filter.md) ⚠️ — 검색조건 빈값 ≠ 전체 응답. court 사이트는 매각기일 빈값 시 종결매물 위주 응답해 진행매물 누락. 사이트 기본값 확인 필수
 - 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
 - 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)
-- [3차 개발 — 태양광설치여부+이격거리+필지수집기](project_phase3_proposal.md) ⭐ — 요청 8개 누적. 단독 550만+필지수집기 250~350만/12~15주. 의뢰자 확답 대기 (2026-05-04 갱신)
+- 📨 [3차 개발 — 7항목 안내 발송](project_phase3_proposal.md) ⭐ — 1·2차 완료 보고 + 3차 7항목 카톡 발송(2026-05-05). 태양광설치여부는 입지탭 기존 기능으로 인식되어 미포함. 의뢰자 답장 대기
 - ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
 - ⚠️ [태양광 허가 API 검증 결과](reference_solar_permit_api.md) — 검색 필터 미지원 (LCTN_LOTNO_ADDR/LATITUDE 등 전부 NODATA). 페이지네이션만 가능. Phase 3 시 12만건 DB 적재 후 by-pnu 신설 필요
 - [건축물대장 API 검증](reference_bldg_register_api.md) — endpoint/파라미터/응답필드 실측. 비닐하우스는 대부분 미등록 한계. 키는 SECRETS.local.md
