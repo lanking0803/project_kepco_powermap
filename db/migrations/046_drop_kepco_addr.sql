@@ -1,0 +1,38 @@
+-- ══════════════════════════════════════════════
+-- 046: kepco_addr 테이블 폐기
+-- ══════════════════════════════════════════════
+-- 배경:
+--   2026-04-22 PNU/bjd_code 시스템 도입(027~031) 후 kepco_addr 의 역할이
+--   bjd_master 로 모두 흡수됨:
+--     - 좌표(lat/lng) → bjd_master 가 99.7% 보유 (vs kepco_addr 94.7%)
+--     - bjd_code 매칭 → kepco_capa 가 직접 보유, bjd_master JOIN
+--     - 검색/지도 → search_kepco RPC 가 bjd_master 만 사용 (035)
+--     - MV(kepco_map_summary) → bjd_master JOIN 으로 재구성 (032)
+--
+--   현 시점 kepco_addr 는 사실상 잉여:
+--     - 행 수: 20,624 (bjd_master 20,560 과 거의 동일 = 이중 마스터)
+--     - bjd_code 채워짐 71.6% (= 28%는 매칭 안 된 표시용)
+--     - addr_si 가 '-기타지역' 같은 KEPCO 표기 그대로 박혀있어 PNU 매칭 무용
+--
+-- 검증 (2026-05-05):
+--   - SQL: pg_proc/pg_views/pg_matviews 본문 참조 0건 (Supabase Studio 직접 확인)
+--   - 코드: web/lib, web/app, web/components 직접 사용 0건 (grep)
+--   - 마이그레이션: 030번대 이후 본문 사용 0건
+--   - crawler/fill_kepco_addr.py, fill_kepco_coords.py 는 채우기 전용 → 함께 폐기
+--
+-- 영향:
+--   - 좌표/주소 단일 출처 = bjd_master 로 정리
+--   - Phase 4 (시뮬레이터/PDF) 진입 전 정리 = 차후 디버깅 부담 감소
+-- ══════════════════════════════════════════════
+
+-- 안전장치: 의존 객체가 있으면 ERROR 로 멈춤 (RESTRICT 가 기본).
+-- CASCADE 사용 안 함 — 예상치 못한 객체가 함께 삭제되는 사고 방지.
+DROP TABLE IF EXISTS kepco_addr;
+
+-- 폐기 후 권장:
+--   1. crawler/fill_kepco_addr.py / fill_kepco_coords.py / analyze_kepco_addr.py /
+--      verify_geocode_cache.py 도 별도 커밋으로 정리.
+--   2. 본 마이그레이션 적용 후 즉시:
+--        VACUUM FULL pg_largeobject;  -- 테이블 자체 디스크 회수는 자동
+--        ANALYZE;
+--   3. 운영 1주일 모니터링: /api/search, /api/capa/*, MV 새로고침 정상 동작 확인.

@@ -31,8 +31,8 @@ import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
 const { data: { user } } = await supabase.auth.getUser();`,
   notes: `- 프로젝트명: kepco-web-map (Project ID: wtbwgjejfrrwgbzgcdjd)
-- 핵심 테이블: kepco_addr / kepco_capa / kepco_map_summary(MV) / bjd_master / crawl_jobs / user_roles
+- 핵심 테이블: kepco_capa / kepco_map_summary(MV) / bjd_master / crawl_jobs / user_roles
 - DB 최적화 이력 (2026-04-11): 110MB → 53MB (52% 감소) — row_hash 도입 + 불필요 인덱스 8개 제거
-- 좌표 저장 정책: kepco_addr.lat/lng = 리 단위 / 지번 좌표는 Vercel KV TTL 3일 (geocode_cache 폐기됨)
+- 좌표 저장 정책: bjd_master.lat/lng = 리 단위 단일 출처 / 지번 좌표는 Vercel KV TTL 3일
 - ⚠️ 휴면 정책: 7일 미접속 → 일시정지. cron ping 으로 방지 필수`,
 };

@@ -227,7 +227,7 @@ export const MANIFEST: GeneratedManifest = {
             "externalDeps": [],
             "notes": "관리자 외 차단. placeholder ({ENV_KEY}) 는 서버에서만 process.env 값으로 치환 — 클라이언트로 키 노출 X. 호출 가능한 서비스는 _lib/services/<id>.ts 에 sampleRequest 정의된 것만."
           },
-          "metaLine": 26,
+          "metaLine": 23,
           "metaExportName": "meta"
         }
       ]
@@ -425,7 +425,7 @@ export const MANIFEST: GeneratedManifest = {
         {
           "method": "GET",
           "meta": {
-            "source": "Hyphen 경매다 /au0147001252 (진행물건검색) + bjd_master 역조회. 면 단위 sweep ≤ 20페이지 cap.",
+            "source": "법원경매(기본) 또는 Hyphen 경매다 (env AUCTION_CHANNEL 토글). 양쪽 채널 모두 같은 출력 (items / fallback). court=읍면동 sweep, hyphen=면 sweep, 모두 cap 20p.",
             "cache": "no-store",
             "auth": "user",
             "inputs": [
@@ -439,12 +439,13 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "outputSchema": "{ ok: true, pnu, apiStatus, errCd, errMsg, items: AuctionListItem[], fallback, village_empty, truncated, fetchedAt }",
             "externalDeps": [
+              "court-auction-direct",
               "hyphen",
               "supabase"
             ],
-            "notes": "Hyphen 진행물건검색 + supabase bjd_master 역조회로 좌표/PNU 보강. 면(里) 단위까지만 호출 (dong=pnu[0:10]). 최대 20페이지(= 200건) cap. 응답에 종결 매물(매각/취하 등) 도 포함됨 — UI 에서 진행상태 배지로 구분. Hyphen dong 필터는 실제로 '면' 단위 매칭 → 응답에 다른 리도 섞여 옴 → PNU 매칭으로 정확 필터. apiStatus=auth_failed 면 의뢰자 비즈머니 충전 또는 결제 만료 — UI 가 배너로 안내."
+            "notes": "채널 분기 (AUCTION_CHANNEL): hyphen=면 단위 sweep / 그 외=court 읍면동 단위 sweep. apiStatus 양쪽 channel 통일 (HyphenApiStatus 형). court 채널은 blocked/unavailable → unavailable 매핑. 모듈 캐시 TTL 30분 — 같은 PNU 재방문 호출 0."
           },
-          "metaLine": 45,
+          "metaLine": 50,
           "metaExportName": "meta"
         }
       ]
@@ -749,7 +750,14 @@ export const MANIFEST: GeneratedManifest = {
                 "type": "string",
                 "required": false,
                 "sample": "31,33",
-                "description": "Hyphen 용도코드 다중 (콤마, 빈 문자=전체). court 채널에선 내부 매핑 후 sweep"
+                "description": "Hyphen 용도코드 다중 (hyphen 채널 정상 흐름 / court 역호환용)"
+              },
+              {
+                "name": "courtSclCodes",
+                "type": "string",
+                "required": false,
+                "sample": "10101,10102",
+                "description": "Court 소분류 5자리 다중 (court 채널 정상 흐름, yongdoCodes 보다 우선)"
               },
               {
                 "name": "progressStatus",
@@ -858,7 +866,7 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "notes": "운영 채널은 환경변수 AUCTION_CHANNEL 로 결정 (기본=court). 의뢰자 합의 — 채널 결정 자율권 + 월 10만 유지보수비. court 채널은 풍부한 서버 필터(용도/매각기일/감정가/할인율/유찰/특이사항) 사용 — 사후 필터는 진행상태/읍면동/면적 일부만. hyphen 채널은 기존 동작 그대로."
           },
-          "metaLine": 51,
+          "metaLine": 53,
           "metaExportName": "meta"
         }
       ]
@@ -1857,6 +1865,7 @@ export const MANIFEST: GeneratedManifest = {
       "filePath": "app/admin/api-manager/_lib/services/court-auction.ts",
       "metaLine": 3,
       "consumedBy": [
+        "auction-by-pnu",
         "auction-court-detail",
         "auction-court-search",
         "auction-search"
