@@ -1,7 +1,8 @@
 - ⛔ [절대규칙 — 거짓말/추측/책임전가 금지](feedback_no_lies_no_guess.md) — 사실은 직접 확인. 추측·결정전가 시 신뢰 상실
 - 💡 [기존 자산 재활용 먼저 검토](feedback_reuse_existing_assets.md) — 인덱스 추가/쿼리 재작성 전에 이미 있는 MV/집계/캐시 확인
 - 🧹 [DB 자산 청소 시 함수 본문까지 검사](feedback_db_cleanup.md) — 코드 grep 만으로 부족, pg_proc.prosrc/pg_views 까지 확인 (043→045 사고 복기)
-- [KEPCO API -기타지역 규칙](kepco_api_skip_value.md) — addr_li만 빈값, 나머지 그대로 + 0건 시 전체 빈값 재시도
+- ⭐ [KEPCO 5필드+jibun 빈값 규칙 (확정)](reference_kepco_field_rules.md) — 의뢰자 캡처 6건+DB 검증. si/gu=-기타지역, li/jibun=빈문자열, lidong=빈값 없음, 세종 si=do
+- [KEPCO API -기타지역 규칙 (구)](kepco_api_skip_value.md) — addr_li만 빈값. ⚠️ field_rules.md 가 정식 — 이건 크롤러 2단계 재시도 흐름 한정
 - [여유용량 판정 수식](kepco_vol_formula.md) — (capa-pwr≤0)OR(capa-g_capa≤0)=없음. 3개 시설 동일.
 - [지오코딩 동+리 fallback](geocode_fallback_rule.md) — "동+리" 없으면 리 빼고 동만으로 재시도
 - [모바일 개발 4대 원칙](feedback_mobile_principles.md) — 웹 영향 없이, 덕지덕지 금지, 크로스브라우저, 컴포넌트 재활용
