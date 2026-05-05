@@ -676,10 +676,6 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
           </div>
         )}
 
-        <div className="text-[10px] text-gray-500 leading-snug px-0.5">
-          ※ Hyphen 호출 비용 절감을 위해 <b>시군구</b>까지 좁혀야 검색 가능합니다.
-        </div>
-
         <div className="flex gap-2 pt-1">
           <button
             type="button"
@@ -787,7 +783,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
               <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
               매물 조회 중...
               <span className="text-[10px] text-gray-400">
-                (테스트 모드 20초 대기 가능 — 카테고리 다중 시 더 길어짐)
+                (카테고리 다중 선택 시 시간이 더 걸릴 수 있습니다)
               </span>
             </div>
           ) : error ? (
