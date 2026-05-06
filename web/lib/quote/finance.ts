@@ -12,6 +12,12 @@
  *   - 15년 대출 — 거치 N개월 + 상환 180개월
  *   - 20년 대출 — 거치 N개월 + 상환 240개월
  *
+ * 상환액 표시 (의뢰자 컨펌 2026-05-06 — A안):
+ *   - 거치기간 (1년차): 이자만 납부 (P × r × 12)
+ *   - 상환기간: 원리금균등 (월상환액 × 12)
+ *   - 상환 종료 이후: 0 (UI 에서는 '-' 로 표시)
+ *   - 20년 대출(거치+상환=21년)은 분석기간 20년 초과분(마지막 1년치) 잘림
+ *
  * 변수 디폴트 (모두 사용자 변경 가능, 봉남리 PDF 일치):
  *   - 일발전시간 4.0h · 열화율 0.4%/년 · 시스템효율 1.0 (봉남리 PDF 검증)
  *   - SMP 121원/kWh · REC 72원/kWh · 가중치 1.5 · 유지보수 매출의 3%
@@ -69,7 +75,7 @@ export interface YearRow {
   netIncome: number;
   /** 누적 순수익 (대출 미반영) */
   cumulativeNet: number;
-  /** 평균 상환액 (年, 대출 적용 시) */
+  /** 그 해 실제 상환액 (年) — 거치 1년차=이자만, 상환기간=원리금균등 합계, 종료 후=0 */
   loanPayment: number;
   /** 대출 적용 후 연수익 = netIncome - loanPayment */
   netAfterLoan: number;
@@ -151,27 +157,50 @@ export function getRepayMonths(scenario: LoanScenario): number {
 }
 
 /**
- * 연간 평균 상환액 (年).
+ * 연도별 상환 스케줄 (年).
  *
- * 거치기간 동안: 매월 이자만 납부 (P × r)
- * 상환기간 동안: 매월 원리금균등 (calcMonthlyPayment)
+ * 의뢰자 컨펌 (2026-05-06):
+ *   - 거치기간(graceMonths): 매월 이자만 납부 (P × r)
+ *   - 상환기간(repayMonths): 매월 원리금균등 (calcMonthlyPayment)
+ *   - 상환 종료 후: 0
  *
- * 분석기간 N년 동안 총 납부액을 N으로 나눈 평균.
- * (봉남리 양식의 "평균 상환액(年)" 컬럼 = 매년 동일 값으로 표시되는 형식.)
+ * 월 단위 시뮬레이션 후 12개월씩 묶어 연도별 합산.
+ * (거치/상환 경계가 연도 경계와 안 맞아도 정확히 처리됨)
+ *
+ * 분석기간(totalYears) 초과분은 잘림 — 20년 대출(거치 12 + 상환 240 = 21년)
+ * 의 마지막 1년치 상환분은 분석표 밖으로 나감 (A안 컨펌).
+ *
+ * 반환: 길이 totalYears 의 연간 상환액 배열. 1년차 = index 0.
  */
-export function calcAnnualLoanPayment(
+export function calcLoanScheduleByYear(
   principal: number,
   annualRate: number,
   graceMonths: number,
   repayMonths: number,
   totalYears: number,
-): number {
-  if (principal <= 0 || repayMonths <= 0 || totalYears <= 0) return 0;
+): number[] {
+  const schedule = new Array<number>(totalYears).fill(0);
+  if (principal <= 0 || totalYears <= 0) return schedule;
+
   const monthlyInterest = principal * (annualRate / 12);
-  const interestDuringGrace = monthlyInterest * graceMonths;
-  const monthlyRepay = calcMonthlyPayment(principal, annualRate, repayMonths);
-  const totalRepay = monthlyRepay * repayMonths;
-  return (interestDuringGrace + totalRepay) / totalYears;
+  const monthlyRepay =
+    repayMonths > 0
+      ? calcMonthlyPayment(principal, annualRate, repayMonths)
+      : 0;
+  const totalMonths = totalYears * 12;
+
+  for (let m = 0; m < totalMonths; m += 1) {
+    let payment = 0;
+    if (m < graceMonths) {
+      payment = monthlyInterest;
+    } else if (m < graceMonths + repayMonths) {
+      payment = monthlyRepay;
+    }
+    const yearIdx = Math.floor(m / 12);
+    schedule[yearIdx] += payment;
+  }
+
+  return schedule;
 }
 
 /** 누적순수익이 총사업비를 넘는 시점 (소수 보간). 못 넘으면 null. */
@@ -218,16 +247,13 @@ export function calcFinance(input: FinanceInput): FinanceResult {
   const totalCost = constructionCost + vat;
   const repayMonths = getRepayMonths(scenario);
   const effectiveLoan = scenario === "자기자본" ? 0 : loanPrincipal;
-  const annualLoanPayment =
-    effectiveLoan > 0
-      ? calcAnnualLoanPayment(
-          effectiveLoan,
-          loanRate,
-          graceMonths,
-          repayMonths,
-          years,
-        )
-      : 0;
+  const loanSchedule = calcLoanScheduleByYear(
+    effectiveLoan,
+    loanRate,
+    graceMonths,
+    repayMonths,
+    years,
+  );
 
   const rows: YearRow[] = [];
   let cumulativeNet = 0;
@@ -246,7 +272,8 @@ export function calcFinance(input: FinanceInput): FinanceResult {
     const maintenance = totalIncome * maintenanceRate;
     const netIncome = totalIncome - maintenance;
     cumulativeNet += netIncome;
-    const netAfterLoan = netIncome - annualLoanPayment;
+    const loanPayment = loanSchedule[i - 1] ?? 0;
+    const netAfterLoan = netIncome - loanPayment;
     cumulativeAfterLoan += netAfterLoan;
     rows.push({
       year: i,
@@ -257,7 +284,7 @@ export function calcFinance(input: FinanceInput): FinanceResult {
       maintenance,
       netIncome,
       cumulativeNet,
-      loanPayment: annualLoanPayment,
+      loanPayment,
       netAfterLoan,
       cumulativeAfterLoan,
     });

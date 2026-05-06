@@ -84,7 +84,9 @@ export default function FinanceTable({ result, scenario }: Props) {
                 {isLoan && (
                   <>
                     <td className={`${cellRight} text-rose-700`}>
-                      {Math.round(r.loanPayment).toLocaleString()}
+                      {r.loanPayment > 0
+                        ? Math.round(r.loanPayment).toLocaleString()
+                        : "-"}
                     </td>
                     <td className={`${cellRight} font-semibold`}>
                       {Math.round(r.netAfterLoan).toLocaleString()}

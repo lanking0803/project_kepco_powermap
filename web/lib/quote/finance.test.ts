@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   calcAnnualGeneration,
-  calcAnnualLoanPayment,
   calcFinance,
+  calcLoanScheduleByYear,
   calcMonthlyPayment,
   calcPaybackYears,
   DEFAULT_FINANCE_INPUT,
@@ -138,29 +138,69 @@ describe("calcFinance — 봉남리 268kW 자기자본 시나리오", () => {
   });
 });
 
-describe("calcAnnualLoanPayment — 대출 케이스", () => {
-  it("대출 0 → 0", () => {
-    expect(
-      calcAnnualLoanPayment(0, 0.055, 12, 120, 20),
-    ).toBe(0);
+describe("calcLoanScheduleByYear — 연도별 상환 스케줄 (A안)", () => {
+  it("대출 0 → 모든 연차 0", () => {
+    const s = calcLoanScheduleByYear(0, 0.055, 12, 120, 20);
+    expect(s).toHaveLength(20);
+    expect(s.every((v) => v === 0)).toBe(true);
   });
 
-  it("1억 · 5.5% · 거치 12개월 · 상환 120개월 · 분석 20년 → 양수", () => {
-    const annual = calcAnnualLoanPayment(
-      100_000_000,
-      0.055,
-      12,
-      120,
-      20,
-    );
-    expect(annual).toBeGreaterThan(0);
-    // 거치 1년 이자 + 10년 원리금균등 총합 / 20년
-    // = (550만 + 월상환 1,085,263 × 120) / 20 ≈ 6,786,577
-    expect(Math.round(annual)).toBe(6_786_577);
+  it("10년 대출(거치 12 + 상환 120) · 1억 · 5.5% — 1년차=이자만, 2~11년차>0, 12년차+=0", () => {
+    const s = calcLoanScheduleByYear(100_000_000, 0.055, 12, 120, 20);
+    expect(s).toHaveLength(20);
+    // 1년차: 거치 12개월 이자만 = 1억 × 5.5%/12 × 12 = 550만
+    expect(Math.round(s[0]!)).toBe(5_500_000);
+    // 2~11년차: 원리금균등 월상환 × 12 ≈ 13,023,153 (부동소수점 누적 오차 ±10원)
+    const monthly = calcMonthlyPayment(100_000_000, 0.055, 120);
+    const expectedAnnual = monthly * 12;
+    for (let i = 1; i <= 10; i += 1) {
+      expect(Math.abs(s[i]! - expectedAnnual)).toBeLessThanOrEqual(1);
+    }
+    // 12~20년차: 0 (상환 완료)
+    for (let i = 11; i < 20; i += 1) {
+      expect(s[i]).toBe(0);
+    }
+  });
+
+  it("15년 대출(거치 12 + 상환 180) — 1년차=이자, 2~16년차>0, 17~20년차=0", () => {
+    const s = calcLoanScheduleByYear(100_000_000, 0.055, 12, 180, 20);
+    expect(Math.round(s[0]!)).toBe(5_500_000);
+    for (let i = 1; i <= 15; i += 1) {
+      expect(s[i]).toBeGreaterThan(0);
+    }
+    for (let i = 16; i < 20; i += 1) {
+      expect(s[i]).toBe(0);
+    }
+  });
+
+  it("20년 대출(거치 12 + 상환 240, 총 21년) — A안: 분석 20년 내내 상환 진행, 마지막 1년치 잘림", () => {
+    const s = calcLoanScheduleByYear(100_000_000, 0.055, 12, 240, 20);
+    // 1년차: 이자만
+    expect(Math.round(s[0]!)).toBe(5_500_000);
+    // 2~20년차: 모두 원리금균등 (240개월 중 228개월만 분석기간 내)
+    for (let i = 1; i < 20; i += 1) {
+      expect(s[i]).toBeGreaterThan(0);
+    }
+    // 분석기간 내 총 납부 = 거치 12개월 이자 + 228개월 원리금
+    const monthly = calcMonthlyPayment(100_000_000, 0.055, 240);
+    const expectedTotal = 5_500_000 + monthly * 228;
+    const sumInRange = s.reduce((a, b) => a + b, 0);
+    expect(Math.round(sumInRange)).toBe(Math.round(expectedTotal));
+  });
+
+  it("금리 0 + 거치 0 — 단순 분할 (1억 / 120개월 = 833,333/월)", () => {
+    const s = calcLoanScheduleByYear(100_000_000, 0, 0, 120, 20);
+    // 1~10년차: 833,333 × 12 ≈ 10,000,000
+    for (let i = 0; i < 10; i += 1) {
+      expect(Math.round(s[i]!)).toBe(10_000_000);
+    }
+    for (let i = 10; i < 20; i += 1) {
+      expect(s[i]).toBe(0);
+    }
   });
 });
 
-describe("calcFinance — 10년 대출 시나리오", () => {
+describe("calcFinance — 10년 대출 시나리오 (A안)", () => {
   const input: FinanceInput = {
     ...BONGNAM_INPUT,
     scenario: "10년",
@@ -168,15 +208,32 @@ describe("calcFinance — 10년 대출 시나리오", () => {
   };
   const result = calcFinance(input);
 
-  it("모든 연차 loanPayment 동일 (평균값)", () => {
-    const first = result.rows[0].loanPayment;
-    expect(first).toBeGreaterThan(0);
-    for (const r of result.rows) {
-      expect(r.loanPayment).toBeCloseTo(first, 0);
+  it("1년차(거치) loanPayment = 거치 이자만 (550만)", () => {
+    expect(Math.round(result.rows[0].loanPayment)).toBe(5_500_000);
+  });
+
+  it("2~11년차 loanPayment > 거치이자 (원리금균등)", () => {
+    for (let i = 1; i <= 10; i += 1) {
+      expect(result.rows[i].loanPayment).toBeGreaterThan(5_500_000);
     }
   });
 
-  it("netAfterLoan = netIncome - loanPayment", () => {
+  it("12년차부터 loanPayment = 0 (상환 완료)", () => {
+    for (let i = 11; i < 20; i += 1) {
+      expect(result.rows[i].loanPayment).toBe(0);
+    }
+  });
+
+  it("12년차 이후 netAfterLoan = netIncome (상환 없음)", () => {
+    for (let i = 11; i < 20; i += 1) {
+      expect(result.rows[i].netAfterLoan).toBeCloseTo(
+        result.rows[i].netIncome,
+        0,
+      );
+    }
+  });
+
+  it("netAfterLoan = netIncome - loanPayment (전 연차)", () => {
     for (const r of result.rows) {
       expect(r.netAfterLoan).toBeCloseTo(r.netIncome - r.loanPayment, 0);
     }
@@ -184,6 +241,45 @@ describe("calcFinance — 10년 대출 시나리오", () => {
 
   it("대출후 20년 총수익 < 무대출 (이자만큼 줄어듦)", () => {
     expect(result.totalAfterLoan).toBeLessThan(result.totalNetIncome);
+  });
+});
+
+describe("calcFinance — 15년 대출 시나리오 (A안)", () => {
+  const result = calcFinance({
+    ...BONGNAM_INPUT,
+    scenario: "15년",
+    loanPrincipal: 100_000_000,
+  });
+
+  it("1년차 = 거치 이자만, 17년차부터 = 0", () => {
+    expect(Math.round(result.rows[0].loanPayment)).toBe(5_500_000);
+    for (let i = 16; i < 20; i += 1) {
+      expect(result.rows[i].loanPayment).toBe(0);
+    }
+  });
+
+  it("2~16년차 모두 원리금균등 > 0", () => {
+    for (let i = 1; i <= 15; i += 1) {
+      expect(result.rows[i].loanPayment).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("calcFinance — 20년 대출 시나리오 (A안, 분석기간 초과분 잘림)", () => {
+  const result = calcFinance({
+    ...BONGNAM_INPUT,
+    scenario: "20년",
+    loanPrincipal: 100_000_000,
+  });
+
+  it("1년차 = 거치 이자만", () => {
+    expect(Math.round(result.rows[0].loanPayment)).toBe(5_500_000);
+  });
+
+  it("2~20년차 모두 원리금균등 > 0 (분석기간 끝까지 상환 진행)", () => {
+    for (let i = 1; i < 20; i += 1) {
+      expect(result.rows[i].loanPayment).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -285,17 +381,20 @@ describe("calcFinance — 변수 변동 영향", () => {
   });
 });
 
-describe("calcAnnualLoanPayment — edge case", () => {
-  it("금리 0 → 단순 분할 (이자 0)", () => {
-    // 1억 · 금리 0 · 거치 0 · 상환 120 · 분석 20년 = (0 + 1억) / 20 = 500만/년
-    const annual = calcAnnualLoanPayment(100_000_000, 0, 0, 120, 20);
-    expect(Math.round(annual)).toBe(5_000_000);
+describe("calcLoanScheduleByYear — edge case", () => {
+  it("거치 0 → 1년차부터 원리금균등 (이자 부담 없음)", () => {
+    const withGrace = calcLoanScheduleByYear(100_000_000, 0.055, 12, 120, 20);
+    const noGrace = calcLoanScheduleByYear(100_000_000, 0.055, 0, 120, 20);
+    // 거치 없으면 1년차가 더 큼 (이자만 vs 원리금균등)
+    expect(noGrace[0]!).toBeGreaterThan(withGrace[0]!);
+    // 거치 없으면 11년차에 0 (상환 종료), 거치 있으면 11년차에 아직 상환 중
+    expect(noGrace[10]).toBe(0);
+    expect(withGrace[10]!).toBeGreaterThan(0);
   });
 
-  it("거치 0 → 거치 이자 부담 없음", () => {
-    const withGrace = calcAnnualLoanPayment(100_000_000, 0.055, 12, 120, 20);
-    const noGrace = calcAnnualLoanPayment(100_000_000, 0.055, 0, 120, 20);
-    expect(noGrace).toBeLessThan(withGrace);
+  it("totalYears 0 → 빈 배열", () => {
+    const s = calcLoanScheduleByYear(100_000_000, 0.055, 12, 120, 0);
+    expect(s).toHaveLength(0);
   });
 });
 

@@ -14,7 +14,6 @@
  */
 
 import type { FinancePrintData } from "@/lib/quote/print-data";
-import { COMPANY } from "@/lib/quote/company";
 
 interface Props {
   data: FinancePrintData;
@@ -132,7 +131,9 @@ export default function FinancePrintLayout({ data }: Props) {
                   <td className="num">{Math.round(r.netIncome / 12).toLocaleString()}</td>
                   <td className="num cum">{Math.round(r.cumulativeNet).toLocaleString()}</td>
                   <td className="num">
-                    {isLoan ? Math.round(r.loanPayment).toLocaleString() : "-"}
+                    {isLoan && r.loanPayment > 0
+                      ? Math.round(r.loanPayment).toLocaleString()
+                      : "-"}
                   </td>
                   <td className="num">
                     {isLoan ? Math.round(r.netAfterLoan).toLocaleString() : "-"}
@@ -146,17 +147,12 @@ export default function FinancePrintLayout({ data }: Props) {
               ))}
             </tbody>
           </table>
-          {/* 면책 문구 + 출력일 + 회사 정보 (영업 자료 신뢰성) */}
+          {/* 면책 문구 + 출력일 */}
           <div className="disclaimer">
             <div># 이 수지분석은 2024년 현물시장 기준 수익분석 자료입니다.</div>
             <div># 선로 개통비 , 구조 보강비 별도 / 순 공사비 기준 수익분석 자료 입니다.</div>
             <div className="meta-row">
               <span>출력일: {formatGenDate(data.generatedAt)}</span>
-              <span className="company-info">
-                <b>{COMPANY.englishName}</b> · {COMPANY.name} ·{" "}
-                {COMPANY.phone} · {COMPANY.mobile} · {COMPANY.email} ·{" "}
-                {COMPANY.website}
-              </span>
             </div>
           </div>
         </div>
@@ -348,7 +344,7 @@ export default function FinancePrintLayout({ data }: Props) {
         }
         .meta-row {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-start;
           align-items: baseline;
           gap: 4mm;
           margin-top: 1.5mm;
@@ -356,12 +352,6 @@ export default function FinancePrintLayout({ data }: Props) {
           border-top: 1px dashed #ccc;
           font-size: 6.5pt;
           color: #555;
-        }
-        .company-info {
-          color: #333;
-        }
-        .company-info b {
-          color: #006400;
         }
         .info-region {
           display: flex;
