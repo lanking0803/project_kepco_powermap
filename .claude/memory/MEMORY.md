@@ -61,3 +61,4 @@
 - 🗺 [시군구 atomic — 모드 공통](project_regions_atomic.md) — `/api/regions/sigungu` (bjd_master 250개) 모든 모드 공유. 취락지구·공매 적용
 - 🏭 [필지 마을 마커 — 공매·경매 미러](project_facility_markers.md) ⭐ — `/api/facility/search` atomic + bjd_master JOIN. violet zIndex 100/50. 동적 갱신은 BJD 키 lookup 패턴 (2026-05-03)
 - ⚡ [줌 빈번 시 level-skip 가드는 무의미](feedback_perf_skip_guard_zoom.md) — 사용 패턴이 줌 위주면 level 기반 skip 발동률 0. idle 리스너 4→1 통합(Step 1A)이 진짜 효과(-63% 스크립트, INP 2,498→313ms). 1B+1C 시도 후 원복(2026-05-03)
+- 📄 [PDF 양식 확장 시 컬럼 정의 우선](feedback_pdf_template_extension.md) ⚠️ — 단일 케이스 PDF 의 표시 형태를 양식 의도로 오독 금지. 컬럼 정의(=대출액+이자) 가 진실. 봉남리 견적 대출 균등분배 사고 복기(2026-05-06)
