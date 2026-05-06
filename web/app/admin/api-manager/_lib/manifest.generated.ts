@@ -1017,7 +1017,7 @@ export const MANIFEST: GeneratedManifest = {
         {
           "method": "GET",
           "meta": {
-            "source": "DB (Supabase: kepco_capa + bjd_master)",
+            "source": "DB (Supabase RPC: fallback_kepco_nearest + bjd_master)",
             "cache": "no-store",
             "auth": "user",
             "inputs": [
@@ -1031,9 +1031,41 @@ export const MANIFEST: GeneratedManifest = {
             ],
             "outputSchema": "{ ok, pnu, bjd_code, jibun, rows: KepcoDataRow[], total, meta: AddrMeta | null }",
             "externalDeps": [],
-            "notes": "exact match 만 — fallback 없음. KEPCO 미수집 지번은 빈 rows. meta = bjd_master 의 sep_1~5 (헤더 주소 표시용 보조). PNU → bjd_code/jibun 분리는 lib/geo/pnu (jibunFromPnu)."
+            "notes": "RPC fallback_kepco_nearest 로 같은 마을 가까운 지번 top 10 (자기 포함). 클라이언트가 PNU 비교로 자기/주변 분기. meta = bjd_master sep_1~5 (헤더용 보조)."
           },
           "metaLine": 36,
+          "metaExportName": "meta"
+        }
+      ]
+    },
+    {
+      "path": "/api/capa/jibun-list-by-pnu",
+      "id": "capa-jibun-list-by-pnu",
+      "filePath": "app/api/capa/jibun-list-by-pnu/route.ts",
+      "methods": [
+        {
+          "method": "GET",
+          "meta": {
+            "source": "KEPCO live (retrieveAddrGbn) + bjd_master",
+            "cache": "no-store",
+            "auth": "user",
+            "inputs": [
+              {
+                "name": "pnu",
+                "type": "string",
+                "required": true,
+                "sample": "4417025021103950003",
+                "description": "PNU 19자리 — 앞 10자리 bjd_code 로 마을 단위 지번 목록 조회."
+              }
+            ],
+            "outputSchema": "{ ok, pnu, bjd_code, jibuns: string[], total }",
+            "externalDeps": [
+              "kepco",
+              "supabase"
+            ],
+            "notes": "KEPCO retrieveAddrGbn (gbn=4) 호출. buildKepcoCandidates 후보 순회 (첫 비어있지 않은 결과 채택) — 세종 si=do 변형 등 대응. DB 저장 없음 — 메모리/UI 일회성."
+          },
+          "metaLine": 24,
           "metaExportName": "meta"
         }
       ]
@@ -1975,6 +2007,7 @@ export const MANIFEST: GeneratedManifest = {
       "metaLine": 3,
       "consumedBy": [
         "admin-crawl-regions",
+        "capa-jibun-list-by-pnu",
         "capa-refresh-by-pnu"
       ]
     },
@@ -2222,7 +2255,7 @@ export const MANIFEST: GeneratedManifest = {
       "dailyLimit": "DB 500MB · egress 5GB/월 · API 요청 무제한",
       "issueGuide": "1. https://supabase.com 회원가입 → 새 프로젝트 생성\n2. Region: Northeast Asia - Seoul 권장\n3. DB 패스워드 설정 (강한 패스워드, SECRETS.local.md 기록)\n4. Settings → API:\n   - Project URL → NEXT_PUBLIC_SUPABASE_URL\n   - anon public → NEXT_PUBLIC_SUPABASE_ANON_KEY (브라우저 노출 OK)\n   - service_role → SUPABASE_SERVICE_ROLE_KEY (서버 전용, 절대 클라이언트 X)\n5. .env.local + Vercel 환경변수 양쪽 등록\n6. 휴면 방지 cron 설정 (주 1회 ping, 7일 미접속 시 일시정지)",
       "usageExample": "# 서버 컴포넌트\nimport { createAdminClient } from \"@/lib/supabase/admin\";\nconst supabase = createAdminClient();\nawait supabase.from(\"kepco_capa\").select(\"*\").eq(\"bjd_code\", \"...\");\n\n# 클라이언트 (브라우저)\nimport { createClient } from \"@/lib/supabase/client\";\nconst supabase = createClient();\nconst { data: { user } } = await supabase.auth.getUser();",
-      "notes": "- 프로젝트명: kepco-web-map (Project ID: wtbwgjejfrrwgbzgcdjd)\n- 핵심 테이블: kepco_addr / kepco_capa / kepco_map_summary(MV) / bjd_master / crawl_jobs / user_roles\n- DB 최적화 이력 (2026-04-11): 110MB → 53MB (52% 감소) — row_hash 도입 + 불필요 인덱스 8개 제거\n- 좌표 저장 정책: kepco_addr.lat/lng = 리 단위 / 지번 좌표는 Vercel KV TTL 3일 (geocode_cache 폐기됨)\n- ⚠️ 휴면 정책: 7일 미접속 → 일시정지. cron ping 으로 방지 필수",
+      "notes": "- 프로젝트명: kepco-web-map (Project ID: wtbwgjejfrrwgbzgcdjd)\n- 핵심 테이블: kepco_capa / kepco_map_summary(MV) / bjd_master / crawl_jobs / user_roles\n- DB 최적화 이력 (2026-04-11): 110MB → 53MB (52% 감소) — row_hash 도입 + 불필요 인덱스 8개 제거\n- 좌표 저장 정책: bjd_master.lat/lng = 리 단위 단일 출처 / 지번 좌표는 Vercel KV TTL 3일\n- ⚠️ 휴면 정책: 7일 미접속 → 일시정지. cron ping 으로 방지 필수",
       "filePath": "app/admin/api-manager/_lib/services/supabase.ts",
       "metaLine": 3,
       "consumedBy": [
@@ -2232,6 +2265,7 @@ export const MANIFEST: GeneratedManifest = {
         "auction-court-search",
         "auction-search",
         "capa-by-bjd",
+        "capa-jibun-list-by-pnu",
         "capa-refresh-by-pnu",
         "capa-summary-by-bjd",
         "facility-search",
