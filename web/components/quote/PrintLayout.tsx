@@ -172,24 +172,22 @@ export default function PrintLayout({ data, mapSlot }: Props) {
           </Section>
         )}
 
-        {/* 4. 회사 로고 + 회사 정보 박스 */}
+        {/* 4. 회사 로고 + 회사 정보 박스 — 영업사원 자필/명함 부착용 빈 양식 */}
         <div className="company-box">
           <CompanyLogo />
           <div className="company-info">
-            <div className="company-name-en">{COMPANY.englishName}</div>
-            <div className="company-name-ko">{COMPANY.name}</div>
             <div className="company-detail">
-              주 소 : {COMPANY.address}
+              주 소 :
               <br />
-              전 화 : {COMPANY.phone}
+              전 화 :
               <br />
-              모바일 : {COMPANY.mobile}
+              모바일 :
               <br />
-              팩 스 : {COMPANY.fax}
+              팩 스 :
               <br />
-              이메일 : {COMPANY.email}
+              이메일 :
               <br />
-              홈페이지 : {COMPANY.website}
+              홈페이지 :
             </div>
           </div>
         </div>
