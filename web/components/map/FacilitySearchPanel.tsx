@@ -277,10 +277,12 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    // 통째 스크롤 패턴 — 전기탭 미러 (2026-05-08).
+    // 외곽 1개 스크롤. 검색조건/결과 자체 스크롤 제거 → 자연스럽게 흘러내림.
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* 검색 입력 영역 — panelCollapsed=false 일 때만 렌더 */}
       {!panelCollapsed && (
-      <div className="p-3 space-y-3 overflow-y-auto flex-shrink-0 border-b border-gray-100">
+      <div className="p-3 space-y-3 flex-shrink-0 border-b border-gray-100">
         {/* 지역 */}
         <Section title="지역">
           <div className="space-y-1.5">
@@ -551,7 +553,8 @@ export default function FacilitySearchPanel({ onResults, onItemClick }: Props) {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+      {/* 결과 영역 — 외곽 통째 스크롤 패턴 (2026-05-08): 자체 스크롤 제거. */}
+      <div className="p-3 space-y-1.5">
         {searchError && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
             ⚠️ {searchError}

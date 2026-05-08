@@ -208,9 +208,11 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
   const totalCount = useMemo(() => results.length, [results]);
 
   return (
-    <div className="flex flex-col h-full">
+    // 통째 스크롤 패턴 — 전기탭 미러 (2026-05-08).
+    // 외곽 1개 스크롤. 검색조건/결과 자체 스크롤 제거 → 자연스럽게 흘러내림.
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* 검색 입력 */}
-      <div className="p-3 space-y-3 overflow-y-auto flex-shrink-0 border-b border-gray-100">
+      <div className="p-3 space-y-3 flex-shrink-0 border-b border-gray-100">
         {/* 지역 */}
         <Section title="지역">
           <div className="space-y-1.5">
@@ -407,8 +409,8 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
         </div>
       </div>
 
-      {/* 결과 — 사이드바 내부 스크롤 영역 */}
-      <div className="flex-1 flex flex-col min-h-0">
+      {/* 결과 — 외곽 통째 스크롤 패턴 (2026-05-08): 자체 스크롤 제거, 검색조건과 한 흐름. */}
+      <div className="flex flex-col">
         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between border-b border-gray-200 bg-gray-50">
           <span>결과</span>
           <span className="tabular-nums">매물 {totalCount.toLocaleString()}건</span>
@@ -422,7 +424,7 @@ export default function OnbidSearchPanel({ onResults, onItemClick }: Props) {
             시군구·읍면동·카테고리로 좁혀주세요.
           </div>
         )}
-        <div className="overflow-y-auto flex-1">
+        <div>
           {loading ? (
             <div className="p-4 text-center text-xs text-gray-500 flex flex-col items-center gap-2">
               <span className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />

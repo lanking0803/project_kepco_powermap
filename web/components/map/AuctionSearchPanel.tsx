@@ -333,14 +333,17 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
   };
 
   // ─── 렌더 ────────────────────────────────────────────────
+  // 통째 스크롤 패턴 — 전기탭 미러 (2026-05-08).
+  // 외곽 1개 스크롤 영역. 검색조건/결과 자체 스크롤 제거 → 자연스럽게 흘러내림.
+  // 매각기일/검색버튼이 화면 밖으로 짤리는 모바일 사고 회피.
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* 검색 입력 — panelCollapsed=false 일 때만 렌더 */}
       {!panelCollapsed && (
-      <div className="p-3 space-y-3 overflow-y-auto flex-shrink-0 border-b border-gray-100">
+      <div className="p-2.5 space-y-2 flex-shrink-0 border-b border-gray-100">
         {/* 지역 */}
         <Section title="지역">
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <Field label="시도">
               <select
                 value={params.sido}
@@ -582,47 +585,45 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
               );
             })}
           </div>
-          <div className="text-[10px] text-gray-400 mt-1 leading-snug">
-            ※ 신건/진행/유찰 = 입찰 가능. 매각/취하 = 종결.
+          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+            ※ 신건·진행·유찰 = 입찰 가능 / 매각·취하 = 종결
           </div>
         </Section>
 
         {/* 매각기일 — 영업 1순위 필터.
             v5 검증 결과 필터 없으면 응답이 종결건 위주라, 미래 윈도우 좁힘 필수.
-            기본 = 오늘 ~ +6개월 (모델 EMPTY_PARAMS 가 자동 세팅). */}
+            기본 = 오늘 ~ +6개월 (모델 EMPTY_PARAMS 가 자동 세팅).
+            모바일 컴팩트: 시작~종료 한 줄 + 빠른범위 같은 줄 우측. */}
         <Section title="매각기일">
-          <div className="space-y-1.5">
-            <Field label="시작">
-              <input
-                type="date"
-                value={params.bidStart ?? ""}
-                onChange={(e) =>
-                  setParams((p) => ({
-                    ...p,
-                    bidStart: e.target.value || null,
-                  }))
-                }
-                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none"
-              />
-            </Field>
-            <Field label="종료">
-              <input
-                type="date"
-                value={params.bidEnd ?? ""}
-                onChange={(e) =>
-                  setParams((p) => ({
-                    ...p,
-                    bidEnd: e.target.value || null,
-                  }))
-                }
-                className="w-full text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none"
-              />
-            </Field>
-            <div className="flex gap-1 pt-0.5">
-              <QuickRangeButton label="오늘~1개월" onClick={() => setParams((p) => ({ ...p, ...rangeFromToday(1) }))} />
-              <QuickRangeButton label="3개월" onClick={() => setParams((p) => ({ ...p, ...rangeFromToday(3) }))} />
-              <QuickRangeButton label="6개월" onClick={() => setParams((p) => ({ ...p, ...rangeFromToday(6) }))} />
-            </div>
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={params.bidStart ?? ""}
+              onChange={(e) =>
+                setParams((p) => ({
+                  ...p,
+                  bidStart: e.target.value || null,
+                }))
+              }
+              className="flex-1 min-w-0 text-xs px-1.5 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none"
+            />
+            <span className="text-xs text-gray-400 shrink-0">~</span>
+            <input
+              type="date"
+              value={params.bidEnd ?? ""}
+              onChange={(e) =>
+                setParams((p) => ({
+                  ...p,
+                  bidEnd: e.target.value || null,
+                }))
+              }
+              className="flex-1 min-w-0 text-xs px-1.5 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div className="flex gap-1 mt-1">
+            <QuickRangeButton label="1개월" onClick={() => setParams((p) => ({ ...p, ...rangeFromToday(1) }))} />
+            <QuickRangeButton label="3개월" onClick={() => setParams((p) => ({ ...p, ...rangeFromToday(3) }))} />
+            <QuickRangeButton label="6개월" onClick={() => setParams((p) => ({ ...p, ...rangeFromToday(6) }))} />
           </div>
         </Section>
 
@@ -676,7 +677,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
           </div>
         )}
 
-        <div className="flex gap-2 pt-1">
+        <div className="flex gap-2 pt-0.5">
           <button
             type="button"
             onClick={runSearch}
@@ -724,8 +725,9 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
         )}
       </button>
 
-      {/* 결과 영역 — 매물 카드 리스트 */}
-      <div className="flex-1 flex flex-col min-h-0">
+      {/* 결과 영역 — 매물 카드 리스트.
+          외곽 통째 스크롤 패턴 (2026-05-08): 자체 스크롤 제거, 위 검색조건과 한 흐름. */}
+      <div className="flex flex-col">
         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-700 flex items-center justify-between gap-2 border-b border-gray-200 bg-gray-50">
           <span className="tabular-nums">
             매물 {results.length.toLocaleString()}건
@@ -777,7 +779,7 @@ export default function AuctionSearchPanel({ onResults, onItemClick }: Props) {
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1">
+        <div>
           {searching ? (
             <div className="p-4 text-center text-xs text-gray-500 flex flex-col items-center gap-2">
               <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -835,7 +837,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-[11px] font-bold text-gray-700 mb-1">{title}</div>
+      <div className="text-[11px] font-bold text-gray-700 mb-0.5">{title}</div>
       {children}
     </div>
   );
