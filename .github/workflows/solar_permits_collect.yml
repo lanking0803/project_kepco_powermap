@@ -1,0 +1,62 @@
+name: Solar Permits Collect
+run-name: "Solar Permits Collect (수동=${{ github.event_name == 'workflow_dispatch' }})"
+
+# 전국 태양광 발전소 전기사업 허가정보 수집 — 매월 1회 전수 적재.
+#
+# 외부 API: data.go.kr `tn_pubr_public_solar_gen_flct_api` (NIA 15107742)
+# Target  : Supabase Storage 'solar-permits' bucket (BJD 별 JSON, ~7,900 파일)
+# 흐름    : crawler/solar_permits.py (STAGE 3 병렬 업로드 — ThreadPoolExecutor 10 worker)
+#
+# 트리거:
+#   - schedule  : 매월 1일 09:00 KST (UTC 0시 0분 1일) 자동
+#   - dispatch  : 수동 실행 (첫 적재 / 즉시 갱신용)
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'   # 매월 1일 09:00 KST
+  workflow_dispatch:
+
+jobs:
+  # 선행: bjd_master 캐시 준비 (KEPCO 워크플로와 동일 패턴 재사용)
+  prep_caches:
+    uses: ./.github/workflows/prep_caches.yml
+    secrets: inherit
+
+  collect:
+    name: 솔라 수집기
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: prep_caches
+
+    concurrency:
+      group: solar-permits-collect
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r crawler/requirements.txt
+
+      # prep_caches 가 업로드한 bjd_master 캐시 복원
+      - name: Restore bjd_master cache
+        uses: ./.github/actions/cache-supabase-table
+        with:
+          table_name: bjd_master
+          columns: bjd_code,sep_1,sep_2,sep_3,sep_4,sep_5
+          supabase_url: ${{ secrets.SUPABASE_URL }}
+          supabase_key: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Run solar_permits collector
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BJD_MASTER_CACHE_FILE: ${{ github.workspace }}/.cache/bjd_master.json
+        run: cd crawler && python solar_permits.py

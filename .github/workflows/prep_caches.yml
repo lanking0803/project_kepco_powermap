@@ -1,0 +1,37 @@
+name: prep_caches
+run-name: "prep_caches (수동=${{ github.event_name == 'workflow_dispatch' }})"
+
+# 역할: Supabase 마스터 테이블을 Actions Cache 에 준비.
+# - workflow_call: crawl 등 다른 workflow 가 선행 단계로 호출
+# - workflow_dispatch: bjd_master 재import 후 수동 갱신 등
+#
+# 확장: 새 테이블 추가 시 .cache/<table>.json 매칭하는 step 한 블록만 추가.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  prep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5   # Cache 준비만 하므로 짧음
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # bjd_master — 행안부 법정동코드 마스터 (~20,560행 / ~1.6MB)
+      - name: Cache bjd_master
+        uses: ./.github/actions/cache-supabase-table
+        with:
+          table_name: bjd_master
+          columns: bjd_code,sep_1,sep_2,sep_3,sep_4,sep_5
+          supabase_url: ${{ secrets.SUPABASE_URL }}
+          supabase_key: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      # 향후 다른 마스터 추가 예시 (필요 시 주석 해제):
+      # - name: Cache polygon_master
+      #   uses: ./.github/actions/cache-supabase-table
+      #   with:
+      #     table_name: polygon_master
+      #     columns: bjd_code,geometry
+      #     supabase_url: ${{ secrets.SUPABASE_URL }}
+      #     supabase_key: ${{ secrets.SUPABASE_SERVICE_KEY }}
