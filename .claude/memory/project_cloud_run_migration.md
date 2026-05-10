@@ -142,17 +142,24 @@ Cloud Run Worker Pool — 새 버전 자동 배포
 - Cloud Run vs Vultr vs 사양 최소화 Cloud Run 결정 보류
 - 며칠~1~2주 시간 벌기 목적, sunlap2026 정지 위험 감수
 
-## 🎯 최종 후보 비교 (의뢰자 결정 필요)
+## 🎯 최종 후보 비교 (2026-05-10 차단 실험 반영)
 
-| 옵션 | 월 비용 | 장점 | 단점 |
-|---|---|---|---|
-| Cloud Run (서울 + 사양 최소화) | $25 | 검증 완료, 자동 배포 | latency 좋음 |
-| Cloud Run (도쿄 + 사양 최소화) | $20 | 가장 저렴 | latency +20ms |
-| Vultr 5대 (도쿄/서울) | $25 | IP 5개 자연 분리 | 직접 셋업 |
-| NCP Micro 5대 | $72~100 | 한국 region | 비싸고 합의 초과 |
-| GitHub Actions 유지 | $0 | 무료 | 정지 위험 |
+⚠️ **중대 발견 (2026-05-10 21:30 KST)** — [kepco_blocking_threshold.md](kepco_blocking_threshold.md) 참조
+- KEPCO 차단 트리거 = **단일 IP 동시 in-flight 5+ 요청**
+- 1~4 병렬은 무조건 안전, IP 1개로도 시간당 52K 처리 가능
+- **다중 IP 가 "필수" 아닌 "처리량 확장용"** 으로 격하
 
-→ **유력**: Cloud Run 도쿄 + 사양 최소화 ($20) 또는 Vultr ($25)
+| 옵션 | 월 비용 | 단일 IP 처리량 | IP 분산 가능 | 비고 |
+|---|---|---|---|---|
+| **단일 VPS $5 (Vultr 1대)** ⭐ | **$5** | 시간당 52K | X | 4병렬로 17개 시도 5일 1사이클 가능 |
+| Vultr 5대 (도쿄/서울) | $25 | 시간당 260K | ✅ 자연 분리 | 의뢰자 우선순위 1 (17개 동시) 빠른 처리 |
+| Cloud Run (도쿄 + 사양 최소화) | $20 | (IP 변동) | △ 보장 X | 4병렬 기준 안전, 자동 배포 |
+| Cloud Run (서울 + 사양 최소화) | $25 | (IP 변동) | △ | latency 좋음 |
+| NCP Micro 5대 | $72~100 | — | ✅ | 한국 region 강점만, 합의 초과 |
+| GitHub Actions 유지 | $0 | (IP 분산 자동) | ✅ AWS US 풀 | 정지 위험 (현재 임시 운영) |
+
+→ **유력**: 단일 VPS $5 (가장 저렴 + 충분한 처리량) 또는 Vultr 5대 $25 (처리 속도 1/5 단축)
+→ Cloud Run 옵션도 살아있음 (단 IP 변동성 = 4병렬 기준 안전 마진 검증 필요)
 
 ## ⚠️ OR-CBAT-23 사고 복기 (가입 단계)
 - 가입 단계 결제 등록 시 OR-CBAT-23 에러 반복 (3회)
@@ -175,4 +182,5 @@ Cloud Run Worker Pool — 새 버전 자동 배포
 # 🔗 관련 메모
 
 - [GitHub 이전 + 정지 이력](reference_github_migration.md) — 이전 사고 맥락
+- [KEPCO IP 차단 임계 (실측)](kepco_blocking_threshold.md) ⭐ — 인프라 결정의 가장 중요한 근거
 - [3차 개발 7항목](project_phase3_proposal.md) — 17개 시도 / 필지 수집기는 3차 견적 대상
