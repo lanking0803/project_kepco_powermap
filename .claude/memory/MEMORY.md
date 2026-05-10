@@ -38,8 +38,8 @@
 - [타겟 시설 오버레이](project_target_buildings_overlay.md) — 유리온실/축사/대형건물(50~200평+) 레이어 + 위치 기준 근처 선로용량 표시 (차기 개발, 의뢰자 요청)
 - [특허 출원 중 워터마크](project_patent_watermark.md) — 지도 화면 사선 워터마크. 특허 등록 완료 시 제거 예정 (NEXT_PUBLIC_PATENT_PENDING=false 로 토글)
 - 서니로직 벤치마크 계정 → `../../docs/SECRETS.local.md` 에 보관 (의뢰자 본인 계정, 자동견적 UX 참고용)
-- 🚨 [GitHub 이전 이력 + 정지 사고](reference_github_migration.md) ⭐ — `hicor1`→`hicor150010`(2026-04-19)→`sunlap2026`(2026-05-09). hicor150010 ToS 정지(GitHub Actions 외부 데이터 수집)로 강제 이전. **GitHub Actions 영구 사용 금지**, `.github/workflows/` 폴더 자체 미존재
-- ☁️ [데이터 수집 인프라 이전 — Cloud Run](project_cloud_run_migration.md) ⭐ — GitHub Actions → Google Cloud Run Worker Pool. 17개 시도 + 필지 10개 + 솔라 1개 컨테이너 분리 운영. PoC 부터. 월 운영비 $40~50 (Cloud Run + Supabase Pro). 의뢰자 우선순위 = 17개 동시 병렬, 다중 IP 선택사항
+- 🚨 [GitHub 이전 이력 + 정지 사고 + 임시 복귀](reference_github_migration.md) ⭐ — `hicor1`→`hicor150010`(04-19)→`sunlap2026`(05-09). 2026-05-10 **GitHub Actions 임시 복귀** (워크플로 4개 복원, 새 PAT workflow 스코프). 정지 위험 감수, 며칠~1~2주 시간 벌기
+- ☁️ [Cloud Run 이전 — PoC PASS, 비용 합의 초과 보류](project_cloud_run_migration.md) ⭐ — 2026-05-10 KEPCO 검증 PASS ✅. 단 5컨테이너 24/7 = 월 $75 (합의 $40~50 초과). 도쿄+사양최소화 $20 또는 Vultr $25 최종 후보. **Service ≠ 60분 한도, Worker Pool/Jobs 가 본 운영용** 사고 복기 포함
 - [도메인 sunlap.kr](project_domain_sunlap.md) — 가비아 구매. Vercel 등록 완료, 가비아 DNS 입력 대기 (2026-04-21)
 - [1차 리팩토링 체크리스트](project_refactor_checklist.md) 🔧 — 비교 기능 엑셀 업로드 개편 + 리 테두리 오버레이. 비용 청구 X, 카톡 노출 X
 - [전기용량 데이터 신선도 표시](project_data_freshness.md) ⏰ — 용량 정보에 "언제 수집됐는지" 타임스탬프 배지 추가 (한전온 실값 불일치 대응)

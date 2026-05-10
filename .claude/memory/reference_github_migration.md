@@ -1,6 +1,6 @@
 ---
 name: GitHub 계정 이력 (hicor1 → hicor150010 → sunlap2026)
-description: 2026-04-19 1차 이전, 2026-05-08 ToS 정지, 2026-05-09 신규 계정 이전 완료. 정지 사유 + 시정 흐름 + 운영 영향.
+description: 2026-04-19 1차 이전, 2026-05-08 ToS 정지, 2026-05-09 신규 계정 이전, 2026-05-10 GitHub Actions 임시 복귀.
 type: reference
 ---
 
@@ -9,10 +9,28 @@ type: reference
 - **GitHub**: `sunlap2026` (`sunlap2026@gmail.com` Google OAuth)
 - **저장소**: https://github.com/sunlap2026/project_kepco_powermap (**Private**)
 - **로컬 git config**: `user.email=sunlap2026@gmail.com`, `user.name=sunlap2026`
-- **PAT**: `docs/SECRETS.local.md` 의 GitHub 섹션 참조 (ghp_F3bx... — 채팅 1회 노출, 폐기 검토 필요)
+- **PAT (현재 운영)**: `ghp_arxsz...` (2026-05-10 발급, workflow 스코프 포함, 만료 2026-08-08)
+- **PAT (구)**: `ghp_F3bx...` (2026-05-09 발급, repo 만, 새 PAT 발급으로 폐기 권장)
 
-⛔ **GitHub Actions 사용 절대 금지** — 이전 정지 사유. `.github/workflows/` 폴더 자체 미존재.
-- PAT 도 `repo` 만 발급 (`workflow` 스코프 X) → 워크플로 푸시 자체가 차단되어 약관 재위반 자동 방어.
+⚠️ **GitHub Actions 임시 복귀 (2026-05-10~)** — Cloud Run vs Vultr 결정 보류 중 서비스 중단 방지 목적.
+- **정지 위험 감수** (며칠~1~2주 안에 인프라 결정 필요)
+- 정지 시 새 GitHub 계정 + Vercel 재연결 사전 대비
+- 회피책: API delay 늘리기 / matrix 줄이기 / 재시작 주기 늘리기 (역효과 X — 빈도 낮을수록 안전)
+- 가장 안전: Self-hosted runner (의뢰자 PC) — 단점: 단일 IP / 24/7 가용성 / 보안
+
+# 🚨 2026-05-10 의사결정 보류 — 인프라 후보 비교
+
+| 옵션 | 월 비용 | 비고 |
+|---|---|---|
+| GitHub Actions (현재 임시) | $0 | 정지 위험 |
+| Cloud Run Worker Pool | $75 | PoC PASS 검증 완료, 합의 $40~50 초과 |
+| Cloud Run + 도쿄 region + 사양 최소화 | $20~25 | latency 손해 |
+| Vultr 5대 (도쿄/서울) | $25 | 가장 현실적 |
+| NCP Micro 5대 | $72~100 | 한국 region 강점만 |
+| Hetzner ARM 5대 | $20 | EU latency 250ms+ |
+| Self-hosted runner | $0 | PC 24/7 / 단일 IP / 보안 위험 |
+
+→ **유력**: Vultr 5대 ($25/월) 또는 Cloud Run + 도쿄 + 사양 최소화 ($20~25)
 
 ---
 

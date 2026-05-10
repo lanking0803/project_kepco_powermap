@@ -110,24 +110,67 @@ Cloud Run Worker Pool — 새 버전 자동 배포
 - ❌ Max Instances 무제한 설정 (악의 트래픽 폭탄)
 - ❌ outbound 트래픽 가정 — 실측 후 Tier 1 region 이전 검토
 
-# 📌 진행 상태 (2026-05-09)
+# 📌 진행 상태 (2026-05-10 업데이트)
 
-- ✅ 의뢰자 우선순위 확정 (17개 동시 + 다중 IP 선택)
-- ✅ 옵션 비교 + Worker Pool 채택 결정
-- ✅ Google Cloud 가입 완료 (sunlap2026@gmail.com, Visa 8305)
-- ✅ 조직 `sunlap2026-org` + 프로젝트 `sunlap-crawler` 생성
-- ✅ $300 무료 크레딧 지급 (₩442,654 / 90일)
-- ✅ API 4개 활성화 완료 (Cloud Run / Cloud Build / Artifact Registry / Cloud Logging)
-- ⏳ Budget Alert 설정 (안전장치)
-- ⏳ gcloud CLI + Docker Desktop 설치
-- ⏳ PoC 컨테이너 작성 + KEPCO API 검증
-- ⏳ 의뢰자 운영비 합의 ($40~50/월)
+## Phase 0 PoC 완료 ✅
 
-## ⚠️ OR-CBAT-23 사고 복기
+- ✅ Google Cloud 가입 + 프로젝트 + API 활성화
+- ✅ Cloud Build trigger + GitHub 자동 빌드 검증
+- ✅ `kepco-poc-worker` Service 배포 (asia-northeast3)
+- ✅ **KEPCO 통과 검증 완료** — `/check` 엔드포인트 호출 결과:
+  - HTTP 200 OK
+  - 시/도 17개 정상 수신
+  - verdict=PASS
+  - **차단 X 확인** ⭐
+- ✅ ingress=internal 보안 복구
+
+## ⚠️ Phase 1+ 보류 — 비용 재계산 결과 합의 초과
+
+**실측 단가 기반 재계산 (asia-northeast3 Tier 2):**
+- 5컨테이너 × 0.25 vCPU + 256MB × 24/7 = **월 약 $75**
+- 의뢰자 합의 운영비 ($40~50) 초과
+- API 호출 횟수 과금 X = 컨테이너 실행 시간만 청구 (간헐 운영이면 절감 가능, 5일 연속 = 풀가동)
+
+**절감 옵션:**
+- 도쿄 region (Tier 1) → 20% 절감 → 월 $60
+- 사양 최소화 (0.08 vCPU + 128MB) → 월 $25
+- 둘 다 → **월 $20~25** (합의 가능)
+
+## 🔄 임시 조치 (2026-05-10~)
+
+- GitHub Actions **임시 복귀** (워크플로 4개 복원, sunlap2026 저장소)
+- Cloud Run vs Vultr vs 사양 최소화 Cloud Run 결정 보류
+- 며칠~1~2주 시간 벌기 목적, sunlap2026 정지 위험 감수
+
+## 🎯 최종 후보 비교 (의뢰자 결정 필요)
+
+| 옵션 | 월 비용 | 장점 | 단점 |
+|---|---|---|---|
+| Cloud Run (서울 + 사양 최소화) | $25 | 검증 완료, 자동 배포 | latency 좋음 |
+| Cloud Run (도쿄 + 사양 최소화) | $20 | 가장 저렴 | latency +20ms |
+| Vultr 5대 (도쿄/서울) | $25 | IP 5개 자연 분리 | 직접 셋업 |
+| NCP Micro 5대 | $72~100 | 한국 region | 비싸고 합의 초과 |
+| GitHub Actions 유지 | $0 | 무료 | 정지 위험 |
+
+→ **유력**: Cloud Run 도쿄 + 사양 최소화 ($20) 또는 Vultr ($25)
+
+## ⚠️ OR-CBAT-23 사고 복기 (가입 단계)
 - 가입 단계 결제 등록 시 OR-CBAT-23 에러 반복 (3회)
 - 실제로는 백엔드에서 결제 등록 정상 처리됨 (UI 오류만 표시)
 - 진단 방법: `console.cloud.google.com/billing/linkedaccount?project=<PROJECT>` 접속 후 "₩442,654 크레딧" 배너 확인
 - 같은 카드로 3회 이상 시도 금지 (Google 사기 방지 시스템 강한 차단 위험)
+
+## ⚠️ Cloud Run Service 한도 사고 복기
+- Service = HTTP 요청 응답형, **request timeout 60분 한도** (5일 작업 불가)
+- Worker Pool 또는 Jobs 가 본 운영용 (메모리에 적힌 채택안)
+- PoC 는 Service 로 검증해도 OK (KEPCO 차단 여부만 확인 목적)
+- **Phase 1 본 운영 시 Worker Pool 또는 Jobs 로 전환 필요**
+
+## ⚠️ Cloud Run "Service URL ≠ 콘솔 표시 URL" 사고 복기
+- 콘솔: `https://kepco-poc-worker-185217450716.asia-northeast3.run.app`
+- 실제: `https://kepco-poc-worker-xbdifx6a6a-du.a.run.app` (gcloud describe 로 확인)
+- 콘솔 URL 로 호출 → 다른 호스트의 404 HTML
+- 진단: `gcloud run services describe ... --format=yaml | grep urls`
 
 # 🔗 관련 메모
 
