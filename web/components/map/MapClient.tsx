@@ -45,6 +45,7 @@ import LocationDetailModal from "./LocationDetailModal";
 import ParcelInfoPanel from "./ParcelInfoPanel";
 import type { SolarMarker } from "@/lib/api/solar-permits";
 import PatentWatermark from "./PatentWatermark";
+import MapLogo from "./MapLogo";
 import type { JibunInfo, ParcelGeometry } from "@/lib/vworld/parcel";
 import { buildPnuFromBjdAndJibun } from "@/lib/geo/pnu";
 import {
@@ -1039,6 +1040,8 @@ export default function MapClient({ isAdmin, email }: Props) {
               </button>
             </div>
           )}
+
+          <MapLogo />
 
           <KakaoMap
             rows={allRows}
