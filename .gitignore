@@ -54,5 +54,8 @@ scripts/test_*
 # Claude Code 로컬 런타임 (세션 캐시 등)
 .claude/cp.json
 
+# Claude 협업 메모리 (시크릿/개인정보/비즈니스 결정 포함 — 로컬 전용)
+.claude/memory/
+
 # Windows bash crash dump
 *.stackdump
