@@ -13,7 +13,8 @@
 - 🛡 [2중 제어 모델](feedback_2tier_control_model.md) 🔑 — intent/status 분리 + cron 안전망 제거 (2026-04-23 재설계). `||'1'` fallback 같은 방어 코드 임의 제거 금지
 - [Surrogate 파손 방어](feedback_surrogate_corruption.md) 🛡 — Python/JSON lone surrogate 오염 → update_job 단일 점에서 sanitize. 취소 API 는 pending 도 cancelled 처리
 - 좌표 저장 정책 (2026-04-22~): `kepco_addr.lat/lng` = 리 단위 단일 저장소. 지번 좌표는 VWorld on-demand + Vercel KV (TTL 3일). `geocode_cache` 폐기
-- [SUNLAP 결제 일정](project_payment_schedule.md) 💰 — 선금 200만 수령(2026-04-21). 잔금 1,210만은 완료 후. 서버비 월 5만 매월 21일
+- [SUNLAP 결제 일정](project_payment_schedule.md) 💰 — ✅ **1·2차 개발비 1,410만 전액 완납** (2026-05-21). 서버비 월 5만 매월 21일(6월분 06-21 수령, 다음 07-21). 차기 정산 = 3차 견적
+- 🆕 [신규 의뢰 — 건축물대장 추출 프로그램 (협상 중)](project_bldg_extract_lead.md) ⚠️ — SUNLAP 무관 별건 외주. 건축HUB API 로 지역선택→DB→엑셀. 견적 180만 제시, "비싸다" 응답 후 예산 협상 중(무산 가능). 연락 오면 주차대수 API 검증부터
 - [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 협상 맥락 + 진행 상태. 가격표 docs/견적_1차2차.md
 - 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
 - ✅ [2차 출시 완료](project_phase2_kickoff.md) ⭐ — 700만 6종 모두 라이브(공매/취락/경매/시설/공시지가/실거래). 잔금 610만 청구 준비
@@ -36,11 +37,12 @@
 - [캐시 전략 체계화 — 차기](project_cache_strategy.md) — HTTP Cache/KV/Next Data Cache 레이어 정리. "마커 0" 사고 복기가 선결
 - [지적편집도 + 지도 클릭 팝업](project_cadastral_and_click_popup.md) — 카카오 지적편집도 레이어 + 빈 곳 클릭 시 지번 용량 팝업 (차기 개발)
 - [타겟 시설 오버레이](project_target_buildings_overlay.md) — 유리온실/축사/대형건물(50~200평+) 레이어 + 위치 기준 근처 선로용량 표시 (차기 개발, 의뢰자 요청)
-- [특허 출원 중 워터마크](project_patent_watermark.md) — 지도 화면 사선 워터마크. 특허 등록 완료 시 제거 예정 (NEXT_PUBLIC_PATENT_PENDING=false 로 토글)
+- ⏸ [특허 출원 중 워터마크 — 현재 임시 OFF](project_patent_watermark.md) — 지도 사선 워터마크. **2026-06-29 임시 비활성화(TEMP_DISABLED, 커밋 fdc8fd6)**. 의뢰자가 "다시 넣어줘" 하면 TEMP_DISABLED 줄 삭제 후 커밋/푸시로 원복
 - 서니로직 벤치마크 계정 → `../../docs/SECRETS.local.md` 에 보관 (의뢰자 본인 계정, 자동견적 UX 참고용)
-- 🚨 [GitHub 이전 이력 + 정지 사고 + 임시 복귀](reference_github_migration.md) ⭐ — `hicor1`→`hicor150010`(04-19)→`sunlap2026`(05-09). 2026-05-10 **GitHub Actions 임시 복귀** (워크플로 4개 복원, 새 PAT workflow 스코프). 정지 위험 감수, 며칠~1~2주 시간 벌기
+- 🚨 [GitHub 이전 이력 + 정지 사고 + 선제 이전](reference_github_migration.md) ⭐ — `hicor1`→`hicor150010`(04-19)→`sunlap2026`(05-09)→`lanking0803`(05-17). 2026-05-17 **정지 전 선제 이전** (sunlap2026 Google 계정 한도 도달 → 정지 시 새 계정 가입 불가 위험 발견). 다운타임 0, 30분 작업. Cloud Run/Vultr 인프라 결정 여전히 보류
 - ☁️ [Cloud Run 이전 — PoC PASS, 비용 합의 초과 보류](project_cloud_run_migration.md) ⭐ — 2026-05-10 KEPCO 검증 PASS ✅. 단 5컨테이너 24/7 = 월 $75 (합의 $40~50 초과). 도쿄+사양최소화 $20 또는 Vultr $25 최종 후보. **Service ≠ 60분 한도, Worker Pool/Jobs 가 본 운영용** 사고 복기 포함
 - 🚦 [KEPCO IP 차단 임계 (실측)](kepco_blocking_threshold.md) ⭐ — 단일 IP 동시 in-flight ≤4 안전 / 5 회색 / 6+ 차단. 분당 호출수 무관(가설 폐기). silent ReadTimeout. 단일 VPS $5 도 시간당 52K 가능 → 인프라 결정 단순화 (2026-05-10 7라운드 실험)
+- 📌 [보류 중인 두 숙제 — 인프라 + 3차 견적](project_pending_decisions.md) ⭐ — (1) 17개 시도 동시 수집기 인프라 결정 (Vultr $25 권장) (2) 3차 7항목 견적 완성 (4항목 완료, 2/3/4 미산출). 트리거별 다음 행동 정리. **다음 대화 진입점**
 - [도메인 sunlap.kr](project_domain_sunlap.md) — 가비아 구매. Vercel 등록 완료, 가비아 DNS 입력 대기 (2026-04-21)
 - [1차 리팩토링 체크리스트](project_refactor_checklist.md) 🔧 — 비교 기능 엑셀 업로드 개편 + 리 테두리 오버레이. 비용 청구 X, 카톡 노출 X
 - [전기용량 데이터 신선도 표시](project_data_freshness.md) ⏰ — 용량 정보에 "언제 수집됐는지" 타임스탬프 배지 추가 (한전온 실값 불일치 대응)
@@ -64,3 +66,4 @@
 - 🏭 [필지 마을 마커 — 공매·경매 미러](project_facility_markers.md) ⭐ — `/api/facility/search` atomic + bjd_master JOIN. violet zIndex 100/50. 동적 갱신은 BJD 키 lookup 패턴 (2026-05-03)
 - ⚡ [줌 빈번 시 level-skip 가드는 무의미](feedback_perf_skip_guard_zoom.md) — 사용 패턴이 줌 위주면 level 기반 skip 발동률 0. idle 리스너 4→1 통합(Step 1A)이 진짜 효과(-63% 스크립트, INP 2,498→313ms). 1B+1C 시도 후 원복(2026-05-03)
 - 📄 [PDF 양식 확장 시 컬럼 정의 우선](feedback_pdf_template_extension.md) ⚠️ — 단일 케이스 PDF 의 표시 형태를 양식 의도로 오독 금지. 컬럼 정의(=대출액+이자) 가 진실. 봉남리 견적 대출 균등분배 사고 복기(2026-05-06)
+- 🐔 [양계장 가능부지 스크리닝 — 묶음1 설계](project_poultry_screening.md) ⭐ — 신규 모드. **PoC 5종 PASS + 요구사항 전면확정 + 견적발송(330만/4주)→의뢰자 "맘에듦, 내부회의후 착수결정"(06-25). 착수결정+이격1500동의 답장 대기**(다음 진입점). 진입=리단위. 1·2단계=WFS BBOX 병렬(농림UQ113/생산관리UQ112/가축UM000, 0.2~0.3초, remark `\d+m거리제한` 정규식추출). 3단계 민가=건축물대장(리 202동 3초)+주용도분류(주택/시설, 동·식물=축사→시설)+지오코딩 25ms실측(병목아님), 리1개 ~22초→캐시. 4단계 경사=AWS 8m+산지관리법 면적가중 dm공식, 필지클리핑 면적정합±4%, 4색(10↓노랑/10~15초록/15~22회색/22+빨강) 슬라이더10~30. UI=base map버튼 아닌 마을단위 오버레이(의뢰자 승인). 카톡=공유방식(묶음2). 공수 ~8~9주

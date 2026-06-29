@@ -1,8 +1,23 @@
 ---
 name: 특허 출원 중 워터마크 (임시 표시)
-description: 지도 화면에 "특허 출원 중 · Patent Pending" 사선 워터마크. 특허 등록 완료 시 제거 예정.
+description: 지도 화면 "특허 출원 중 · Patent Pending" 사선 워터마크. 현재 임시 비활성화 중 — 의뢰자가 "다시 넣어줘" 하면 TEMP_DISABLED 줄만 삭제하면 원복.
 type: project
 ---
+## ⚠️ 현재 임시 비활성화 중 (2026-06-29)
+
+의뢰자 요청으로 워터마크를 **임시로 내린 상태** (기간 미정, "다시 넣어달라"고 하면 복구).
+
+- 방법: `web/components/map/PatentWatermark.tsx` 함수 첫 줄 `if (TEMP_DISABLED) return null;` + 파일 상단 `const TEMP_DISABLED = true;`
+- 커밋: `fdc8fd6` (2026-06-29 푸시 → Vercel 배포 반영). 로컬·운영 양쪽 적용됨.
+
+**다시 켜는(원복) 방법 — 의뢰자가 "워터마크 다시 넣어줘" 하면:**
+1. `web/components/map/PatentWatermark.tsx` 에서 `const TEMP_DISABLED = true;` **줄만 삭제** (함수 안 `if (TEMP_DISABLED) return null;` 도 같이 삭제하면 더 깔끔)
+2. 커밋 + 푸시 → Vercel 자동 배포로 운영·로컬 양쪽 원복
+3. (또는 `git revert fdc8fd6` 한 방으로도 동일)
+4. 원복 후 이 "임시 비활성화 중" 섹션 삭제 + description 원복
+
+> 모양·위치·투명도 등은 코드가 그대로라 원복 시 100% 동일하게 복구됨.
+
 ## 현황 (2026-04-15 추가)
 
 지도 화면 전체에 "특허 출원 중 · Patent Pending" 사선(-30°) 반복 워터마크 표시.
