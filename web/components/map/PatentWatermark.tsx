@@ -25,10 +25,15 @@
  *   - z-index: 45        → 지도 UI 위, 모달(z-100) 아래
  */
 
+// [임시] 워터마크 7일간 비활성화 — 2026-07-06 원복 예정
+//   원복: 아래 TEMP_DISABLED 줄만 삭제하면 원래대로 복구됨 (다른 코드 변경 없음)
+const TEMP_DISABLED = true;
+
 const PATENT_PENDING_ENABLED =
   process.env.NEXT_PUBLIC_PATENT_PENDING !== "false";
 
 export default function PatentWatermark() {
+  if (TEMP_DISABLED) return null;
   if (!PATENT_PENDING_ENABLED) return null;
 
   // 반복 텍스트 — 한 줄당 여러 번 반복해야 회전 후에도 화면 전체 덮음
