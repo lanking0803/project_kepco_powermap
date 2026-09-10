@@ -1,69 +1,55 @@
-- ⛔ [절대규칙 — 거짓말/추측/책임전가 금지](feedback_no_lies_no_guess.md) — 사실은 직접 확인. 추측·결정전가 시 신뢰 상실
-- 💡 [기존 자산 재활용 먼저 검토](feedback_reuse_existing_assets.md) — 인덱스 추가/쿼리 재작성 전에 이미 있는 MV/집계/캐시 확인
-- 🧹 [DB 자산 청소 시 함수 본문까지 검사](feedback_db_cleanup.md) — 코드 grep 만으로 부족, pg_proc.prosrc/pg_views 까지 확인 (043→045 사고 복기)
-- ⭐ [KEPCO 5필드+jibun 빈값 규칙 (확정)](reference_kepco_field_rules.md) — 의뢰자 캡처 6건+DB 검증. si/gu=-기타지역, li/jibun=빈문자열, lidong=빈값 없음, 세종 si=do
-- [KEPCO API -기타지역 규칙 (구)](kepco_api_skip_value.md) — addr_li만 빈값. ⚠️ field_rules.md 가 정식 — 이건 크롤러 2단계 재시도 흐름 한정
-- [여유용량 판정 수식](kepco_vol_formula.md) — (capa-pwr≤0)OR(capa-g_capa≤0)=없음. 3개 시설 동일.
-- [지오코딩 동+리 fallback](geocode_fallback_rule.md) — "동+리" 없으면 리 빼고 동만으로 재시도
-- [모바일 개발 4대 원칙](feedback_mobile_principles.md) — 웹 영향 없이, 덕지덕지 금지, 크로스브라우저, 컴포넌트 재활용
-- [코드 수정 원칙](feedback_code_quality.md) — 실제 렌더 파일 먼저 특정, 중복 로직 금지, 동작 확인 필수
-- [푸시 원칙](feedback_push_after_perf_test.md) — 커밋은 가능, 푸시는 성능 테스트 통과 후에만. 기본값: 지시 없으면 푸시 묻기
-- [docs 자율 수정](feedback_docs_autonomy.md) — docs/ 문서 수정은 승인 없이 바로. SECRETS.local.md 만 예외
-- ✅ [크롤 좀비 job — RESOLVED](feedback_crawl_zombie_jobs.md) — (해결) 2중 제어 모델로 근본 제거. 사고 복기용으로 보존
-- 🛡 [2중 제어 모델](feedback_2tier_control_model.md) 🔑 — intent/status 분리 + cron 안전망 제거 (2026-04-23 재설계). `||'1'` fallback 같은 방어 코드 임의 제거 금지
-- [Surrogate 파손 방어](feedback_surrogate_corruption.md) 🛡 — Python/JSON lone surrogate 오염 → update_job 단일 점에서 sanitize. 취소 API 는 pending 도 cancelled 처리
-- 좌표 저장 정책 (2026-04-22~): `kepco_addr.lat/lng` = 리 단위 단일 저장소. 지번 좌표는 VWorld on-demand + Vercel KV (TTL 3일). `geocode_cache` 폐기
-- [SUNLAP 결제 일정](project_payment_schedule.md) 💰 — ✅ **1·2차 개발비 1,410만 전액 완납** (2026-05-21). 서버비 월 5만 매월 21일(6월분 06-21 수령, 다음 07-21). 차기 정산 = 3차 견적
-- 🆕 [신규 의뢰 — 건축물대장 추출 프로그램 (협상 중)](project_bldg_extract_lead.md) ⚠️ — SUNLAP 무관 별건 외주. 건축HUB API 로 지역선택→DB→엑셀. 견적 180만 제시, "비싸다" 응답 후 예산 협상 중(무산 가능). 연락 오면 주차대수 API 검증부터
-- [SUNLAP 견적 — 진행 중](project_solar_proposal.md) ⭐ — 2026-04-21 수락. 협상 맥락 + 진행 상태. 가격표 docs/견적_1차2차.md
-- 🛠 [견적 모드 구조 + 1차 완료](project_quote_mode.md) ⭐ — /quote/[pnu] 5단계 100% 완료(2026-04-28). 시연 통과
-- ✅ [2차 출시 완료](project_phase2_kickoff.md) ⭐ — 700만 6종 모두 라이브(공매/취락/경매/시설/공시지가/실거래). 잔금 610만 청구 준비
-- 🏛 [공매·경매 통합 의도](project_auction_intent.md) ⭐ — "저가 매입 기회 발굴". 경매 Phase 1+2 개발 완료(2026-05-02). 테스트모드 시연 단계
-- 🔨 [경매 D4 완료 — 진입 흐름 통합](project_auction_d4_done.md) ⭐ — 검색 카드/마커/카드/모달 4경로 모두 ParcelPanel [경매] 탭으로 수렴 (2026-05-03)
-- 🪤 [sessionStorage 복원 패턴](feedback_session_restore_pattern.md) ⚠️ — 모드 패널 마운트 시 복원된 results 를 부모로 흘려야 마커 회귀 안 함
-- 🗄 [Hyphen — 백업 채널](project_hyphen_billing.md) — 2026-05-04 법원경매 채택으로 미운영. 가격 인상/차단 시 swap 카드. 멤버십 11만/월 + 호출당 종량 (참고)
-- ✅ [경매 직접 호출 — 전체 swap + 카테고리 분리](project_court_auction_direct.md) ⭐ — env AUCTION_CHANNEL 토글(기본=court). 목록/by-pnu/상세모달. 사건 단위 그룹핑 key=(boCd,saNo). **카테고리 시스템 court 전용 분리(2026-05-05)** — 검증된 76개 소분류 + 영업 6그룹. hyphen 종속 폐기. 응답 캡처 docs/api_specs/법원경매/ 보존. 회차별가격은 raw 필드 의미 불명으로 롤백
-- 🪞 [기존 endpoint 패턴 미러 우선](feedback_mirror_existing_endpoint.md) ⚠️ — 새 채널 by-pnu/search 짤 때 기존 공매(onbid) 패턴 끝까지 읽고 따라가기. 자체 로직 짜다가 동명이리 충돌 발생(court 사례)
-- 🪤 [외부 API 빈값 검색조건 함정](feedback_external_api_default_filter.md) ⚠️ — 검색조건 빈값 ≠ 전체 응답. court 사이트는 매각기일 빈값 시 종결매물 위주 응답해 진행매물 누락. 사이트 기본값 확인 필수
-- 🏛 [공매 Phase 1 출시 후 재검토 항목](project_onbid_phase1_review.md) — dedup 정책/회차/페이지네이션/카테고리/모바일/알림 보류. 의뢰자 영업 피드백 발화 트리거별 재검토
-- 🔍 [주소·지번 검색 재설계 숙제](project_search_redesign_pending.md) ⭐ — 리 후보 1건일 때만 지번 검색하는 미친 로직 발견(2026-05-05). MV/리/지번 흐름 통째 재설계 필요
-- 🎨 [의뢰자 사용 피드백 — 통합 오버레이](project_overlay_combined_modes.md) ⭐ — 필지 클릭 빨간 음영 + 전기/공매(빨강)/경매(노랑) 동시 표시 (2026-05-02 카톡)
-- 📨 [3차 개발 — 7항목 안내 발송](project_phase3_proposal.md) ⭐ — 1·2차 완료 보고 + 3차 7항목 카톡 발송(2026-05-05). 태양광설치여부는 입지탭 기존 기능으로 인식되어 미포함. 의뢰자 답장 대기
-- ☀️ [Phase 4 — 패널 시뮬레이터 + PDF 견적서/배치도](project_phase4_simulator.md) ⭐ — 의뢰자 영업 핵심 도구. 2.5평/kW 고정, 130만/kW 기본. 양식 docs/예시/. 800~900만/5.5주 (2026-04-26 의뢰자 답변 확정)
-- ⚠️ [태양광 허가 API 검증 결과](reference_solar_permit_api.md) — 검색 필터 미지원 (LCTN_LOTNO_ADDR/LATITUDE 등 전부 NODATA). 페이지네이션만 가능. Phase 3 시 12만건 DB 적재 후 by-pnu 신설 필요
-- [건축물대장 API 검증](reference_bldg_register_api.md) — endpoint/파라미터/응답필드 실측. 비닐하우스는 대부분 미등록 한계. 키는 SECRETS.local.md
-- ✅ [줌 레벨별 마커 최적화 — 완료](project_zoom_level_optimization.md) — 줌 8~12 sep 단위 클라이언트 그룹핑 + maxLevel 12 (2026-05-04). 클러스터러 인덱싱 비용 제거
-- [DB row_hash 리팩토링 — 추후](project_db_row_hash_refactor.md) — kepco_capa_ukey 61MB → MD5 해시로 40MB 절감. 1차 2단계 완료 후 권장
-- [캐시 전략 체계화 — 차기](project_cache_strategy.md) — HTTP Cache/KV/Next Data Cache 레이어 정리. "마커 0" 사고 복기가 선결
-- [지적편집도 + 지도 클릭 팝업](project_cadastral_and_click_popup.md) — 카카오 지적편집도 레이어 + 빈 곳 클릭 시 지번 용량 팝업 (차기 개발)
-- [타겟 시설 오버레이](project_target_buildings_overlay.md) — 유리온실/축사/대형건물(50~200평+) 레이어 + 위치 기준 근처 선로용량 표시 (차기 개발, 의뢰자 요청)
-- ⏸ [특허 출원 중 워터마크 — 현재 임시 OFF](project_patent_watermark.md) — 지도 사선 워터마크. **2026-06-29 임시 비활성화(TEMP_DISABLED, 커밋 fdc8fd6)**. 의뢰자가 "다시 넣어줘" 하면 TEMP_DISABLED 줄 삭제 후 커밋/푸시로 원복
-- 서니로직 벤치마크 계정 → `../../docs/SECRETS.local.md` 에 보관 (의뢰자 본인 계정, 자동견적 UX 참고용)
-- 🚨 [GitHub 이전 이력 + 정지 사고 + 선제 이전](reference_github_migration.md) ⭐ — `hicor1`→`hicor150010`(04-19)→`sunlap2026`(05-09)→`lanking0803`(05-17). 2026-05-17 **정지 전 선제 이전** (sunlap2026 Google 계정 한도 도달 → 정지 시 새 계정 가입 불가 위험 발견). 다운타임 0, 30분 작업. Cloud Run/Vultr 인프라 결정 여전히 보류
-- ☁️ [Cloud Run 이전 — PoC PASS, 비용 합의 초과 보류](project_cloud_run_migration.md) ⭐ — 2026-05-10 KEPCO 검증 PASS ✅. 단 5컨테이너 24/7 = 월 $75 (합의 $40~50 초과). 도쿄+사양최소화 $20 또는 Vultr $25 최종 후보. **Service ≠ 60분 한도, Worker Pool/Jobs 가 본 운영용** 사고 복기 포함
-- 🚦 [KEPCO IP 차단 임계 (실측)](kepco_blocking_threshold.md) ⭐ — 단일 IP 동시 in-flight ≤4 안전 / 5 회색 / 6+ 차단. 분당 호출수 무관(가설 폐기). silent ReadTimeout. 단일 VPS $5 도 시간당 52K 가능 → 인프라 결정 단순화 (2026-05-10 7라운드 실험)
-- 📌 [보류 중인 두 숙제 — 인프라 + 3차 견적](project_pending_decisions.md) ⭐ — (1) 17개 시도 동시 수집기 인프라 결정 (Vultr $25 권장) (2) 3차 7항목 견적 완성 (4항목 완료, 2/3/4 미산출). 트리거별 다음 행동 정리. **다음 대화 진입점**
-- [도메인 sunlap.kr](project_domain_sunlap.md) — 가비아 구매. Vercel 등록 완료, 가비아 DNS 입력 대기 (2026-04-21)
-- [1차 리팩토링 체크리스트](project_refactor_checklist.md) 🔧 — 비교 기능 엑셀 업로드 개편 + 리 테두리 오버레이. 비용 청구 X, 카톡 노출 X
-- [전기용량 데이터 신선도 표시](project_data_freshness.md) ⏰ — 용량 정보에 "언제 수집됐는지" 타임스탬프 배지 추가 (한전온 실값 불일치 대응)
-- 🧭 [함수 네이밍 컨벤션](feedback_naming_convention.md) — `[verb][Source][Entity][By+Input]`. 30+ 함수 추가 대비 충돌 0
-- 🙏 [존댓말 사용](feedback_polite_tone.md) — 의뢰자와 대화 시 항상 공손한 존댓말
-- ⚛️ [Atomic API + 클라이언트 enrichment](project_atomic_api_pattern.md) ⭐ — 5종 endpoint + lib/api source별 분리 + KepcoCapaRow enrichment (2026-04-24)
-- 🏷 [표준코드 번들 — 보류](project_stdcode_bundle.md) — xlsx 7종 보유. DB X / 정적 JSON O 결정. UI 개발 시점에 구현
-- 🗺 [지적도 데이터 출처 + 카카오 SDK 한계](reference_cadastral_data_sources.md) — VWorld LX 편집지적도 사용. 카카오 외부 타일 오버레이 비호환 (재시도 금지)
-- 🌏 [Vercel region = icn1 고정](reference_vercel_region.md) — vercel.json 프로젝트 전역. 한국 외부 API 가 미국 iad1 IP 거절. preferredRegion 은 Edge 전용이라 Node 에서 무시 (함정)
-- 🪤 [Supabase RPC plan 함정](reference_supabase_rpc_plan_trap.md) — 동일 SQL 직접 1.5ms ↔ RPC 2초+. generic plan 캐시로 인덱스 못 탐. 쿼리빌더 직접 호출 또는 표현식 인덱스로 회피
-- 🏛 [법제처 OPEN API 도메인 검증](reference_law_api_referer.md) — Referer/Origin 헤더 필수 (서버사이드 fetch). 헤더 값 한글 금지(ByteString 거부). sunlap.kr 등록 완료
-- ⚡ [KEPCO 같은 마을 fallback](reference_kepco_fallback.md) — 매칭 0건 시 본번거리 top 5. RPC plpgsql+EXECUTE 필수(sql LANGUAGE 시 plan trap = 2.5초). UI는 LocationDetailGrouped compact 재활용
-- 📊 [차트는 라이브러리 사용](feedback_charts_use_library.md) — Recharts 우선. SVG 직접 그리기 시 점 찌그러짐/툴팁/보간 재구현으로 유지보수 어려움
-- 🎴 [ParcelInfoPanel 카드 패턴](project_panel_card_pattern.md) — 공매탭 Section 미러 + accent 색상 분기 (rose/amber/blue/gray)
-- 🏘 [자연취락지구 폴리곤 표시](project_uq_villages.md) ⭐ — 마을 클릭 시 자동 표시. 별도 토글 X. atomic /api/uq-villages/by-bjd + 프론트 Turf 후처리 (2026-05-02)
-- 📍 [자연취락지구 마커 + 클러스터](project_uq_marker.md) ⭐ — 검색 결과 줌별 마커/클러스터(KEPCO 패턴). 평수 압축 라벨. CustomOverlay 418개 프리징 사고 복기(2026-05-03)
-- 🪤 [VWorld lt_c_uq128 함정 5종](reference_vworld_uq128.md) ⚠️ — OGC FILTER 전용/일반시 등록 단위 불일치/uname 자연·집단 혼재/sigg_name 부정확/bbox 함정. 회피=sgg-strategy + uname 필터
-- 🪤 [캠코 lctnSggnm 표기 규칙](reference_onbid_sigungu_format.md) — 일반시 일반구는 "성남시 분당구" 통합. 광역시 자치구/일반 군은 단독. 분당구 단독 검색 0건 사고(2026-05-02)
-- ⚠️ [정부 공공 API 행정구역 단위 가정 금지](feedback_govdata_unit_mismatch.md) — bjd_master 표준 ≠ 외부 등록 단위. 일반시 일반구 시·구 따로 등록 흔함. 실 호출 검증 필수, 추측 금지(2026-05-02)
-- 🗺 [시군구 atomic — 모드 공통](project_regions_atomic.md) — `/api/regions/sigungu` (bjd_master 250개) 모든 모드 공유. 취락지구·공매 적용
-- 🏭 [필지 마을 마커 — 공매·경매 미러](project_facility_markers.md) ⭐ — `/api/facility/search` atomic + bjd_master JOIN. violet zIndex 100/50. 동적 갱신은 BJD 키 lookup 패턴 (2026-05-03)
-- ⚡ [줌 빈번 시 level-skip 가드는 무의미](feedback_perf_skip_guard_zoom.md) — 사용 패턴이 줌 위주면 level 기반 skip 발동률 0. idle 리스너 4→1 통합(Step 1A)이 진짜 효과(-63% 스크립트, INP 2,498→313ms). 1B+1C 시도 후 원복(2026-05-03)
-- 📄 [PDF 양식 확장 시 컬럼 정의 우선](feedback_pdf_template_extension.md) ⚠️ — 단일 케이스 PDF 의 표시 형태를 양식 의도로 오독 금지. 컬럼 정의(=대출액+이자) 가 진실. 봉남리 견적 대출 균등분배 사고 복기(2026-05-06)
-- 🐔 [양계장 가능부지 스크리닝 — 묶음1 설계](project_poultry_screening.md) ⭐ — 신규 모드. **PoC 5종 PASS + 요구사항 전면확정 + 견적발송(330만/4주)→의뢰자 "맘에듦, 내부회의후 착수결정"(06-25). 착수결정+이격1500동의 답장 대기**(다음 진입점). 진입=리단위. 1·2단계=WFS BBOX 병렬(농림UQ113/생산관리UQ112/가축UM000, 0.2~0.3초, remark `\d+m거리제한` 정규식추출). 3단계 민가=건축물대장(리 202동 3초)+주용도분류(주택/시설, 동·식물=축사→시설)+지오코딩 25ms실측(병목아님), 리1개 ~22초→캐시. 4단계 경사=AWS 8m+산지관리법 면적가중 dm공식, 필지클리핑 면적정합±4%, 4색(10↓노랑/10~15초록/15~22회색/22+빨강) 슬라이더10~30. UI=base map버튼 아닌 마을단위 오버레이(의뢰자 승인). 카톡=공유방식(묶음2). 공수 ~8~9주
+# Memory Index
+
+> ★ **유일한 브레인은 볼트다. 여기 지식을 쌓지 않는다.**
+>
+> 진입점: `E:/2. hicor/Python/project_second_brain/01_Projects/project_kepco_powermap/_project-index.md`
+>
+> 이 파일은 **매 세션 자동 주입된다.** 그래서 여기 적힌 것이 볼트보다 낡으면
+> 낡은 쪽이 더 자주 읽힌다. **금액·계좌·계정·토큰을 여기 적지 않는다.**
+
+## 쓰기 라우팅 — 무엇을 어디에 남기나
+
+| 남길 것 | 어디에 |
+|---|---|
+| **결정·판단** | 볼트 `01_Projects/project_kepco_powermap/decision-log.md` 에 append |
+| **작업 경과** | 볼트 `.../_작업일지/YYYY-MM-DD_<주제>.md` |
+| **노하우** | 볼트 `.../_공통/_작업_노하우.md` 버전 bump |
+| **지식·실측** | 볼트 `.../레퍼런스/` 의 해당 노트 |
+| **자격증명 값** | 볼트 `.../00_Meta/_자격증명.local.md` (git 밖) |
+
+**고칠 것이 있으면 볼트를 고친다.** 이 파일에 새 지식을 적으면 볼트와 갈라진다.
+
+## 볼트의 레퍼런스 노트 (2026-09-09 승격 완료)
+
+`01_Projects/project_kepco_powermap/` 아래.
+
+| 노트 | 무엇 |
+|---|---|
+| `레퍼런스/KEPCO_수집_실측.md` | 차단 임계(동시 in-flight ≤4) · 빈값 채움 규칙 · 여유용량 수식 · 마을 fallback |
+| `레퍼런스/외부API_함정.md` | VWorld·캠코·법제처·건축HUB·법원경매·태양광허가의 실측 성질 |
+| `레퍼런스/인프라_실측과_이력.md` | Cloud Run · Supabase RPC plan trap · Vercel region · 지형타일 |
+| `레퍼런스/GitHub_계정_정지_대응.md` | 정지 사유 · 선제 이전 · 다계정 PC 인증 충돌 |
+| `레퍼런스/제품_설계규약.md` | 모드·마커·카드·색상 규약, 카카오 SDK 한계 우회 |
+| `레퍼런스/사업_계약_수익구조.md` | 금액·수령이력·청구문구·협상 교훈·미납 차단 장치 |
+| `_공통/_작업_노하우.md` | 이 프로젝트에서 일하는 방식 |
+| `decision-log.md` | 결정 6건 + **미결·보류 15건** |
+
+> **2026-09-09**: auto memory 72건을 전수 정독해 위 노트로 옮기고 원본을 삭제했다.
+> 판정 대장은 볼트 `.../_작업일지/2026-09-09_auto-memory_승격.md` 에 72행으로 남아 있다.
+> 삭제 전 역방향 대조(72/72)를 통과했고, 그 대조가 실제 누락 2건을 잡아냈다.
+
+## 트리거 — 이런 말이 나오면 볼트의 저기를 편다
+
+**상태를 여기 적지 않는다.** 상태는 바뀌고, 이 파일은 매 세션 자동 주입되므로
+낡은 상태가 매번 읽힌다. 아래는 **어디를 펴라**는 지시만 있다.
+
+| 이런 말이 나오면 | 볼트에서 펼 곳 |
+|---|---|
+| 수집이 안 돈다 · 데이터가 낡았다 · 좀비 job | `decision-log.md` **말미** + `레퍼런스/KEPCO_수집_실측.md` |
+| 401 · 토큰 · PAT · 배포가 안 된다 | `decision-log.md` 말미 + `레퍼런스/GitHub_계정_정지_대응.md` |
+| 청구 · 입금 · 견적 · 계약 | `레퍼런스/사업_계약_수익구조.md` |
+| 느리다 · 프리징 · 마커가 안 뜬다 | `레퍼런스/제품_설계규약.md` + `_공통/_작업_노하우.md` §2·§3 |
+| 외부 API 가 이상하다 (빈값·라벨·좌표) | `레퍼런스/외부API_함정.md` |
+| 운영 DB 를 고쳐야 한다 | `_공통/_작업_노하우.md` **§8 가드 5단계 — 먼저 읽는다** |
+
+> **미결 목록은 볼트 `decision-log.md` 말미**에 트리거별로 있다. 여기 복사하지 않는다.
