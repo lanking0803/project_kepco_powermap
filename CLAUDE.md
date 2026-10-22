@@ -44,7 +44,9 @@
 
 ## 🔐 자격증명 / 비밀
 
-- 모든 키/계정/비밀번호는 [docs/SECRETS.local.md](docs/SECRETS.local.md) 에 통합 관리
+- **원천은 볼트다** — `project_second_brain/01_Projects/project_kepco_powermap/_자격증명.local.md`
+- [docs/SECRETS.local.md](docs/SECRETS.local.md) 는 2026-09-06 부터 **포인터 stub** 이다 (값 없음).
+  기존 참조 18곳을 살리려고 파일 자체는 남겼다
 - `.gitignore` 에 `*.local.md` 패턴 등록되어 git 에 올라가지 않음
 - 외부 공유 / 채팅 / 스크린샷 금지
 
@@ -65,7 +67,7 @@ project_kepco_powermap/
 │   ├── COMPARE.md
 │   ├── CRAWLING.md
 │   ├── SERVICES.md
-│   └── SECRETS.local.md  ← 자격증명 (git 제외)
+│   └── SECRETS.local.md  ← 포인터 stub. 값은 볼트에 (git 제외)
 ├── geocoder/          ← 지오코딩 워커
 ├── web/               ← Next.js + React 웹 서비스
 │   ├── CLAUDE.md      ← Next.js 특수 지침
@@ -93,7 +95,8 @@ project_kepco_powermap/
 자세한 내용은 메모리의 `feedback_*.md` 파일들 참고:
 
 - **코드 수정 전 반드시 해당 파일 Read 먼저**
-- **계획 제시 → 승인 후 작업 시작**
+- **승인 기준은 전역 `~/.claude/CLAUDE.md` § 승인 을 따른다** (이 프로젝트만의 예외 없음)
+  - 단, **푸시는 성능 테스트 통과 후** — `memory/feedback_push_after_perf_test.md`
 - **커밋은 명시적 요청 시에만**
 - **기존 프로젝트 패턴/컨벤션 준수**
 - **한국어로 응답**
