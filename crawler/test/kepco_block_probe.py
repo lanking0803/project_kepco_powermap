@@ -15,7 +15,8 @@ KEPCO 차단 응답 패턴 탐지 테스트
 - API 호출 응답 수신 후 0.5초 대기 (운영 코드와 동일)
 - 1시간 후 자동 종료
 - 모든 비정상 응답 (HTTP 에러 / JSON 파싱 실패 / 200 OK + 빈 결과 등) 을
-  results/probe_<timestamp>.jsonl 에 한 줄씩 기록
+  C:/cache/project_kepco_powermap/probe/probe_<timestamp>.jsonl 에 한 줄씩 기록
+  (프로젝트가 Google Drive 위라 결과는 밖에 쓴다)
 - 5분 간격으로 stdout 에 누적 통계 출력
 
 차단 판정 후보
@@ -28,12 +29,11 @@ KEPCO 차단 응답 패턴 탐지 테스트
 
 실행
 ----
-PowerShell (프로젝트 루트):
-  cd "e:/2. hicor/Python/project_kepco_powermap"
+PowerShell (프로젝트 루트에서):
   python crawler/test/kepco_block_probe.py
 
 또는 백그라운드:
-  Start-Process python -ArgumentList "crawler/test/kepco_block_probe.py" -RedirectStandardOutput "crawler/test/results/run.log" -NoNewWindow
+  Start-Process python -ArgumentList "crawler/test/kepco_block_probe.py" -RedirectStandardOutput "C:/cache/project_kepco_powermap/probe/run.log" -NoNewWindow
 """
 
 import json
@@ -68,8 +68,8 @@ DURATION_SEC = 180              # 3분
 DELAY_AFTER_RESPONSE = 1.0      # 0.5 → 1.0초 유지
 STATUS_REPORT_INTERVAL_SEC = 30 # 30초마다 stdout 통계 (3분 짧음)
 HTTP_TIMEOUT_SEC = 10           # Ctrl+C 즉시 반응 위해 30→10 단축
-RESULTS_DIR = Path(__file__).resolve().parent / "results"
-RESULTS_DIR.mkdir(exist_ok=True)
+RESULTS_DIR = Path("C:/cache/project_kepco_powermap/probe")
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 RUN_TS = datetime.now().strftime("%Y%m%d_%H%M%S")
 ANOMALY_LOG = RESULTS_DIR / f"probe_{RUN_TS}_anomalies.jsonl"

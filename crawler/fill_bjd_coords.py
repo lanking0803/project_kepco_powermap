@@ -20,7 +20,7 @@ bjd_master 좌표 채우기 — VWorld data API 기반
   L3 읍/면/동  LT_C_ADEMD_INFO    emd_cd      bjd_code[:8]
   L4 리       LT_C_ADRI_INFO     li_cd       bjd_code[:10]
 
-출력 파일 (모두 같은 timestamp):
+출력 파일 (모두 같은 timestamp, Windows 는 C:/cache/project_kepco_powermap/fill_bjd/):
   fill_bjd_run_<ts>.log
   fill_bjd_errors_<ts>.jsonl
   fill_bjd_summary_<ts>.json
@@ -64,10 +64,13 @@ FILL_LIMIT = int(os.environ.get("FILL_LIMIT", "0"))
 TIMEOUT = 20
 
 RUN_TS = datetime.now().strftime("%Y%m%d_%H%M%S")
-LOG_PATH = f"fill_bjd_run_{RUN_TS}.log"
-ERR_PATH = f"fill_bjd_errors_{RUN_TS}.jsonl"
-NAME_DIFF_PATH = f"fill_bjd_name_diff_{RUN_TS}.jsonl"  # 행안부 vs VWorld 한글명 불일치
-SUM_PATH = f"fill_bjd_summary_{RUN_TS}.json"
+# Windows 로컬은 Google Drive 위 프로젝트 밖에 쓴다. 그 외(서버)는 현재 폴더
+OUT_DIR = r"C:\cache\project_kepco_powermap\fill_bjd" if os.name == "nt" else "."
+os.makedirs(OUT_DIR, exist_ok=True)
+LOG_PATH = os.path.join(OUT_DIR, f"fill_bjd_run_{RUN_TS}.log")
+ERR_PATH = os.path.join(OUT_DIR, f"fill_bjd_errors_{RUN_TS}.jsonl")
+NAME_DIFF_PATH = os.path.join(OUT_DIR, f"fill_bjd_name_diff_{RUN_TS}.jsonl")  # 행안부 vs VWorld 한글명 불일치
+SUM_PATH = os.path.join(OUT_DIR, f"fill_bjd_summary_{RUN_TS}.json")
 
 # ─────────────────────────────────────────────
 # 로깅

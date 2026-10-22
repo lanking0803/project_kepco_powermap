@@ -3,7 +3,9 @@ Supabase 마스터 테이블을 프로세스 메모리로 로드.
 
 우선순위:
   1. 환경변수 BJD_CACHE_FILE 로 지정된 경로가 있으면 해당 파일
-  2. 기본 .cache/<table>.json 파일이 있으면 해당 파일
+  2. 기본 경로 파일이 있으면 해당 파일
+     (Windows 로컬 = C:/cache/project_kepco_powermap/<table>.json — 프로젝트가 Google Drive 위라 밖에 둔다,
+      그 외(Actions·서버) = .cache/<table>.json)
   3. 둘 다 없으면 Supabase 에서 GET → 파일 저장 후 메모리 로드
 
 GitHub Actions 에서 prep_caches workflow 가 Cache 로 파일을 제공하는 것을 전제.
@@ -34,7 +36,8 @@ def _cache_path(table: str) -> Path:
     override = os.environ.get(env_key)
     if override:
         return Path(override)
-    return Path(f".cache/{table}.json")
+    base = Path(r"C:\cache\project_kepco_powermap") if os.name == "nt" else Path(".cache")
+    return base / f"{table}.json"
 
 
 def _get_with_retry(url: str, headers: dict, timeout: int = 60, retries: int = 4) -> requests.Response:
