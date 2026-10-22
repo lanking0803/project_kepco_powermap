@@ -12,7 +12,7 @@
  * 실행: node --env-file=.env.local scripts/poc-slope/poc4-render.mjs
  */
 import sharp from "sharp";
-import { readFileSync } from "fs";
+import { readFileSync, mkdirSync } from "fs";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 
 const Z = 14, X0 = 13986, Y0 = 6486, SIZE = 256, RAD2DEG = 180 / Math.PI;
@@ -103,7 +103,9 @@ async function fetchParcelAtPoint(lat, lng) {
     }
   }
 
-  const outPath = "scripts/poc-slope/data/render-slope.png";
+  const outDir = "C:/cache/project_kepco_powermap/poc-slope";  // Drive 밖에 결과를 쓴다
+  mkdirSync(outDir, { recursive: true });
+  const outPath = `${outDir}/render-slope.png`;
   await sharp(buf, { raw: { width: outW, height: outH, channels: 4 } }).png().toFile(outPath);
   console.log(`\n✅ PoC ④ 성공 — 격자 음영 PNG 저장: ${outPath} (${outW}×${outH})`);
   console.log(`   색: 노랑<10° / 초록10~15° / 회색15~22° / 빨강22°+\n`);
