@@ -62,3 +62,6 @@ scripts/test_*
 
 # Claude Code 로컬 권한 설정 (기기별 경로·PID 포함)
 .claude/settings.json
+
+# 의뢰자 문의 원본 PDF (고객 문서 — 로컬·Drive 보관만)
+docs/[[]양계장*.pdf
