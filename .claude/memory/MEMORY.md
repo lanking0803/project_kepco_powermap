@@ -2,7 +2,7 @@
 
 > ★ **유일한 브레인은 볼트다. 여기 지식을 쌓지 않는다.**
 >
-> 진입점: `E:/2. hicor/Python/project_second_brain/01_Projects/project_kepco_powermap/_project-index.md`
+> 진입점: `G:/내 드라이브/hicor/프로젝트/project_second_brain/01_Projects/project_kepco_powermap/_project-index.md`
 >
 > 이 파일은 **매 세션 자동 주입된다.** 그래서 여기 적힌 것이 볼트보다 낡으면
 > 낡은 쪽이 더 자주 읽힌다. **금액·계좌·계정·토큰을 여기 적지 않는다.**
